@@ -119,6 +119,19 @@ Nura uses a Multi-Agent Architecture.
 | Appointment Agent           | Appointment Workflow  |
 | Memory Agent                | Long-Term Memory      |
 
+
+## Patient Context Builder
+
+Responsibilities:
+
+- Aggregate reports
+- Aggregate prescriptions
+- Aggregate appointments
+- Aggregate reminders
+- Build unified patient context
+
+The context builder runs after retrieval and before specialized agent execution.
+
 ---
 
 # 7. LangGraph Workflow
@@ -273,6 +286,19 @@ AI Summary
 Dashboard Display
 ```
 
+
+```
+OCR
+↓
+Structured Extraction
+↓
+Medical Entity Extraction
+↓
+Risk Detection
+↓
+Groq Summary
+```
+
 ---
 
 # 13. Payment Workflow
@@ -288,6 +314,17 @@ Appointment Confirmation
  ↓
 Revenue Split
 ```
+
+```
+Payment
+↓
+Escrow Hold
+↓
+Appointment Request
+↓
+Doctor Approval
+```
+
 
 Revenue Distribution:
 

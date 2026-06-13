@@ -239,6 +239,11 @@ chat_messages
 doctor_wallets
 drug_interactions
 audit_logs
+refresh_tokens
+doctor_documents
+health_insights
+notification_preferences
+agent_logs
 ```
 
 ---
@@ -450,6 +455,7 @@ LLM Service
 Embedding Service
 Vector Service
 Agent Base Classes
+Patient Context Builder
 ```
 
 ---
@@ -574,15 +580,21 @@ Analyze uploaded reports.
 
 ```text
 Upload
- ↓
+↓
 OCR
- ↓
+↓
+Structured Extraction
+↓
+Entity Extraction
+↓
+Risk Detection
+↓
 Chunking
- ↓
+↓
 Embeddings
- ↓
+↓
 Qdrant
- ↓
+↓
 AI Analysis
 ```
 

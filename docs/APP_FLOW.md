@@ -244,6 +244,23 @@ Embedding Generation
 Qdrant Storage
 ```
 
+```
+OCR
+↓
+Structured Extraction
+↓
+Medical Entity Extraction
+↓
+Risk Detection
+↓
+AI Summary
+↓
+Health Insights
+↓
+Dashboard Update
+```
+
+
 ---
 
 ## Analysis Flow
@@ -405,6 +422,20 @@ Payment
  ↓
 Appointment Request
 ```
+```
+Search Doctor
+↓
+Select Slot
+↓
+Payment
+↓
+Escrow Hold
+↓
+Appointment Request
+↓
+Doctor Approval
+```
+
 
 ---
 
@@ -593,9 +624,11 @@ Platform: ₹75
 
 ```text
 Doctor Registration
- ↓
-Document Review
- ↓
+↓
+Upload Verification Documents
+↓
+Admin Review
+↓
 Approve / Reject
 ```
 

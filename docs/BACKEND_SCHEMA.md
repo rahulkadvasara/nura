@@ -243,7 +243,9 @@ cancelled
   "_id": "ObjectId",
   "patient_id": "ObjectId",
   "file_url": "string",
-  "ocr_text": "string",
+  "raw_text": "string",
+  "structured_data": {},
+  "entities": [],
   "ai_summary": "string",
   "risk_level": "medium"
 }
@@ -331,6 +333,85 @@ cancelled
   "source": "rxnorm"
 }
 ```
+---
+
+## refresh_tokens
+
+```json
+{
+  "_id": "ObjectId",
+  "user_id": "ObjectId",
+  "token_hash": "string",
+  "expires_at": "datetime",
+  "revoked": false,
+  "created_at": "datetime"
+}
+```
+---
+
+## doctor_documents
+
+```json
+{
+  "_id": "ObjectId",
+  "doctor_id": "ObjectId",
+  "document_type": "license",
+  "file_url": "string",
+  "verification_status": "pending",
+  "uploaded_at": "datetime",
+  "verified_at": "datetime",
+  "verified_by": "ObjectId"
+}
+```
+
+---
+
+## health_insights
+
+```json
+{
+  "_id": "ObjectId",
+  "user_id": "ObjectId",
+  "type": "report",
+  "title": "Elevated Cholesterol",
+  "description": "Cholesterol levels increased compared to previous report",
+  "severity": "medium",
+  "source_report_id": "ObjectId",
+  "created_at": "datetime"
+}
+```
+
+---
+
+## notification_preferences
+
+```json
+{
+  "_id": "ObjectId",
+  "user_id": "ObjectId",
+  "email_enabled": true,
+  "appointment_enabled": true,
+  "reminder_enabled": true,
+  "report_enabled": true,
+  "marketing_enabled": false
+}
+```
+
+---
+
+## agent_logs
+
+```json
+{
+  "_id": "ObjectId",
+  "user_id": "ObjectId",
+  "agent_name": "symptom_agent",
+  "query": "I have fever",
+  "response": "Possible viral infection",
+  "execution_time_ms": 1250,
+  "created_at": "datetime"
+}
+```
 
 ---
 
@@ -363,7 +444,7 @@ Stores:
 
 ---
 
-## drug_knowledge
+## drug_interaction
 
 Stores:
 
@@ -371,6 +452,17 @@ Stores:
 * Drug interaction knowledge
 
 ---
+
+## Doctor_knowledge
+
+Stores:
+
+* Doctor knowledge
+
+---
+
+
+
 
 # 5. API Structure
 
