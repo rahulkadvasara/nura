@@ -1,1 +1,19 @@
-# Services package
+"""
+Nura - Services Package
+Business logic services for the application
+"""
+
+from app.services.base import BaseService
+from app.services.user_service import UserService
+from app.services.auth_service import AuthService
+from app.services.otp_service import OTPService
+
+__all__ = [
+    # Base service
+    "BaseService",
+    
+    # Specific services
+    "UserService",
+    "AuthService",
+    "OTPService",
+]
