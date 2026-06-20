@@ -81,8 +81,20 @@ class TestUserServicePasswords:
 class TestUserServiceCRUD:
 
     @pytest.fixture
-    def repo(self):
-        return AsyncMock(spec=UserRepository)
+    def col(self) -> MagicMock:
+        """Motor collection mock — mirrors the pattern in test_repositories.py."""
+        c = MagicMock()
+        c.find_one = AsyncMock()
+        c.insert_one = AsyncMock()
+        c.update_one = AsyncMock()
+        c.update_many = AsyncMock()
+        c.delete_many = AsyncMock()
+        c.count_documents = AsyncMock()
+        return c
+
+    @pytest.fixture
+    def repo(self, col) -> UserRepository:
+        return UserRepository(col)
 
     @pytest.fixture
     def svc(self, repo):
@@ -91,55 +103,111 @@ class TestUserServiceCRUD:
     # create_user ─────────────────────────────────────────────────────────
 
     @pytest.mark.asyncio
-    async def test_create_user_success(self, svc, repo):
-        repo.exists_by_email.return_value = False
-        repo.create.return_value = _make_user()
+    async def test_create_user_success(self, svc, col):
+        from bson import ObjectId
+        from unittest.mock import MagicMock
+
+        # exists_by_email → count_documents returns 0 (no existing user)
+        col.count_documents.return_value = 0
+
+        insert_result = MagicMock()
+        insert_result.inserted_id = ObjectId("507f1f77bcf86cd799439011")
+        col.insert_one.return_value = insert_result
+
+        now = datetime.now(timezone.utc)
+        col.find_one.return_value = {
+            "_id": ObjectId("507f1f77bcf86cd799439011"),
+            "email": "user@example.com",
+            "full_name": "Alice",
+            "role": "patient",
+            "password_hash": "hashed",
+            "auth_provider": "local",
+            "email_verified": False,
+            "is_active": True,
+            "created_at": now,
+            "updated_at": now,
+        }
 
         result = await svc.create_user(
             UserCreate(email="user@example.com", password="Password1", full_name="Alice")
         )
         assert isinstance(result, UserInDB)
-        repo.exists_by_email.assert_called_once_with("user@example.com")
-        repo.create.assert_called_once()
+        assert result.email == "user@example.com"
+        col.insert_one.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_create_user_email_taken(self, svc, repo):
-        repo.exists_by_email.return_value = True
+    async def test_create_user_email_taken(self, svc, col):
+        col.count_documents.return_value = 1
 
         with pytest.raises(ValueError, match="already exists"):
             await svc.create_user(
                 UserCreate(email="taken@example.com", password="Password1", full_name="X")
             )
-        repo.create.assert_not_called()
+        col.insert_one.assert_not_called()
 
     # authenticate_user ───────────────────────────────────────────────────
 
     @pytest.mark.asyncio
-    async def test_authenticate_success(self, svc, repo):
+    async def test_authenticate_success(self, svc, col):
         user = _make_user(password_hash=svc.hash_password("Pass1word"))
-        repo.get_by_email.return_value = user
+        # get_by_email calls find_one on the collection
+        col.find_one.return_value = {
+            "_id": __import__("bson").ObjectId(user.id),
+            "email": user.email,
+            "full_name": user.full_name,
+            "role": user.role.value,
+            "password_hash": user.password_hash,
+            "auth_provider": user.auth_provider.value,
+            "email_verified": user.email_verified,
+            "is_active": user.is_active,
+            "created_at": user.created_at,
+            "updated_at": user.updated_at,
+        }
 
         result = await svc.authenticate_user("user@example.com", "Pass1word")
-        assert result is user
+        assert isinstance(result, UserInDB)
+        assert result.email == user.email
 
     @pytest.mark.asyncio
-    async def test_authenticate_wrong_password(self, svc, repo):
+    async def test_authenticate_wrong_password(self, svc, col):
         user = _make_user(password_hash=svc.hash_password("Correct1"))
-        repo.get_by_email.return_value = user
+        col.find_one.return_value = {
+            "_id": __import__("bson").ObjectId(user.id),
+            "email": user.email,
+            "full_name": user.full_name,
+            "role": user.role.value,
+            "password_hash": user.password_hash,
+            "auth_provider": user.auth_provider.value,
+            "email_verified": user.email_verified,
+            "is_active": user.is_active,
+            "created_at": user.created_at,
+            "updated_at": user.updated_at,
+        }
 
         result = await svc.authenticate_user("user@example.com", "Wrong1")
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_authenticate_user_not_found(self, svc, repo):
-        repo.get_by_email.return_value = None
+    async def test_authenticate_user_not_found(self, svc, col):
+        col.find_one.return_value = None
         result = await svc.authenticate_user("nobody@example.com", "Pass1word")
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_authenticate_inactive_user(self, svc, repo):
+    async def test_authenticate_inactive_user(self, svc, col):
         user = _make_user(is_active=False, password_hash=svc.hash_password("Pass1word"))
-        repo.get_by_email.return_value = user
+        col.find_one.return_value = {
+            "_id": __import__("bson").ObjectId(user.id),
+            "email": user.email,
+            "full_name": user.full_name,
+            "role": user.role.value,
+            "password_hash": user.password_hash,
+            "auth_provider": user.auth_provider.value,
+            "email_verified": user.email_verified,
+            "is_active": user.is_active,
+            "created_at": user.created_at,
+            "updated_at": user.updated_at,
+        }
 
         result = await svc.authenticate_user("user@example.com", "Pass1word")
         assert result is None

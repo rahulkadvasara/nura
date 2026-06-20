@@ -85,8 +85,16 @@ def _mock_cursor(docs: list) -> AsyncMock:
 class TestUserRepository:
 
     @pytest.fixture
-    def col(self) -> AsyncMock:
-        return AsyncMock()
+    def col(self) -> MagicMock:
+        """Motor collection mock — find() is synchronous in Motor."""
+        c = MagicMock()
+        c.find_one = AsyncMock()
+        c.insert_one = AsyncMock()
+        c.update_one = AsyncMock()
+        c.update_many = AsyncMock()
+        c.delete_many = AsyncMock()
+        c.count_documents = AsyncMock()
+        return c
 
     @pytest.fixture
     def repo(self, col) -> UserRepository:
@@ -196,8 +204,22 @@ class TestUserRepository:
 class TestRefreshTokenRepository:
 
     @pytest.fixture
-    def col(self) -> AsyncMock:
-        return AsyncMock()
+    def col(self) -> MagicMock:
+        """Motor collection mock.
+
+        Motor's find() is synchronous (returns a cursor), so the collection
+        itself must be a MagicMock.  Individual async operations (find_one,
+        insert_one, update_one, update_many, delete_many, count_documents)
+        are patched as AsyncMocks so they can be awaited.
+        """
+        c = MagicMock()
+        c.find_one = AsyncMock()
+        c.insert_one = AsyncMock()
+        c.update_one = AsyncMock()
+        c.update_many = AsyncMock()
+        c.delete_many = AsyncMock()
+        c.count_documents = AsyncMock()
+        return c
 
     @pytest.fixture
     def repo(self, col) -> RefreshTokenRepository:
@@ -278,8 +300,16 @@ class TestRefreshTokenRepository:
 class TestOTPRepository:
 
     @pytest.fixture
-    def col(self) -> AsyncMock:
-        return AsyncMock()
+    def col(self) -> MagicMock:
+        """Motor collection mock — find() is synchronous in Motor."""
+        c = MagicMock()
+        c.find_one = AsyncMock()
+        c.insert_one = AsyncMock()
+        c.update_one = AsyncMock()
+        c.update_many = AsyncMock()
+        c.delete_many = AsyncMock()
+        c.count_documents = AsyncMock()
+        return c
 
     @pytest.fixture
     def repo(self, col) -> OTPRepository:

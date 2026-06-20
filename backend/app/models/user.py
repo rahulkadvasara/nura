@@ -73,6 +73,7 @@ class UserUpdate(BaseModel):
     phone: Optional[str] = Field(None, max_length=20, description="Phone number")
     profile_picture: Optional[str] = Field(None, description="Profile picture URL")
     is_active: Optional[bool] = Field(None, description="Account active status")
+    password_hash: Optional[str] = Field(None, description="Hashed password (internal use only)")
 
 
 class UserInDB(UserBase):

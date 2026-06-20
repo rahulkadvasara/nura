@@ -9,8 +9,9 @@ from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.core.logging import setup_logging
-from app.db.mongodb import connect_to_mongodb, close_mongodb_connection
+from app.db.mongodb import connect_to_mongodb, close_mongodb_connection, get_database
 from app.db.qdrant import connect_to_qdrant, close_qdrant_connection
+from app.db.init import setup_database
 from app.api.v1 import health
 
 
@@ -21,6 +22,14 @@ async def lifespan(app: FastAPI):
     setup_logging()
     await connect_to_mongodb()
     await connect_to_qdrant()
+
+    # Initialize collections and indexes (idempotent)
+    try:
+        db = get_database()
+        await setup_database(db)
+    except RuntimeError:
+        # MongoDB not connected (e.g. dev without DB) — skip index setup
+        pass
     
     yield
     

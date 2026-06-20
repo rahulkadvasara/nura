@@ -54,8 +54,17 @@ class UserService(BaseService[UserInDB, UserCreate, UserUpdate]):
         user_data.setdefault("email_verified", False)
         user_data.setdefault("is_active", True)
 
-        # Re-validate through the model so validators run
-        return await self.user_repository.create(UserCreate(**user_data))
+        # Insert raw dict via the base repository so we don't need a password field
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        user_data.setdefault("created_at", now)
+        user_data.setdefault("updated_at", now)
+
+        result = await self.user_repository.collection.insert_one(user_data)
+        created_doc = await self.user_repository.collection.find_one({"_id": result.inserted_id})
+        if created_doc is None:
+            raise RuntimeError("User was inserted but could not be retrieved")
+        return UserInDB.from_mongo(created_doc)
 
     async def get_user_by_id(self, user_id: str) -> Optional[UserInDB]:
         return await self.user_repository.get_by_id(user_id)
