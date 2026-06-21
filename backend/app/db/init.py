@@ -128,5 +128,26 @@ async def setup_database(database: AsyncIOMotorDatabase) -> None:
     await health_insights_collection.create_index("severity", name="severity_index")
     await health_insights_collection.create_index("insight_type", name="insight_type_index")
     logger.info("Created health_insights collection indexes")
+
+    # reminders collection
+    reminders_collection = database.reminders
+    await reminders_collection.create_index("patient_id", name="patient_id_index")
+    await reminders_collection.create_index("reminder_type", name="reminder_type_index")
+    await reminders_collection.create_index("status", name="status_index")
+    await reminders_collection.create_index("scheduled_time", name="scheduled_time_index")
+    logger.info("Created reminders collection indexes")
+
+    # notifications collection
+    notifications_collection = database.notifications
+    await notifications_collection.create_index("user_id", name="user_id_index")
+    await notifications_collection.create_index("read", name="read_index")
+    await notifications_collection.create_index("priority", name="priority_index")
+    await notifications_collection.create_index("created_at", name="created_at_index")
+    logger.info("Created notifications collection indexes")
+
+    # notification_preferences collection
+    notification_preferences_collection = database.notification_preferences
+    await notification_preferences_collection.create_index("user_id", unique=True, name="user_id_unique")
+    logger.info("Created notification_preferences collection indexes")
     
     logger.info("Database setup completed")

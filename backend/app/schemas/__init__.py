@@ -56,6 +56,18 @@ from app.schemas.report import (
     HealthInsightResponse,
 )
 
+from app.schemas.reminder import (
+    ReminderCreateSchema,
+    ReminderUpdateSchema,
+    ReminderResponse,
+)
+
+from app.schemas.notification import (
+    NotificationCreateSchema,
+    NotificationUpdateSchema,
+    NotificationResponse,
+)
+
 __all__ = [
     # Authentication schemas
     "UserLogin",
@@ -105,4 +117,14 @@ __all__ = [
     "HealthInsightCreateSchema",
     "HealthInsightUpdateSchema",
     "HealthInsightResponse",
+
+    # Reminder schemas
+    "ReminderCreateSchema",
+    "ReminderUpdateSchema",
+    "ReminderResponse",
+
+    # Notification schemas
+    "NotificationCreateSchema",
+    "NotificationUpdateSchema",
+    "NotificationResponse",
 ]

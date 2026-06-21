@@ -18,6 +18,8 @@ from app.services.consultation_service import ConsultationService
 from app.services.prescription_service import PrescriptionService
 from app.services.report_service import ReportService
 from app.services.health_insight_service import HealthInsightService
+from app.services.reminder_service import ReminderService
+from app.services.notification_service import NotificationService
 
 __all__ = [
     # Base service
@@ -42,4 +44,8 @@ __all__ = [
     # Report & Health Insight services
     "ReportService",
     "HealthInsightService",
+
+    # Reminder & Notification services
+    "ReminderService",
+    "NotificationService",
 ]

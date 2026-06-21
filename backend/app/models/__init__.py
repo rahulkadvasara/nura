@@ -85,6 +85,26 @@ from app.models.report import (
     HealthInsightInDB,
 )
 
+from app.models.preferences import (
+    NotificationPreferencesBase,
+    NotificationPreferencesUpdate,
+    NotificationPreferencesInDB,
+    NotificationPreferencesResponse,
+)
+
+from app.models.reminder import (
+    ReminderType,
+    ReminderStatus,
+    ReminderSourceType,
+    ReminderInDB,
+)
+
+from app.models.notification import (
+    NotificationType,
+    NotificationPriority,
+    NotificationInDB,
+)
+
 __all__ = [
     # User models
     "UserRole",

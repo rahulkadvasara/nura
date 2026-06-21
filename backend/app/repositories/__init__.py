@@ -17,6 +17,8 @@ from app.repositories.consultation_repository import ConsultationRepository
 from app.repositories.prescription_repository import PrescriptionRepository
 from app.repositories.report_repository import ReportRepository
 from app.repositories.health_insight_repository import HealthInsightRepository
+from app.repositories.reminder_repository import ReminderRepository
+from app.repositories.notification_repository import NotificationRepository
 
 __all__ = [
     # Base repository
@@ -40,4 +42,8 @@ __all__ = [
     # Report & Health Insight repositories
     "ReportRepository",
     "HealthInsightRepository",
+
+    # Reminder & Notification repositories
+    "ReminderRepository",
+    "NotificationRepository",
 ]
