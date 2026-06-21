@@ -7,9 +7,10 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import ValidationError
 
+from app.core.config import settings
 from app.core.dependencies import get_user_service, get_otp_service, get_email_service, get_auth_service, require_active_user
 from app.models import UserCreate, UserRole, AuthProvider, OTPPurpose, UserInDB, OTPVerificationInDB
-from app.schemas.auth import SuccessResponse, OTPVerify, UserLogin, RefreshTokenRequest, ForgotPasswordRequest, ResetPasswordRequest
+from app.schemas.auth import SuccessResponse, OTPVerify, UserLogin, RefreshTokenRequest, ForgotPasswordRequest, ResetPasswordRequest, GoogleLoginRequest
 from app.services import UserService, OTPService, EmailService, AuthService
 
 logger = logging.getLogger(__name__)
@@ -414,5 +415,96 @@ async def reset_password(
     return SuccessResponse(
         success=True,
         message="Password has been reset successfully",
+    )
+
+
+@router.post("/google", response_model=SuccessResponse)
+async def google_login(
+    google_in: GoogleLoginRequest,
+    user_service: UserService = Depends(get_user_service),
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    """
+    Authenticate user using Google ID token, creating profile if necessary
+    """
+    try:
+        from google.oauth2 import id_token
+        from google.auth.transport import requests
+
+        # Verify Google token
+        idinfo = id_token.verify_oauth2_token(
+            google_in.id_token,
+            requests.Request(),
+            settings.GOOGLE_CLIENT_ID
+        )
+
+        # Validate issuer
+        if idinfo.get("iss") not in ["accounts.google.com", "https://accounts.google.com"]:
+            raise ValueError("Wrong issuer")
+
+        # Validate email verification claim
+        if not idinfo.get("email_verified"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Google email is not verified",
+            )
+            
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid Google token: {str(e)}",
+        )
+
+    email = idinfo.get("email").lower().strip()
+    full_name = idinfo.get("name")
+    profile_picture = idinfo.get("picture")
+
+    # Look up user
+    user = await user_service.get_user_by_email(email)
+
+    if user:
+        # Existing user flow
+        # Ensure account is active and email is marked verified
+        if not user.email_verified:
+            await user_service.verify_user_email(user.id)
+            
+        update_data = {}
+        if not user.is_active:
+            update_data["is_active"] = True
+        if profile_picture and not user.profile_picture:
+            update_data["profile_picture"] = profile_picture
+            
+        if update_data:
+            from app.models import UserUpdate
+            await user_service.update_user(user.id, UserUpdate(**update_data))
+            
+        # Re-fetch user to make sure we return correct state
+        user = await user_service.get_user_by_id(user.id)
+    else:
+        # New user flow
+        user = await user_service.create_oauth_user(
+            email=email,
+            full_name=full_name,
+            profile_picture=profile_picture,
+            provider=AuthProvider.GOOGLE,
+        )
+
+    # Issue access and refresh tokens
+    token_response, raw_refresh, refresh_token_create = await auth_service._build_token_pair(user)
+
+    # Store refresh token in MongoDB
+    await auth_service.refresh_token_repository.create_token(refresh_token_create)
+
+    return SuccessResponse(
+        success=True,
+        message="Google login successful",
+        data={
+            "access_token": token_response.access_token,
+            "refresh_token": token_response.refresh_token,
+            "user": {
+                "id": token_response.user.id,
+                "role": token_response.user.role.value,
+            }
+        }
     )
 

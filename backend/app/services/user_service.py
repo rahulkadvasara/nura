@@ -149,3 +149,39 @@ class UserService(BaseService[UserInDB, UserCreate, UserUpdate]):
             created_at=user.created_at,
             updated_at=user.updated_at,
         )
+
+    async def create_oauth_user(
+        self,
+        email: str,
+        full_name: str,
+        profile_picture: Optional[str],
+        provider: AuthProvider,
+    ) -> UserInDB:
+        """Create a new OAuth user with no password hash (unusable password)."""
+        email = email.lower().strip()
+
+        if await self.user_repository.exists_by_email(email):
+            raise ValueError(f"User with email {email} already exists")
+
+        # Build a plain dict for MongoDB insertion
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        
+        user_data = {
+            "email": email,
+            "full_name": full_name,
+            "profile_picture": profile_picture,
+            "role": UserRole.PATIENT,
+            "auth_provider": provider,
+            "email_verified": True,
+            "is_active": True,
+            "password_hash": "",  # Empty hash makes local login impossible
+            "created_at": now,
+            "updated_at": now,
+        }
+
+        result = await self.user_repository.collection.insert_one(user_data)
+        created_doc = await self.user_repository.collection.find_one({"_id": result.inserted_id})
+        if created_doc is None:
+            raise RuntimeError("OAuth User was inserted but could not be retrieved")
+        return UserInDB.from_mongo(created_doc)

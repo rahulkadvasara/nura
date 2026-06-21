@@ -132,3 +132,8 @@ class ResetPasswordRequest(BaseModel):
         if not any(c.isdigit() for c in v):
             raise ValueError("Password must contain at least one number")
         return v
+
+
+class GoogleLoginRequest(BaseModel):
+    """Google OAuth login request schema"""
+    id_token: str = Field(..., description="Google ID Token")

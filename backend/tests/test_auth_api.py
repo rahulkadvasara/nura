@@ -4,7 +4,7 @@ Nura - Auth API Integration Tests
 
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timezone, timedelta
 
 from app.main import app
@@ -666,4 +666,189 @@ def test_reset_password_weak_password(client, auth_mocks):
     data = response.json()
     assert data["success"] is False
     assert "Validation failed" in data["message"]
+
+
+def test_google_login_new_user(client, auth_mocks):
+    """Test successful Google login for a new user"""
+    mock_user_service, _, _, mock_auth_service = auth_mocks
+    
+    # User does not exist yet
+    mock_user_service.get_user_by_email.return_value = None
+    
+    mock_user = _make_user(email="google_user@example.com", email_verified=True, is_active=True)
+    mock_user.auth_provider = AuthProvider.GOOGLE
+    mock_user_service.create_oauth_user.return_value = mock_user
+    
+    token_response = TokenResponse(
+        access_token="google_access_token",
+        refresh_token="google_refresh_token",
+        token_type="bearer",
+        expires_in=1800,
+        user=TokenUser(
+            id=mock_user.id,
+            role=mock_user.role,
+            email=mock_user.email,
+            full_name=mock_user.full_name,
+            email_verified=mock_user.email_verified
+        )
+    )
+    refresh_token_create = RefreshTokenCreate(
+        user_id=mock_user.id,
+        token_hash="hashed_refresh",
+        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        revoked=False
+    )
+    mock_auth_service._build_token_pair.return_value = (token_response, "google_refresh_token", refresh_token_create)
+    mock_auth_service.refresh_token_repository.create_token.return_value = MagicMock()
+
+    mock_id_info = {
+        "iss": "https://accounts.google.com",
+        "sub": "google123",
+        "email": "google_user@example.com",
+        "email_verified": True,
+        "name": "Google User",
+        "picture": "http://example.com/pic.jpg",
+        "aud": "mock_client_id"
+    }
+
+    with patch("google.oauth2.id_token.verify_oauth2_token", return_value=mock_id_info):
+        response = client.post(
+            "/api/v1/auth/google",
+            json={"id_token": "valid_token"}
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["data"]["access_token"] == "google_access_token"
+    assert data["data"]["user"]["id"] == mock_user.id
+    assert data["data"]["user"]["role"] == "patient"
+    
+    mock_user_service.get_user_by_email.assert_called_once_with("google_user@example.com")
+    mock_user_service.create_oauth_user.assert_called_once_with(
+        email="google_user@example.com",
+        full_name="Google User",
+        profile_picture="http://example.com/pic.jpg",
+        provider=AuthProvider.GOOGLE
+    )
+
+
+def test_google_login_existing_user(client, auth_mocks):
+    """Test Google login for an existing user"""
+    mock_user_service, _, _, mock_auth_service = auth_mocks
+    
+    # User already exists
+    user = _make_user(email="google_user@example.com", email_verified=False, is_active=False)
+    mock_user_service.get_user_by_email.return_value = user
+    
+    # Setup updated user mocks
+    mock_user_service.verify_user_email.return_value = user
+    mock_user_service.update_user.return_value = user
+    mock_user_service.get_user_by_id.return_value = user
+    
+    token_response = TokenResponse(
+        access_token="google_access_token",
+        refresh_token="google_refresh_token",
+        token_type="bearer",
+        expires_in=1800,
+        user=TokenUser(
+            id=user.id,
+            role=user.role,
+            email=user.email,
+            full_name=user.full_name,
+            email_verified=True
+        )
+    )
+    refresh_token_create = RefreshTokenCreate(
+        user_id=user.id,
+        token_hash="hashed_refresh",
+        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        revoked=False
+    )
+    mock_auth_service._build_token_pair.return_value = (token_response, "google_refresh_token", refresh_token_create)
+
+    mock_id_info = {
+        "iss": "https://accounts.google.com",
+        "sub": "google123",
+        "email": "google_user@example.com",
+        "email_verified": True,
+        "name": "Google User",
+        "picture": "http://example.com/pic.jpg",
+        "aud": "mock_client_id"
+    }
+
+    with patch("google.oauth2.id_token.verify_oauth2_token", return_value=mock_id_info):
+        response = client.post(
+            "/api/v1/auth/google",
+            json={"id_token": "valid_token"}
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["data"]["access_token"] == "google_access_token"
+    
+    mock_user_service.get_user_by_email.assert_called_once_with("google_user@example.com")
+    mock_user_service.verify_user_email.assert_called_once_with(user.id)
+    mock_user_service.update_user.assert_called_once()
+
+
+def test_google_login_invalid_token(client, auth_mocks):
+    """Test Google login with an invalid token"""
+    with patch("google.oauth2.id_token.verify_oauth2_token", side_effect=ValueError("Token expired")):
+        response = client.post(
+            "/api/v1/auth/google",
+            json={"id_token": "invalid_token"}
+        )
+
+    assert response.status_code == 400
+    data = response.json()
+    assert data["success"] is False
+    assert "Invalid Google token" in data["message"]
+
+
+def test_google_login_invalid_issuer(client, auth_mocks):
+    """Test Google login with a mismatched token issuer"""
+    mock_id_info = {
+        "iss": "hacker.com", # Mismatched issuer
+        "sub": "google123",
+        "email": "google_user@example.com",
+        "email_verified": True,
+        "name": "Google User",
+        "aud": "mock_client_id"
+    }
+
+    with patch("google.oauth2.id_token.verify_oauth2_token", return_value=mock_id_info):
+        response = client.post(
+            "/api/v1/auth/google",
+            json={"id_token": "valid_token"}
+        )
+
+    assert response.status_code == 400
+    data = response.json()
+    assert data["success"] is False
+    assert "Invalid Google token" in data["message"]
+
+
+def test_google_login_unverified_email(client, auth_mocks):
+    """Test Google login with an unverified email address"""
+    mock_id_info = {
+        "iss": "https://accounts.google.com",
+        "sub": "google123",
+        "email": "google_user@example.com",
+        "email_verified": False, # Email unverified in Google
+        "name": "Google User",
+        "aud": "mock_client_id"
+    }
+
+    with patch("google.oauth2.id_token.verify_oauth2_token", return_value=mock_id_info):
+        response = client.post(
+            "/api/v1/auth/google",
+            json={"id_token": "valid_token"}
+        )
+
+    assert response.status_code == 400
+    data = response.json()
+    assert data["success"] is False
+    assert "Google email is not verified" in data["message"]
 
