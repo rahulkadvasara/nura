@@ -7,6 +7,7 @@ from app.services.base import BaseService
 from app.services.user_service import UserService
 from app.services.auth_service import AuthService
 from app.services.otp_service import OTPService
+from app.services.email_service import EmailService
 
 __all__ = [
     # Base service
@@ -16,4 +17,5 @@ __all__ = [
     "UserService",
     "AuthService",
     "OTPService",
+    "EmailService",
 ]

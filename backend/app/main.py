@@ -12,7 +12,10 @@ from app.core.logging import setup_logging
 from app.db.mongodb import connect_to_mongodb, close_mongodb_connection, get_database
 from app.db.qdrant import connect_to_qdrant, close_qdrant_connection
 from app.db.init import setup_database
-from app.api.v1 import health
+from app.api.v1 import health, auth
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from fastapi import Request, HTTPException, status
 
 
 @asynccontextmanager
@@ -57,11 +60,43 @@ def create_application() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Custom exception handlers for API contract consistency
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        errors = []
+        for error in exc.errors():
+            loc = " -> ".join(str(x) for x in error["loc"])
+            errors.append(f"{loc}: {error['msg']}")
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={
+                "success": False,
+                "message": "Validation failed",
+                "errors": errors
+            }
+        )
+
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "success": False,
+                "message": exc.detail,
+                "errors": None
+            }
+        )
+
     # Include routers
     app.include_router(
         health.router,
         prefix=settings.API_V1_PREFIX,
         tags=["health"]
+    )
+    app.include_router(
+        auth.router,
+        prefix=settings.API_V1_PREFIX + "/auth",
+        tags=["auth"]
     )
 
     return app

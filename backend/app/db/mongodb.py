@@ -119,7 +119,7 @@ class MongoDBConnection:
     
     def get_database(self) -> AsyncIOMotorDatabase:
         """Get database instance"""
-        if not self.database:
+        if self.database is None:
             raise RuntimeError("MongoDB not connected")
         return self.database
 

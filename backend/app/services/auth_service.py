@@ -7,7 +7,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, Tuple
 from jose import jwt, JWTError
-from passlib.context import CryptContext
+import hashlib
 
 from app.core.config import settings
 from app.models import UserInDB, UserRole, RefreshTokenCreate
@@ -16,8 +16,7 @@ from app.repositories import RefreshTokenRepository
 from app.services.user_service import UserService
 
 
-# Separate context for hashing opaque refresh tokens (not user passwords)
-_token_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 
 
 def _utc_now() -> datetime:
@@ -76,12 +75,12 @@ class AuthService:
         return token, expires_at
 
     def hash_token(self, token: str) -> str:
-        """Return a bcrypt hash of an opaque token string."""
-        return _token_context.hash(token)
+        """Return a SHA-256 hash of an opaque token string."""
+        return hashlib.sha256(token.encode('utf-8')).hexdigest()
 
     def verify_token_hash(self, token: str, hashed_token: str) -> bool:
         """Return True when *token* matches *hashed_token*."""
-        return _token_context.verify(token, hashed_token)
+        return self.hash_token(token) == hashed_token
 
     # ------------------------------------------------------------------
     # High-level auth flows

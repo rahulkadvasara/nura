@@ -8,7 +8,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.db import get_database
 from app.repositories import UserRepository, RefreshTokenRepository, OTPRepository
-from app.services import UserService, AuthService, OTPService
+from app.services import UserService, AuthService, OTPService, EmailService
 
 
 def get_user_repository() -> UserRepository:
@@ -46,3 +46,8 @@ def get_otp_service() -> OTPService:
     """Get OTPService instance"""
     otp_repository = get_otp_repository()
     return OTPService(otp_repository)
+
+
+def get_email_service() -> EmailService:
+    """Get EmailService instance"""
+    return EmailService()
