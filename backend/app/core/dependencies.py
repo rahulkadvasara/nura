@@ -5,10 +5,16 @@ Dependency injection for services and repositories
 
 from typing import AsyncGenerator
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import jwt, JWTError, ExpiredSignatureError
 
+from app.core.config import settings
 from app.db import get_database
+from app.models import UserInDB, UserRole
 from app.repositories import UserRepository, RefreshTokenRepository, OTPRepository
 from app.services import UserService, AuthService, OTPService, EmailService
+
 
 
 def get_user_repository() -> UserRepository:
@@ -51,3 +57,87 @@ def get_otp_service() -> OTPService:
 def get_email_service() -> EmailService:
     """Get EmailService instance"""
     return EmailService()
+
+
+reusable_oauth2 = HTTPBearer()
+
+
+async def get_current_user(
+    token: HTTPAuthorizationCredentials = Depends(reusable_oauth2),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> UserInDB:
+    """Validate JWT access token and return the user"""
+    try:
+        payload = jwt.decode(
+            token.credentials,
+            settings.SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM]
+        )
+        if payload.get("type") != "access":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token type",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token payload",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = await auth_service.user_service.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
+
+
+def require_active_user(
+    current_user: UserInDB = Depends(get_current_user)
+) -> UserInDB:
+    """Enforce active and email-verified user"""
+    if not current_user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email not verified",
+        )
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Inactive user account",
+        )
+    return current_user
+
+
+def require_role(required_role: UserRole):
+    """Enforce specific user role (admin > doctor > patient)"""
+    def dependency(
+        current_user: UserInDB = Depends(get_current_user),
+        auth_service: AuthService = Depends(get_auth_service),
+    ) -> UserInDB:
+        try:
+            auth_service.require_role(current_user, required_role)
+        except PermissionError as e:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=str(e),
+            )
+        return current_user
+    return dependency

@@ -7,10 +7,10 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import ValidationError
 
-from app.core.dependencies import get_user_service, get_otp_service, get_email_service
-from app.models import UserCreate, UserRole, AuthProvider, OTPPurpose
-from app.schemas.auth import SuccessResponse, OTPVerify
-from app.services import UserService, OTPService, EmailService
+from app.core.dependencies import get_user_service, get_otp_service, get_email_service, get_auth_service, require_active_user
+from app.models import UserCreate, UserRole, AuthProvider, OTPPurpose, UserInDB
+from app.schemas.auth import SuccessResponse, OTPVerify, UserLogin, RefreshTokenRequest
+from app.services import UserService, OTPService, EmailService, AuthService
 
 logger = logging.getLogger(__name__)
 
@@ -129,3 +129,161 @@ async def verify_otp(
         success=True,
         message="Account verified",
     )
+
+
+@router.post("/login", response_model=SuccessResponse)
+async def login(
+    login_in: UserLogin,
+    user_service: UserService = Depends(get_user_service),
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    """
+    Authenticate a user, issue access and refresh tokens
+    """
+    email = login_in.email.lower().strip()
+    password = login_in.password
+
+    # Find user
+    user = await user_service.get_user_by_email(email)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect email or password",
+        )
+
+    # Verify password
+    if not user_service.verify_password(password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect email or password",
+        )
+
+    # Verify account active
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User account is inactive",
+        )
+
+    # Verify email verified
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email not verified",
+        )
+
+    # Generate tokens
+    token_response, raw_refresh, refresh_token_create = await auth_service._build_token_pair(user)
+
+    # Store refresh token in MongoDB
+    await auth_service.refresh_token_repository.create_token(refresh_token_create)
+
+    return SuccessResponse(
+        success=True,
+        message="Login successful",
+        data={
+            "access_token": token_response.access_token,
+            "refresh_token": token_response.refresh_token,
+            "user": {
+                "id": token_response.user.id,
+                "role": token_response.user.role.value,
+            }
+        }
+    )
+
+
+@router.post("/refresh", response_model=SuccessResponse)
+async def refresh(
+    refresh_in: RefreshTokenRequest,
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    """
+    Refresh JWT access token using opaque refresh token
+    """
+    token_hash = auth_service.hash_token(refresh_in.refresh_token)
+    record = await auth_service.refresh_token_repository.get_by_token_hash(token_hash)
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+        )
+
+    if record.revoked:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has been revoked",
+        )
+
+    from datetime import datetime, timezone
+    expires_at = record.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+        
+    if expires_at < datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has expired",
+        )
+
+    user = await auth_service.user_service.get_user_by_id(record.user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account is inactive",
+        )
+
+    # Generate new access token ONLY (no rotation)
+    new_access = auth_service.create_access_token(user)
+
+    return SuccessResponse(
+        success=True,
+        message="Token refreshed successfully",
+        data={
+            "access_token": new_access
+        }
+    )
+
+
+@router.post("/logout", response_model=SuccessResponse)
+async def logout(
+    refresh_in: RefreshTokenRequest,
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    """
+    Logout user by revoking their refresh token
+    """
+    token_hash = auth_service.hash_token(refresh_in.refresh_token)
+    revoked = await auth_service.refresh_token_repository.revoke_by_hash(token_hash)
+    if not revoked:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or already revoked refresh token",
+        )
+
+    return SuccessResponse(
+        success=True,
+        message="Logged out successfully",
+    )
+
+
+@router.get("/me", response_model=SuccessResponse)
+async def get_me(
+    current_user: UserInDB = Depends(require_active_user),
+    user_service: UserService = Depends(get_user_service),
+):
+    """
+    Get current authenticated user profile
+    """
+    user_response = user_service.to_response(current_user)
+    return SuccessResponse(
+        success=True,
+        message="User profile retrieved",
+        data=user_response.model_dump(),
+    )
+

@@ -8,8 +8,9 @@ from unittest.mock import AsyncMock, MagicMock
 from datetime import datetime, timezone, timedelta
 
 from app.main import app
-from app.core.dependencies import get_user_service, get_otp_service, get_email_service
-from app.models import UserInDB, UserRole, AuthProvider, OTPVerificationInDB, OTPPurpose
+from app.core.dependencies import get_user_service, get_otp_service, get_email_service, get_auth_service, get_current_user
+from app.models import UserInDB, UserRole, AuthProvider, OTPVerificationInDB, OTPPurpose, RefreshTokenCreate, RefreshTokenInDB
+from app.schemas.auth import TokenResponse, TokenUser
 
 
 @pytest.fixture
@@ -26,6 +27,12 @@ def mocks():
     user_svc = AsyncMock()
     otp_svc = AsyncMock()
     email_svc = AsyncMock()
+    
+    # Configure synchronous methods as MagicMocks
+    user_svc.verify_password = MagicMock()
+    user_svc.hash_password = MagicMock()
+    from app.services.user_service import UserService
+    user_svc.to_response = MagicMock(side_effect=lambda u: UserService.to_response(None, u))
     
     app.dependency_overrides[get_user_service] = lambda: user_svc
     app.dependency_overrides[get_otp_service] = lambda: otp_svc
@@ -244,3 +251,231 @@ def test_verify_otp_already_verified(client, mocks):
     data = response.json()
     assert data["success"] is False
     assert data["message"] == "Account already verified"
+
+
+@pytest.fixture
+def auth_mocks(mocks):
+    user_svc, otp_svc, email_svc = mocks
+    auth_svc = AsyncMock()
+    
+    # Configure synchronous methods of AuthService as MagicMocks
+    auth_svc.create_access_token = MagicMock()
+    auth_svc.hash_token = MagicMock()
+    auth_svc.verify_token_hash = MagicMock()
+    auth_svc.has_role = MagicMock()
+    auth_svc.require_role = MagicMock()
+    
+    app.dependency_overrides[get_auth_service] = lambda: auth_svc
+    yield user_svc, otp_svc, email_svc, auth_svc
+
+
+def test_login_success(client, auth_mocks):
+    """Test successful login flow"""
+    mock_user_service, _, _, mock_auth_service = auth_mocks
+    user = _make_user(email_verified=True, is_active=True)
+    
+    mock_user_service.get_user_by_email.return_value = user
+    mock_user_service.verify_password.return_value = True
+    
+    token_response = TokenResponse(
+        access_token="test_access_token",
+        refresh_token="test_refresh_token",
+        token_type="bearer",
+        expires_in=1800,
+        user=TokenUser(
+            id=user.id,
+            role=user.role,
+            email=user.email,
+            full_name=user.full_name,
+            email_verified=user.email_verified
+        )
+    )
+    refresh_token_create = RefreshTokenCreate(
+        user_id=user.id,
+        token_hash="hashed_refresh",
+        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        revoked=False
+    )
+    
+    mock_auth_service._build_token_pair.return_value = (token_response, "test_refresh_token", refresh_token_create)
+    mock_auth_service.refresh_token_repository.create_token.return_value = MagicMock()
+
+    response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "rahul@example.com",
+            "password": "Password123"
+        }
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["message"] == "Login successful"
+    assert data["data"]["access_token"] == "test_access_token"
+    assert data["data"]["refresh_token"] == "test_refresh_token"
+    assert data["data"]["user"]["id"] == user.id
+    assert data["data"]["user"]["role"] == user.role.value
+
+
+def test_login_invalid_password(client, auth_mocks):
+    """Test login with incorrect password"""
+    mock_user_service, _, _, _ = auth_mocks
+    user = _make_user(email_verified=True, is_active=True)
+    
+    mock_user_service.get_user_by_email.return_value = user
+    mock_user_service.verify_password.return_value = False
+
+    response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "rahul@example.com",
+            "password": "WrongPassword"
+        }
+    )
+
+    assert response.status_code == 400
+    data = response.json()
+    assert data["success"] is False
+    assert "Incorrect email or password" in data["message"]
+
+
+def test_login_inactive_account(client, auth_mocks):
+    """Test login with inactive account"""
+    mock_user_service, _, _, _ = auth_mocks
+    user = _make_user(email_verified=True, is_active=False)
+    
+    mock_user_service.get_user_by_email.return_value = user
+    mock_user_service.verify_password.return_value = True
+
+    response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "rahul@example.com",
+            "password": "Password123"
+        }
+    )
+
+    assert response.status_code == 400
+    data = response.json()
+    assert data["success"] is False
+    assert "inactive" in data["message"].lower()
+
+
+def test_login_unverified_account(client, auth_mocks):
+    """Test login with unverified account"""
+    mock_user_service, _, _, _ = auth_mocks
+    user = _make_user(email_verified=False, is_active=True)
+    
+    mock_user_service.get_user_by_email.return_value = user
+    mock_user_service.verify_password.return_value = True
+
+    response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "rahul@example.com",
+            "password": "Password123"
+        }
+    )
+
+    assert response.status_code == 400
+    data = response.json()
+    assert data["success"] is False
+    assert "not verified" in data["message"].lower()
+
+
+def test_refresh_success(client, auth_mocks):
+    """Test successful token refresh flow"""
+    mock_user_service, _, _, mock_auth_service = auth_mocks
+    user = _make_user(email_verified=True, is_active=True)
+    
+    mock_auth_service.hash_token.return_value = "hashed_refresh"
+    
+    refresh_token_record = RefreshTokenInDB(
+        id="507f1f77bcf86cd799439013",
+        user_id=user.id,
+        token_hash="hashed_refresh",
+        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        revoked=False,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc)
+    )
+    mock_auth_service.refresh_token_repository.get_by_token_hash.return_value = refresh_token_record
+    mock_user_service.get_user_by_id.return_value = user
+    mock_auth_service.create_access_token.return_value = "new_access_token"
+
+    response = client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": "test_refresh_token"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["data"]["access_token"] == "new_access_token"
+
+
+def test_refresh_revoked(client, auth_mocks):
+    """Test token refresh with a revoked token"""
+    _, _, _, mock_auth_service = auth_mocks
+    
+    mock_auth_service.hash_token.return_value = "hashed_refresh"
+    
+    refresh_token_record = RefreshTokenInDB(
+        id="507f1f77bcf86cd799439013",
+        user_id="507f1f77bcf86cd799439011",
+        token_hash="hashed_refresh",
+        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        revoked=True,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc)
+    )
+    mock_auth_service.refresh_token_repository.get_by_token_hash.return_value = refresh_token_record
+
+    response = client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": "revoked_token"}
+    )
+
+    assert response.status_code == 401
+    data = response.json()
+    assert data["success"] is False
+    assert "revoked" in data["message"].lower()
+
+
+def test_logout_success(client, auth_mocks):
+    """Test successful logout flow"""
+    _, _, _, mock_auth_service = auth_mocks
+    
+    mock_auth_service.hash_token.return_value = "hashed_refresh"
+    mock_auth_service.refresh_token_repository.revoke_by_hash.return_value = True
+
+    response = client.post(
+        "/api/v1/auth/logout",
+        json={"refresh_token": "test_refresh_token"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert "Logged out" in data["message"]
+
+
+def test_me_endpoint_success(client, mocks):
+    """Test retrieving authenticated current user profile"""
+    user = _make_user(email_verified=True, is_active=True)
+    
+    # Directly override get_current_user dependency
+    app.dependency_overrides[get_current_user] = lambda: user
+
+    response = client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": "Bearer fake_token"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["data"]["email"] == user.email
+    assert data["data"]["full_name"] == user.full_name
+
