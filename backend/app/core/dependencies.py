@@ -140,4 +140,60 @@ def require_role(required_role: UserRole):
                 detail=str(e),
             )
         return current_user
-    return dependency
+    return dependency
+
+
+# ---------------------------------------------------------------------------
+# Dashboard service dependency factories
+# ---------------------------------------------------------------------------
+
+def get_patient_dashboard_service():
+    """Get PatientDashboardService instance"""
+    from app.services.patient_dashboard_service import PatientDashboardService
+    from app.repositories.appointment_repository import AppointmentRepository
+    from app.repositories.reminder_repository import ReminderRepository
+    from app.repositories.report_repository import ReportRepository
+    from app.repositories.notification_repository import NotificationRepository
+    from app.repositories.health_insight_repository import HealthInsightRepository
+
+    database = get_database()
+    return PatientDashboardService(
+        appointment_repository=AppointmentRepository(database.appointments),
+        reminder_repository=ReminderRepository(database.reminders),
+        report_repository=ReportRepository(database.reports),
+        notification_repository=NotificationRepository(database.notifications),
+        health_insight_repository=HealthInsightRepository(database.health_insights),
+    )
+
+
+def get_doctor_dashboard_service():
+    """Get DoctorDashboardService instance"""
+    from app.services.doctor_dashboard_service import DoctorDashboardService
+    from app.repositories.appointment_repository import AppointmentRepository
+    from app.repositories.doctor_wallet_repository import DoctorWalletRepository
+
+    database = get_database()
+    return DoctorDashboardService(
+        appointment_repository=AppointmentRepository(database.appointments),
+        doctor_wallet_repository=DoctorWalletRepository(database.doctor_wallets),
+    )
+
+
+def get_admin_dashboard_service():
+    """Get AdminDashboardService instance"""
+    from app.services.admin_dashboard_service import AdminDashboardService
+    from app.repositories.user_repository import UserRepository
+    from app.repositories.appointment_repository import AppointmentRepository
+    from app.repositories.consultation_repository import ConsultationRepository
+    from app.repositories.payment_repository import PaymentRepository
+    from app.repositories.doctor_repository import DoctorProfileRepository
+
+    database = get_database()
+    return AdminDashboardService(
+        user_repository=UserRepository(database.users),
+        appointment_repository=AppointmentRepository(database.appointments),
+        consultation_repository=ConsultationRepository(database.consultations),
+        payment_repository=PaymentRepository(database.payments),
+        doctor_profile_repository=DoctorProfileRepository(database.doctor_profiles),
+    )
+

@@ -96,6 +96,13 @@ from app.schemas.observability import (
     AuditLogResponse,
 )
 
+from app.schemas.dashboard import (
+    RecentHealthInsight,
+    PatientDashboardResponse,
+    DoctorDashboardResponse,
+    AdminDashboardResponse,
+)
+
 __all__ = [
     # Authentication schemas
     "UserLogin",
@@ -180,4 +187,10 @@ __all__ = [
     "AuditLogCreateSchema",
     "AuditLogUpdateSchema",
     "AuditLogResponse",
+
+    # Dashboard response schemas
+    "RecentHealthInsight",
+    "PatientDashboardResponse",
+    "DoctorDashboardResponse",
+    "AdminDashboardResponse",
 ]

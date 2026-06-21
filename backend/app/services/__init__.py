@@ -26,6 +26,9 @@ from app.services.payment_service import PaymentService
 from app.services.doctor_wallet_service import DoctorWalletService
 from app.services.agent_log_service import AgentLogService
 from app.services.audit_log_service import AuditLogService
+from app.services.patient_dashboard_service import PatientDashboardService
+from app.services.doctor_dashboard_service import DoctorDashboardService
+from app.services.admin_dashboard_service import AdminDashboardService
 
 __all__ = [
     # Base service
@@ -66,4 +69,9 @@ __all__ = [
     # Observability and audit services
     "AgentLogService",
     "AuditLogService",
+
+    # Dashboard aggregation services
+    "PatientDashboardService",
+    "DoctorDashboardService",
+    "AdminDashboardService",
 ]

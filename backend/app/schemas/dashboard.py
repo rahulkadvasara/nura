@@ -1,0 +1,124 @@
+"""
+Nura - Dashboard Response Schemas
+Read-only Pydantic v2 schemas for Patient, Doctor, and Admin dashboard API responses
+"""
+
+from datetime import datetime
+from typing import List, Optional
+from pydantic import BaseModel, Field, ConfigDict
+
+
+# ---------------------------------------------------------------------------
+# Shared sub-schemas
+# ---------------------------------------------------------------------------
+
+class RecentHealthInsight(BaseModel):
+    """Compact health insight summary for dashboard display"""
+    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+
+    id: str = Field(..., description="Health insight ID")
+    title: str = Field(..., description="Short insight title")
+    severity: Optional[str] = Field(None, description="Severity level (low/medium/high)")
+    created_at: datetime = Field(..., description="When the insight was generated")
+
+
+# ---------------------------------------------------------------------------
+# Patient Dashboard
+# ---------------------------------------------------------------------------
+
+class PatientDashboardResponse(BaseModel):
+    """Read-only aggregated data for the patient dashboard"""
+    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+
+    upcoming_appointments_count: int = Field(
+        default=0,
+        description="Number of upcoming appointments (pending or approved, future dates)",
+    )
+    active_reminders_count: int = Field(
+        default=0,
+        description="Number of currently active reminders",
+    )
+    reports_count: int = Field(
+        default=0,
+        description="Total number of uploaded reports",
+    )
+    unread_notifications_count: int = Field(
+        default=0,
+        description="Number of unread notifications",
+    )
+    recent_health_insights: List[RecentHealthInsight] = Field(
+        default_factory=list,
+        description="Most recent health insights (up to 5)",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Doctor Dashboard
+# ---------------------------------------------------------------------------
+
+class DoctorDashboardResponse(BaseModel):
+    """Read-only aggregated data for the doctor dashboard"""
+    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+
+    todays_appointments_count: int = Field(
+        default=0,
+        description="Number of appointments scheduled for today",
+    )
+    upcoming_appointments_count: int = Field(
+        default=0,
+        description="Number of upcoming appointments (future dates, pending/approved)",
+    )
+    total_patients_count: int = Field(
+        default=0,
+        description="Total number of unique patients this doctor has appointments with",
+    )
+    pending_approvals_count: int = Field(
+        default=0,
+        description="Number of appointments awaiting the doctor's approval",
+    )
+    wallet_balance: float = Field(
+        default=0.0,
+        description="Current available wallet balance (INR)",
+    )
+    total_earnings: float = Field(
+        default=0.0,
+        description="Total lifetime earnings (INR)",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Admin Dashboard
+# ---------------------------------------------------------------------------
+
+class AdminDashboardResponse(BaseModel):
+    """Read-only aggregated data for the admin dashboard"""
+    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+
+    total_users_count: int = Field(
+        default=0,
+        description="Total number of registered users on the platform",
+    )
+    total_patients_count: int = Field(
+        default=0,
+        description="Total number of patient-role users",
+    )
+    total_doctors_count: int = Field(
+        default=0,
+        description="Total number of doctor-role users",
+    )
+    pending_doctor_verifications_count: int = Field(
+        default=0,
+        description="Number of doctor profiles pending admin verification",
+    )
+    total_appointments_count: int = Field(
+        default=0,
+        description="Total appointments across the platform",
+    )
+    total_revenue: float = Field(
+        default=0.0,
+        description="Total revenue collected (sum of all payment amounts, INR)",
+    )
+    active_consultations_count: int = Field(
+        default=0,
+        description="Total number of consultation records on the platform",
+    )
