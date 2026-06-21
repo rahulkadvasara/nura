@@ -1,66 +1,101 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-
-interface User {
-  id: string
-  role: string
-  email: string
-  full_name: string
-}
+import { User } from '@/types'
 
 interface AuthState {
   user: User | null
   accessToken: string | null
-  refreshToken: string | null
   isAuthenticated: boolean
+  isLoading: boolean
   
   // Actions
-  setAuth: (user: User, accessToken: string, refreshToken: string) => void
-  clearAuth: () => void
-  updateUser: (user: Partial<User>) => void
+  setUser: (user: User | null) => void
+  setAccessToken: (token: string | null) => void
+  login: (user: User, accessToken: string, refreshToken: string) => void
+  logout: () => void
+  clearSession: () => void
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       user: null,
       accessToken: null,
-      refreshToken: null,
       isAuthenticated: false,
+      isLoading: true, // starts loading until hydration completes
 
-      setAuth: (user, accessToken, refreshToken) =>
+      setUser: (user) => set({ user, isAuthenticated: !!user }),
+      
+      setAccessToken: (token) => {
+        if (typeof window !== 'undefined') {
+          if (token) {
+            localStorage.setItem('access_token', token)
+          } else {
+            localStorage.removeItem('access_token')
+          }
+        }
+        set({ accessToken: token })
+      },
+      
+      login: (user, accessToken, refreshToken) => {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('access_token', accessToken)
+          localStorage.setItem('refresh_token', refreshToken)
+        }
         set({
           user,
           accessToken,
-          refreshToken,
           isAuthenticated: true,
-        }),
-
-      clearAuth: () =>
+          isLoading: false
+        })
+      },
+      
+      logout: () => {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('access_token')
+          localStorage.removeItem('refresh_token')
+        }
         set({
           user: null,
           accessToken: null,
-          refreshToken: null,
           isAuthenticated: false,
-        }),
-
-      updateUser: (userData) => {
-        const currentUser = get().user
-        if (currentUser) {
-          set({
-            user: { ...currentUser, ...userData },
-          })
-        }
+          isLoading: false
+        })
       },
+      
+      clearSession: () => {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('access_token')
+          localStorage.removeItem('refresh_token')
+        }
+        set({
+          user: null,
+          accessToken: null,
+          isAuthenticated: false,
+          isLoading: false
+        })
+      }
     }),
     {
       name: 'auth-storage',
       partialize: (state) => ({
         user: state.user,
-        accessToken: state.accessToken,
-        refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
+        // we omit accessToken from zustand persist because it is stored directly in localStorage keys 
+        // by the actions, which is what axios expects.
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.isLoading = false
+          // Restore access token from local storage on hydration
+          if (typeof window !== 'undefined') {
+            const token = localStorage.getItem('access_token')
+            if (token) {
+              state.setAccessToken(token)
+            }
+          }
+        }
+      }
     }
   )
 )
