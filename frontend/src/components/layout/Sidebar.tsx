@@ -28,7 +28,7 @@ export function Sidebar() {
         { name: 'Appointments', href: '/dashboard/appointments', icon: Calendar },
         { name: 'Patients', href: '/dashboard/patients', icon: Users },
         { name: 'Reports', href: '/dashboard/reports', icon: FileText },
-        { name: 'Settings', href: '/dashboard/settings', icon: Settings },
+        { name: 'Settings', href: '/dashboard/settings/profile', icon: Settings },
       ]
     }
     
@@ -37,7 +37,7 @@ export function Sidebar() {
         { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
         { name: 'Users', href: '/dashboard/users', icon: Users },
         { name: 'System Logs', href: '/dashboard/logs', icon: Activity },
-        { name: 'Settings', href: '/dashboard/settings', icon: Settings },
+        { name: 'Settings', href: '/dashboard/settings/profile', icon: Settings },
       ]
     }
 
@@ -47,7 +47,7 @@ export function Sidebar() {
       { name: 'My Appointments', href: '/dashboard/appointments', icon: Calendar },
       { name: 'My Doctors', href: '/dashboard/doctors', icon: HeartPulse },
       { name: 'Medical Records', href: '/dashboard/records', icon: FileText },
-      { name: 'Settings', href: '/dashboard/settings', icon: Settings },
+      { name: 'Settings', href: '/dashboard/settings/profile', icon: Settings },
     ]
   }
 

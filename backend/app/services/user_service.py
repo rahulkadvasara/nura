@@ -185,3 +185,52 @@ class UserService(BaseService[UserInDB, UserCreate, UserUpdate]):
         if created_doc is None:
             raise RuntimeError("OAuth User was inserted but could not be retrieved")
         return UserInDB.from_mongo(created_doc)
+
+    # ------------------------------------------------------------------
+    # Notification Preferences
+    # ------------------------------------------------------------------
+
+    async def get_user_preferences(self, user_id: str):
+        from app.models.preferences import NotificationPreferencesInDB
+        from bson import ObjectId
+
+        db = self.user_repository.collection.database
+        prefs_col = db.get_collection("notification_preferences")
+        
+        doc = await prefs_col.find_one({"user_id": ObjectId(user_id)})
+        
+        if not doc:
+            # Create default preferences
+            default_prefs = {
+                "user_id": ObjectId(user_id),
+                "email_enabled": True,
+                "appointment_enabled": True,
+                "reminder_enabled": True,
+                "report_enabled": True,
+                "marketing_enabled": False
+            }
+            result = await prefs_col.insert_one(default_prefs)
+            doc = await prefs_col.find_one({"_id": result.inserted_id})
+            
+        return NotificationPreferencesInDB.from_mongo(doc)
+
+    async def update_user_preferences(self, user_id: str, update_data):
+        from app.models.preferences import NotificationPreferencesInDB
+        from bson import ObjectId
+
+        db = self.user_repository.collection.database
+        prefs_col = db.get_collection("notification_preferences")
+        
+        # Ensure it exists
+        await self.get_user_preferences(user_id)
+        
+        update_dict = {k: v for k, v in update_data.model_dump().items() if v is not None}
+        
+        if update_dict:
+            await prefs_col.update_one(
+                {"user_id": ObjectId(user_id)},
+                {"$set": update_dict}
+            )
+            
+        doc = await prefs_col.find_one({"user_id": ObjectId(user_id)})
+        return NotificationPreferencesInDB.from_mongo(doc)

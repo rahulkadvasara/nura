@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/stores/auth'
 import { Bell, Search, LogOut, User as UserIcon } from 'lucide-react'
@@ -63,10 +64,14 @@ export function Topbar() {
                 <div className="px-4 py-2 border-b">
                   <p className="text-sm font-medium text-slate-900 truncate">{user?.email}</p>
                 </div>
-                <button className="flex w-full items-center px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
+                <Link 
+                  href="/dashboard/settings/profile"
+                  onClick={() => setIsDropdownOpen(false)}
+                  className="flex w-full items-center px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                >
                   <UserIcon className="mr-2 h-4 w-4" />
                   Your Profile
-                </button>
+                </Link>
                 <button 
                   onClick={handleLogout}
                   className="flex w-full items-center px-4 py-2 text-sm text-destructive hover:bg-red-50 transition-colors"
