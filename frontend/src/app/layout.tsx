@@ -9,6 +9,8 @@ export const metadata = {
   description: 'Your Intelligent Healthcare Companion',
 }
 
+import { Toaster } from 'sonner'
+
 export default function RootLayout({
   children,
 }: {
@@ -20,6 +22,7 @@ export default function RootLayout({
         <QueryProvider>
           {children}
         </QueryProvider>
+        <Toaster position="top-center" richColors />
       </body>
     </html>
   )
