@@ -45,6 +45,17 @@ from app.schemas.appointment import (
     PrescriptionResponse,
 )
 
+from app.schemas.report import (
+    # Report schemas
+    ReportCreateSchema,
+    ReportUpdateSchema,
+    ReportResponse,
+    # Health Insight schemas
+    HealthInsightCreateSchema,
+    HealthInsightUpdateSchema,
+    HealthInsightResponse,
+)
+
 __all__ = [
     # Authentication schemas
     "UserLogin",
@@ -86,4 +97,12 @@ __all__ = [
     "PrescriptionCreateSchema",
     "PrescriptionUpdateSchema",
     "PrescriptionResponse",
+
+    # Report & Health Insight schemas
+    "ReportCreateSchema",
+    "ReportUpdateSchema",
+    "ReportResponse",
+    "HealthInsightCreateSchema",
+    "HealthInsightUpdateSchema",
+    "HealthInsightResponse",
 ]

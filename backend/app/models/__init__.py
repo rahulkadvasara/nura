@@ -69,6 +69,22 @@ from app.models.appointment import (
     PrescriptionInDB,
 )
 
+from app.models.report import (
+    ReportType,
+    ProcessingStatus,
+    RiskLevel,
+    InsightType,
+    Severity,
+    ReportBase,
+    ReportCreate,
+    ReportUpdate,
+    ReportInDB,
+    HealthInsightBase,
+    HealthInsightCreate,
+    HealthInsightUpdate,
+    HealthInsightInDB,
+)
+
 __all__ = [
     # User models
     "UserRole",
@@ -132,4 +148,19 @@ __all__ = [
     "PrescriptionCreate",
     "PrescriptionUpdate",
     "PrescriptionInDB",
+
+    # Report & Health Insight models
+    "ReportType",
+    "ProcessingStatus",
+    "RiskLevel",
+    "InsightType",
+    "Severity",
+    "ReportBase",
+    "ReportCreate",
+    "ReportUpdate",
+    "ReportInDB",
+    "HealthInsightBase",
+    "HealthInsightCreate",
+    "HealthInsightUpdate",
+    "HealthInsightInDB",
 ]

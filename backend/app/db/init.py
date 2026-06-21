@@ -113,5 +113,20 @@ async def setup_database(database: AsyncIOMotorDatabase) -> None:
     await prescriptions_collection.create_index("patient_id", name="patient_id_index")
     await prescriptions_collection.create_index("doctor_id", name="doctor_id_index")
     logger.info("Created prescriptions collection indexes")
+
+    # reports collection
+    reports_collection = database.reports
+    await reports_collection.create_index("patient_id", name="patient_id_index")
+    await reports_collection.create_index("report_type", name="report_type_index")
+    await reports_collection.create_index("processing_status", name="processing_status_index")
+    await reports_collection.create_index("created_at", name="created_at_index")
+    logger.info("Created reports collection indexes")
+
+    # health_insights collection
+    health_insights_collection = database.health_insights
+    await health_insights_collection.create_index("patient_id", name="patient_id_index")
+    await health_insights_collection.create_index("severity", name="severity_index")
+    await health_insights_collection.create_index("insight_type", name="insight_type_index")
+    logger.info("Created health_insights collection indexes")
     
     logger.info("Database setup completed")
