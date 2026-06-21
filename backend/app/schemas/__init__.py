@@ -68,6 +68,16 @@ from app.schemas.notification import (
     NotificationResponse,
 )
 
+from app.schemas.chat import (
+    ChatMessageMetadata,
+    ChatSessionCreateSchema,
+    ChatSessionUpdateSchema,
+    ChatSessionResponse,
+    ChatMessageCreateSchema,
+    ChatMessageUpdateSchema,
+    ChatMessageResponse,
+)
+
 __all__ = [
     # Authentication schemas
     "UserLogin",
@@ -127,4 +137,13 @@ __all__ = [
     "NotificationCreateSchema",
     "NotificationUpdateSchema",
     "NotificationResponse",
+
+    # Chat schemas
+    "ChatMessageMetadata",
+    "ChatSessionCreateSchema",
+    "ChatSessionUpdateSchema",
+    "ChatSessionResponse",
+    "ChatMessageCreateSchema",
+    "ChatMessageUpdateSchema",
+    "ChatMessageResponse",
 ]

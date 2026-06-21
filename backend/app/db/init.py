@@ -149,5 +149,20 @@ async def setup_database(database: AsyncIOMotorDatabase) -> None:
     notification_preferences_collection = database.notification_preferences
     await notification_preferences_collection.create_index("user_id", unique=True, name="user_id_unique")
     logger.info("Created notification_preferences collection indexes")
+
+    # chat_sessions collection
+    chat_sessions_collection = database.chat_sessions
+    await chat_sessions_collection.create_index("patient_id", name="patient_id_index")
+    await chat_sessions_collection.create_index("session_type", name="session_type_index")
+    await chat_sessions_collection.create_index("active", name="active_index")
+    await chat_sessions_collection.create_index("last_message_at", name="last_message_at_index")
+    logger.info("Created chat_sessions collection indexes")
+
+    # chat_messages collection
+    chat_messages_collection = database.chat_messages
+    await chat_messages_collection.create_index("session_id", name="session_id_index")
+    await chat_messages_collection.create_index("sender_type", name="sender_type_index")
+    await chat_messages_collection.create_index("created_at", name="created_at_index")
+    logger.info("Created chat_messages collection indexes")
     
     logger.info("Database setup completed")

@@ -20,6 +20,8 @@ from app.services.report_service import ReportService
 from app.services.health_insight_service import HealthInsightService
 from app.services.reminder_service import ReminderService
 from app.services.notification_service import NotificationService
+from app.services.chat_session_service import ChatSessionService
+from app.services.chat_message_service import ChatMessageService
 
 __all__ = [
     # Base service
@@ -48,4 +50,8 @@ __all__ = [
     # Reminder & Notification services
     "ReminderService",
     "NotificationService",
+
+    # Chat session and message services
+    "ChatSessionService",
+    "ChatMessageService",
 ]

@@ -105,6 +105,20 @@ from app.models.notification import (
     NotificationInDB,
 )
 
+from app.models.chat import (
+    SessionType,
+    SenderType,
+    MessageType,
+    ChatSessionBase,
+    ChatSessionCreate,
+    ChatSessionUpdate,
+    ChatSessionInDB,
+    ChatMessageBase,
+    ChatMessageCreate,
+    ChatMessageUpdate,
+    ChatMessageInDB,
+)
+
 __all__ = [
     # User models
     "UserRole",
@@ -183,4 +197,26 @@ __all__ = [
     "HealthInsightCreate",
     "HealthInsightUpdate",
     "HealthInsightInDB",
+
+    # Reminder & Notification models
+    "ReminderType",
+    "ReminderStatus",
+    "ReminderSourceType",
+    "ReminderInDB",
+    "NotificationType",
+    "NotificationPriority",
+    "NotificationInDB",
+
+    # Chat session and message models
+    "SessionType",
+    "SenderType",
+    "MessageType",
+    "ChatSessionBase",
+    "ChatSessionCreate",
+    "ChatSessionUpdate",
+    "ChatSessionInDB",
+    "ChatMessageBase",
+    "ChatMessageCreate",
+    "ChatMessageUpdate",
+    "ChatMessageInDB",
 ]
