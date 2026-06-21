@@ -87,6 +87,15 @@ from app.schemas.payment import (
     DoctorWalletResponse,
 )
 
+from app.schemas.observability import (
+    AgentLogCreateSchema,
+    AgentLogUpdateSchema,
+    AgentLogResponse,
+    AuditLogCreateSchema,
+    AuditLogUpdateSchema,
+    AuditLogResponse,
+)
+
 __all__ = [
     # Authentication schemas
     "UserLogin",
@@ -163,4 +172,12 @@ __all__ = [
     "DoctorWalletCreateSchema",
     "DoctorWalletUpdateSchema",
     "DoctorWalletResponse",
+
+    # Observability and audit schemas
+    "AgentLogCreateSchema",
+    "AgentLogUpdateSchema",
+    "AgentLogResponse",
+    "AuditLogCreateSchema",
+    "AuditLogUpdateSchema",
+    "AuditLogResponse",
 ]

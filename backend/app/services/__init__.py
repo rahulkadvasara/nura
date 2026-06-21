@@ -24,6 +24,8 @@ from app.services.chat_session_service import ChatSessionService
 from app.services.chat_message_service import ChatMessageService
 from app.services.payment_service import PaymentService
 from app.services.doctor_wallet_service import DoctorWalletService
+from app.services.agent_log_service import AgentLogService
+from app.services.audit_log_service import AuditLogService
 
 __all__ = [
     # Base service
@@ -60,4 +62,8 @@ __all__ = [
     # Payment and doctor wallet services
     "PaymentService",
     "DoctorWalletService",
+
+    # Observability and audit services
+    "AgentLogService",
+    "AuditLogService",
 ]

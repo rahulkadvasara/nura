@@ -23,6 +23,8 @@ from app.repositories.chat_session_repository import ChatSessionRepository
 from app.repositories.chat_message_repository import ChatMessageRepository
 from app.repositories.payment_repository import PaymentRepository
 from app.repositories.doctor_wallet_repository import DoctorWalletRepository
+from app.repositories.agent_log_repository import AgentLogRepository
+from app.repositories.audit_log_repository import AuditLogRepository
 
 __all__ = [
     # Base repository
@@ -58,4 +60,8 @@ __all__ = [
     # Payment and doctor wallet repositories
     "PaymentRepository",
     "DoctorWalletRepository",
+
+    # Observability and audit repositories
+    "AgentLogRepository",
+    "AuditLogRepository",
 ]

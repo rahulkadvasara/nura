@@ -177,5 +177,22 @@ async def setup_database(database: AsyncIOMotorDatabase) -> None:
     doctor_wallets_collection = database.doctor_wallets
     await doctor_wallets_collection.create_index("doctor_id", unique=True, name="doctor_id_unique")
     logger.info("Created doctor_wallets collection indexes")
+
+    # agent_logs collection
+    agent_logs_collection = database.agent_logs
+    await agent_logs_collection.create_index("agent_name", name="agent_name_index")
+    await agent_logs_collection.create_index("workflow_id", name="workflow_id_index")
+    await agent_logs_collection.create_index("session_id", name="session_id_index")
+    await agent_logs_collection.create_index("status", name="status_index")
+    await agent_logs_collection.create_index("created_at", name="created_at_index")
+    logger.info("Created agent_logs collection indexes")
+
+    # audit_logs collection
+    audit_logs_collection = database.audit_logs
+    await audit_logs_collection.create_index("user_id", name="user_id_index")
+    await audit_logs_collection.create_index("action", name="action_index")
+    await audit_logs_collection.create_index("resource_type", name="resource_type_index")
+    await audit_logs_collection.create_index("created_at", name="created_at_index")
+    logger.info("Created audit_logs collection indexes")
     
     logger.info("Database setup completed")

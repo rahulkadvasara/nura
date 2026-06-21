@@ -132,6 +132,18 @@ from app.models.payment import (
     DoctorWalletInDB,
 )
 
+from app.models.observability import (
+    AgentLogStatus,
+    AgentLogBase,
+    AgentLogCreate,
+    AgentLogUpdate,
+    AgentLogInDB,
+    AuditLogBase,
+    AuditLogCreate,
+    AuditLogUpdate,
+    AuditLogInDB,
+)
+
 __all__ = [
     # User models
     "UserRole",
@@ -244,4 +256,15 @@ __all__ = [
     "DoctorWalletCreate",
     "DoctorWalletUpdate",
     "DoctorWalletInDB",
+
+    # Observability and audit models
+    "AgentLogStatus",
+    "AgentLogBase",
+    "AgentLogCreate",
+    "AgentLogUpdate",
+    "AgentLogInDB",
+    "AuditLogBase",
+    "AuditLogCreate",
+    "AuditLogUpdate",
+    "AuditLogInDB",
 ]
