@@ -91,5 +91,27 @@ async def setup_database(database: AsyncIOMotorDatabase) -> None:
         name="doctor_availability_compound_index",
     )
     logger.info("Created doctor_availability collection indexes")
+
+    # appointments collection
+    appointments_collection = database.appointments
+    await appointments_collection.create_index("patient_id", name="patient_id_index")
+    await appointments_collection.create_index("doctor_id", name="doctor_id_index")
+    await appointments_collection.create_index("status", name="status_index")
+    await appointments_collection.create_index("slot_date", name="slot_date_index")
+    logger.info("Created appointments collection indexes")
+
+    # consultations collection
+    consultations_collection = database.consultations
+    await consultations_collection.create_index("appointment_id", name="appointment_id_index")
+    await consultations_collection.create_index("patient_id", name="patient_id_index")
+    await consultations_collection.create_index("doctor_id", name="doctor_id_index")
+    logger.info("Created consultations collection indexes")
+
+    # prescriptions collection
+    prescriptions_collection = database.prescriptions
+    await prescriptions_collection.create_index("consultation_id", name="consultation_id_index")
+    await prescriptions_collection.create_index("patient_id", name="patient_id_index")
+    await prescriptions_collection.create_index("doctor_id", name="doctor_id_index")
+    logger.info("Created prescriptions collection indexes")
     
     logger.info("Database setup completed")

@@ -29,6 +29,22 @@ from app.schemas.doctor import (
     DoctorAvailabilityResponse,
 )
 
+from app.schemas.appointment import (
+    # Appointment schemas
+    AppointmentCreateSchema,
+    AppointmentUpdateSchema,
+    AppointmentResponse,
+    # Consultation schemas
+    ConsultationCreateSchema,
+    ConsultationUpdateSchema,
+    ConsultationResponse,
+    # Prescription schemas
+    MedicationSchema,
+    PrescriptionCreateSchema,
+    PrescriptionUpdateSchema,
+    PrescriptionResponse,
+)
+
 __all__ = [
     # Authentication schemas
     "UserLogin",
@@ -54,4 +70,20 @@ __all__ = [
     "DoctorAvailabilityCreateSchema",
     "DoctorAvailabilityUpdateSchema",
     "DoctorAvailabilityResponse",
+
+    # Appointment schemas
+    "AppointmentCreateSchema",
+    "AppointmentUpdateSchema",
+    "AppointmentResponse",
+
+    # Consultation schemas
+    "ConsultationCreateSchema",
+    "ConsultationUpdateSchema",
+    "ConsultationResponse",
+
+    # Prescription schemas
+    "MedicationSchema",
+    "PrescriptionCreateSchema",
+    "PrescriptionUpdateSchema",
+    "PrescriptionResponse",
 ]

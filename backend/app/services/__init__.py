@@ -13,6 +13,9 @@ from app.services.doctor_service import (
     DoctorDocumentService,
     DoctorAvailabilityService,
 )
+from app.services.appointment_service import AppointmentService
+from app.services.consultation_service import ConsultationService
+from app.services.prescription_service import PrescriptionService
 
 __all__ = [
     # Base service
@@ -28,4 +31,9 @@ __all__ = [
     "DoctorProfileService",
     "DoctorDocumentService",
     "DoctorAvailabilityService",
+
+    # Appointment services
+    "AppointmentService",
+    "ConsultationService",
+    "PrescriptionService",
 ]

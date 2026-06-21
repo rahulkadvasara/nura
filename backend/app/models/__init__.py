@@ -51,6 +51,24 @@ from app.models.doctor import (
     DoctorAvailabilityInDB,
 )
 
+from app.models.appointment import (
+    AppointmentStatus,
+    PaymentStatus,
+    AppointmentBase,
+    AppointmentCreate,
+    AppointmentUpdate,
+    AppointmentInDB,
+    ConsultationBase,
+    ConsultationCreate,
+    ConsultationUpdate,
+    ConsultationInDB,
+    Medication,
+    PrescriptionBase,
+    PrescriptionCreate,
+    PrescriptionUpdate,
+    PrescriptionInDB,
+)
+
 __all__ = [
     # User models
     "UserRole",
@@ -97,4 +115,21 @@ __all__ = [
     "DoctorAvailabilityCreate",
     "DoctorAvailabilityUpdate",
     "DoctorAvailabilityInDB",
+
+    # Appointment, Consultation, Prescription models
+    "AppointmentStatus",
+    "PaymentStatus",
+    "AppointmentBase",
+    "AppointmentCreate",
+    "AppointmentUpdate",
+    "AppointmentInDB",
+    "ConsultationBase",
+    "ConsultationCreate",
+    "ConsultationUpdate",
+    "ConsultationInDB",
+    "Medication",
+    "PrescriptionBase",
+    "PrescriptionCreate",
+    "PrescriptionUpdate",
+    "PrescriptionInDB",
 ]
