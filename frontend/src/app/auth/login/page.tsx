@@ -13,6 +13,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { GoogleAuthButton } from '@/components/auth/GoogleAuthButton'
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -109,7 +110,24 @@ export default function LoginPage() {
         </Button>
       </form>
 
-      <div className="mt-4 text-center text-sm">
+      <div className="mt-6">
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t border-slate-200" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-white px-2 text-muted-foreground">
+              Or continue with
+            </span>
+          </div>
+        </div>
+        
+        <div className="mt-6 flex justify-center w-full">
+          <GoogleAuthButton />
+        </div>
+      </div>
+
+      <div className="mt-6 text-center text-sm">
         Don&apos;t have an account?{' '}
         <Link href="/auth/register" className="text-primary hover:underline font-medium">
           Sign up

@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { GoogleAuthButton } from '@/components/auth/GoogleAuthButton'
 
 const registerSchema = z.object({
   full_name: z.string().min(2, 'Full name must be at least 2 characters'),
@@ -134,7 +135,24 @@ export default function RegisterPage() {
         </Button>
       </form>
 
-      <div className="mt-4 text-center text-sm">
+      <div className="mt-6">
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t border-slate-200" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-white px-2 text-muted-foreground">
+              Or continue with
+            </span>
+          </div>
+        </div>
+        
+        <div className="mt-6 flex justify-center w-full">
+          <GoogleAuthButton />
+        </div>
+      </div>
+
+      <div className="mt-6 text-center text-sm">
         Already have an account?{' '}
         <Link href="/auth/login" className="text-primary hover:underline font-medium">
           Sign in
