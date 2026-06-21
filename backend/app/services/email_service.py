@@ -92,3 +92,33 @@ class EmailService:
         )
 
         return await self._send_email(email, subject, html_content, text_content)
+
+    async def send_password_reset_email(self, email: str, otp: str) -> bool:
+        """Sends an OTP email for password reset verification"""
+        subject = f"Your {settings.APP_NAME} Password Reset OTP"
+
+        html_content = f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+                <h2>Password Reset Request</h2>
+                <p>Hello,</p>
+                <p>We received a request to reset your password. Please use the following 6-digit One-Time Password (OTP) to complete the reset:</p>
+                <div style="font-size: 24px; font-weight: bold; background-color: #f0f0f0; padding: 15px; text-align: center; border-radius: 5px; letter-spacing: 5px; margin: 20px 0; max-width: 200px;">
+                    {otp}
+                </div>
+                <p>This OTP is valid for 10 minutes. If you did not request this, please ignore this email; your password will remain unchanged.</p>
+                <br/>
+                <p>Best regards,<br/>The {settings.APP_NAME} Team</p>
+            </body>
+        </html>
+        """
+        text_content = (
+            f"Hello,\n\n"
+            f"We received a request to reset your password. Please use the following 6-digit One-Time Password (OTP) to complete the reset:\n\n"
+            f"{otp}\n\n"
+            f"This OTP is valid for 10 minutes. If you did not request this, please ignore this email; your password will remain unchanged.\n\n"
+            f"Best regards,\n"
+            f"The {settings.APP_NAME} Team"
+        )
+
+        return await self._send_email(email, subject, html_content, text_content)

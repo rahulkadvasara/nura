@@ -8,8 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import ValidationError
 
 from app.core.dependencies import get_user_service, get_otp_service, get_email_service, get_auth_service, require_active_user
-from app.models import UserCreate, UserRole, AuthProvider, OTPPurpose, UserInDB
-from app.schemas.auth import SuccessResponse, OTPVerify, UserLogin, RefreshTokenRequest
+from app.models import UserCreate, UserRole, AuthProvider, OTPPurpose, UserInDB, OTPVerificationInDB
+from app.schemas.auth import SuccessResponse, OTPVerify, UserLogin, RefreshTokenRequest, ForgotPasswordRequest, ResetPasswordRequest
 from app.services import UserService, OTPService, EmailService, AuthService
 
 logger = logging.getLogger(__name__)
@@ -285,5 +285,134 @@ async def get_me(
         success=True,
         message="User profile retrieved",
         data=user_response.model_dump(),
+    )
+
+
+@router.post("/forgot-password", response_model=SuccessResponse)
+async def forgot_password(
+    forgot_in: ForgotPasswordRequest,
+    user_service: UserService = Depends(get_user_service),
+    otp_service: OTPService = Depends(get_otp_service),
+    email_service: EmailService = Depends(get_email_service),
+):
+    """
+    Initiate password recovery by sending an OTP to the user's email (enumeration prevention)
+    """
+    email = forgot_in.email.lower().strip()
+
+    # Look up user
+    user = await user_service.get_user_by_email(email)
+    
+    # Generic message for enumeration prevention
+    success_message = "If this email is registered, we have sent a password reset OTP"
+
+    if not user:
+        # Return generic success immediately to prevent account enumeration
+        return SuccessResponse(
+            success=True,
+            message=success_message,
+        )
+
+    # Generate OTP for password reset
+    otp = await otp_service.send_otp(email, OTPPurpose.PASSWORD_RESET)
+    if not otp:
+        # Log error internally but return success to client
+        logger.error(f"Failed to generate password reset OTP for {email}")
+        return SuccessResponse(
+            success=True,
+            message=success_message,
+        )
+
+    # Send password reset email
+    email_sent = await email_service.send_password_reset_email(email, otp)
+    if not email_sent:
+        logger.warning(f"Could not send password reset OTP email to {email}")
+
+    return SuccessResponse(
+        success=True,
+        message=success_message,
+    )
+
+
+@router.post("/reset-password", response_model=SuccessResponse)
+async def reset_password(
+    reset_in: ResetPasswordRequest,
+    user_service: UserService = Depends(get_user_service),
+    otp_service: OTPService = Depends(get_otp_service),
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    """
+    Reset user password using verification OTP
+    """
+    email = reset_in.email.lower().strip()
+
+    # Look up the absolute latest OTP document to verify custom errors
+    latest_otp_doc = await otp_service.otp_repository.collection.find_one(
+        {"email": email, "purpose": OTPPurpose.PASSWORD_RESET},
+        sort=[("created_at", -1)]
+    )
+
+    # Differentiate errors without leaking account existence for mismatching cases
+    if not latest_otp_doc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OTP",
+        )
+
+    latest_otp = OTPVerificationInDB.from_mongo(latest_otp_doc)
+
+    if latest_otp.otp != reset_in.otp:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OTP",
+        )
+
+    if latest_otp.verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="OTP has already been verified",
+        )
+
+    from datetime import datetime, timezone
+    expires_at = latest_otp.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    if expires_at < datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Expired OTP",
+        )
+
+    # Find the user
+    user = await user_service.get_user_by_email(email)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OTP",
+        )
+
+    # Perform verification (marks the OTP as verified)
+    verified_otp = await otp_service.verify_otp(email, reset_in.otp, OTPPurpose.PASSWORD_RESET)
+    if not verified_otp:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="OTP verification failed",
+        )
+
+    # Unconditionally reset user password (validation is handled inside the request schema and reset_password)
+    password_updated = await user_service.reset_password(user.id, reset_in.new_password)
+    if not password_updated:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update password",
+        )
+
+    # Revoke all active refresh tokens belonging to the user (forces logout on all devices)
+    await auth_service.logout_all(user.id)
+
+    return SuccessResponse(
+        success=True,
+        message="Password has been reset successfully",
     )
 

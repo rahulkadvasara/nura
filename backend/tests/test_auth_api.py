@@ -479,3 +479,191 @@ def test_me_endpoint_success(client, mocks):
     assert data["data"]["email"] == user.email
     assert data["data"]["full_name"] == user.full_name
 
+
+def test_forgot_password_success(client, mocks):
+    """Test forgot password flow for registered email"""
+    mock_user_service, mock_otp_service, mock_email_service = mocks
+    user = _make_user(email_verified=True, is_active=True)
+    
+    mock_user_service.get_user_by_email.return_value = user
+    mock_otp_service.send_otp.return_value = "123456"
+    mock_email_service.send_password_reset_email.return_value = True
+
+    response = client.post(
+        "/api/v1/auth/forgot-password",
+        json={"email": "rahul@example.com"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert "If this email is registered" in data["message"]
+    
+    mock_user_service.get_user_by_email.assert_called_once_with("rahul@example.com")
+    mock_otp_service.send_otp.assert_called_once_with("rahul@example.com", OTPPurpose.PASSWORD_RESET)
+    mock_email_service.send_password_reset_email.assert_called_once_with("rahul@example.com", "123456")
+
+
+def test_forgot_password_unknown_email(client, mocks):
+    """Test forgot password flow for unknown email (prevent enumeration)"""
+    mock_user_service, mock_otp_service, mock_email_service = mocks
+    mock_user_service.get_user_by_email.return_value = None
+
+    response = client.post(
+        "/api/v1/auth/forgot-password",
+        json={"email": "unknown@example.com"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert "If this email is registered" in data["message"]
+    
+    mock_user_service.get_user_by_email.assert_called_once_with("unknown@example.com")
+    mock_otp_service.send_otp.assert_not_called()
+    mock_email_service.send_password_reset_email.assert_not_called()
+
+
+def test_reset_password_success(client, auth_mocks):
+    """Test successful password reset flow"""
+    mock_user_service, mock_otp_service, _, mock_auth_service = auth_mocks
+    user = _make_user(email_verified=True, is_active=True)
+    otp_record = _make_otp(otp="123456")
+    otp_record.purpose = OTPPurpose.PASSWORD_RESET
+    
+    # Mock find_one for latest OTP document
+    mock_otp_service.otp_repository.collection.find_one.return_value = {
+        "_id": "507f1f77bcf86cd799439012",
+        "email": "rahul@example.com",
+        "otp": "123456",
+        "purpose": "password_reset",
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
+        "verified": False,
+        "created_at": datetime.now(timezone.utc)
+    }
+    mock_user_service.get_user_by_email.return_value = user
+    mock_otp_service.verify_otp.return_value = otp_record
+    mock_user_service.reset_password.return_value = True
+    mock_auth_service.logout_all.return_value = 1
+
+    response = client.post(
+        "/api/v1/auth/reset-password",
+        json={
+            "email": "rahul@example.com",
+            "otp": "123456",
+            "new_password": "NewPassword123"
+        }
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert "reset successfully" in data["message"]
+    
+    mock_user_service.reset_password.assert_called_once_with(user.id, "NewPassword123")
+    mock_auth_service.logout_all.assert_called_once_with(user.id)
+
+
+def test_reset_password_invalid_otp(client, auth_mocks):
+    """Test password reset with mismatched OTP"""
+    mock_user_service, mock_otp_service, _, _ = auth_mocks
+    
+    mock_otp_service.otp_repository.collection.find_one.return_value = {
+        "_id": "507f1f77bcf86cd799439012",
+        "email": "rahul@example.com",
+        "otp": "123456",
+        "purpose": "password_reset",
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
+        "verified": False,
+        "created_at": datetime.now(timezone.utc)
+    }
+
+    response = client.post(
+        "/api/v1/auth/reset-password",
+        json={
+            "email": "rahul@example.com",
+            "otp": "999999", # Mismatched OTP
+            "new_password": "NewPassword123"
+        }
+    )
+
+    assert response.status_code == 400
+    data = response.json()
+    assert data["success"] is False
+    assert "Invalid OTP" in data["message"]
+
+
+def test_reset_password_expired_otp(client, auth_mocks):
+    """Test password reset with expired OTP"""
+    mock_user_service, mock_otp_service, _, _ = auth_mocks
+    
+    mock_otp_service.otp_repository.collection.find_one.return_value = {
+        "_id": "507f1f77bcf86cd799439012",
+        "email": "rahul@example.com",
+        "otp": "123456",
+        "purpose": "password_reset",
+        "expires_at": datetime.now(timezone.utc) - timedelta(minutes=1), # Expired
+        "verified": False,
+        "created_at": datetime.now(timezone.utc) - timedelta(minutes=11)
+    }
+
+    response = client.post(
+        "/api/v1/auth/reset-password",
+        json={
+            "email": "rahul@example.com",
+            "otp": "123456",
+            "new_password": "NewPassword123"
+        }
+    )
+
+    assert response.status_code == 400
+    data = response.json()
+    assert data["success"] is False
+    assert "Expired OTP" in data["message"]
+
+
+def test_reset_password_reused_otp(client, auth_mocks):
+    """Test password reset with already verified OTP"""
+    mock_user_service, mock_otp_service, _, _ = auth_mocks
+    
+    mock_otp_service.otp_repository.collection.find_one.return_value = {
+        "_id": "507f1f77bcf86cd799439012",
+        "email": "rahul@example.com",
+        "otp": "123456",
+        "purpose": "password_reset",
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
+        "verified": True, # Already used
+        "created_at": datetime.now(timezone.utc)
+    }
+
+    response = client.post(
+        "/api/v1/auth/reset-password",
+        json={
+            "email": "rahul@example.com",
+            "otp": "123456",
+            "new_password": "NewPassword123"
+        }
+    )
+
+    assert response.status_code == 400
+    data = response.json()
+    assert data["success"] is False
+    assert "already been verified" in data["message"]
+
+
+def test_reset_password_weak_password(client, auth_mocks):
+    """Test password reset with weak password"""
+    response = client.post(
+        "/api/v1/auth/reset-password",
+        json={
+            "email": "rahul@example.com",
+            "otp": "123456",
+            "new_password": "weak" # Weak password
+        }
+    )
+
+    assert response.status_code == 422
+    data = response.json()
+    assert data["success"] is False
+    assert "Validation failed" in data["message"]
+
