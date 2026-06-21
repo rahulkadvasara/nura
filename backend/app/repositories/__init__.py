@@ -21,6 +21,8 @@ from app.repositories.reminder_repository import ReminderRepository
 from app.repositories.notification_repository import NotificationRepository
 from app.repositories.chat_session_repository import ChatSessionRepository
 from app.repositories.chat_message_repository import ChatMessageRepository
+from app.repositories.payment_repository import PaymentRepository
+from app.repositories.doctor_wallet_repository import DoctorWalletRepository
 
 __all__ = [
     # Base repository
@@ -52,4 +54,8 @@ __all__ = [
     # Chat session and message repositories
     "ChatSessionRepository",
     "ChatMessageRepository",
+
+    # Payment and doctor wallet repositories
+    "PaymentRepository",
+    "DoctorWalletRepository",
 ]

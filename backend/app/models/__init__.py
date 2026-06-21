@@ -119,6 +119,19 @@ from app.models.chat import (
     ChatMessageInDB,
 )
 
+from app.models.payment import (
+    PaymentStatus,
+    PaymentMethod,
+    PaymentBase,
+    PaymentCreate,
+    PaymentUpdate,
+    PaymentInDB,
+    DoctorWalletBase,
+    DoctorWalletCreate,
+    DoctorWalletUpdate,
+    DoctorWalletInDB,
+)
+
 __all__ = [
     # User models
     "UserRole",
@@ -219,4 +232,16 @@ __all__ = [
     "ChatMessageCreate",
     "ChatMessageUpdate",
     "ChatMessageInDB",
+
+    # Payment and doctor wallet models
+    "PaymentStatus",
+    "PaymentMethod",
+    "PaymentBase",
+    "PaymentCreate",
+    "PaymentUpdate",
+    "PaymentInDB",
+    "DoctorWalletBase",
+    "DoctorWalletCreate",
+    "DoctorWalletUpdate",
+    "DoctorWalletInDB",
 ]

@@ -78,6 +78,15 @@ from app.schemas.chat import (
     ChatMessageResponse,
 )
 
+from app.schemas.payment import (
+    PaymentCreateSchema,
+    PaymentUpdateSchema,
+    PaymentResponse,
+    DoctorWalletCreateSchema,
+    DoctorWalletUpdateSchema,
+    DoctorWalletResponse,
+)
+
 __all__ = [
     # Authentication schemas
     "UserLogin",
@@ -146,4 +155,12 @@ __all__ = [
     "ChatMessageCreateSchema",
     "ChatMessageUpdateSchema",
     "ChatMessageResponse",
+
+    # Payment and doctor wallet schemas
+    "PaymentCreateSchema",
+    "PaymentUpdateSchema",
+    "PaymentResponse",
+    "DoctorWalletCreateSchema",
+    "DoctorWalletUpdateSchema",
+    "DoctorWalletResponse",
 ]

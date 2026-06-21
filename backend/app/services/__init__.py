@@ -22,6 +22,8 @@ from app.services.reminder_service import ReminderService
 from app.services.notification_service import NotificationService
 from app.services.chat_session_service import ChatSessionService
 from app.services.chat_message_service import ChatMessageService
+from app.services.payment_service import PaymentService
+from app.services.doctor_wallet_service import DoctorWalletService
 
 __all__ = [
     # Base service
@@ -54,4 +56,8 @@ __all__ = [
     # Chat session and message services
     "ChatSessionService",
     "ChatMessageService",
+
+    # Payment and doctor wallet services
+    "PaymentService",
+    "DoctorWalletService",
 ]

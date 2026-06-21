@@ -164,5 +164,18 @@ async def setup_database(database: AsyncIOMotorDatabase) -> None:
     await chat_messages_collection.create_index("sender_type", name="sender_type_index")
     await chat_messages_collection.create_index("created_at", name="created_at_index")
     logger.info("Created chat_messages collection indexes")
+
+    # payments collection
+    payments_collection = database.payments
+    await payments_collection.create_index("appointment_id", name="appointment_id_index")
+    await payments_collection.create_index("patient_id", name="patient_id_index")
+    await payments_collection.create_index("doctor_id", name="doctor_id_index")
+    await payments_collection.create_index("payment_status", name="payment_status_index")
+    logger.info("Created payments collection indexes")
+
+    # doctor_wallets collection
+    doctor_wallets_collection = database.doctor_wallets
+    await doctor_wallets_collection.create_index("doctor_id", unique=True, name="doctor_id_unique")
+    logger.info("Created doctor_wallets collection indexes")
     
     logger.info("Database setup completed")
