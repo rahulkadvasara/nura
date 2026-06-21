@@ -28,6 +28,29 @@ from app.models.otp_verification import (
     OTPVerificationResponse
 )
 
+from app.models.doctor import (
+    # Enumerations
+    DoctorProfileStatus,
+    DocumentType,
+    DocumentVerificationStatus,
+    DayOfWeek,
+    # Doctor profile models
+    DoctorProfileBase,
+    DoctorProfileCreate,
+    DoctorProfileUpdate,
+    DoctorProfileInDB,
+    # Doctor document models
+    DoctorDocumentBase,
+    DoctorDocumentCreate,
+    DoctorDocumentUpdate,
+    DoctorDocumentInDB,
+    # Doctor availability models
+    DoctorAvailabilityBase,
+    DoctorAvailabilityCreate,
+    DoctorAvailabilityUpdate,
+    DoctorAvailabilityInDB,
+)
+
 __all__ = [
     # User models
     "UserRole",
@@ -50,4 +73,28 @@ __all__ = [
     "OTPVerificationCreate",
     "OTPVerificationInDB",
     "OTPVerificationResponse",
+
+    # Doctor enumerations
+    "DoctorProfileStatus",
+    "DocumentType",
+    "DocumentVerificationStatus",
+    "DayOfWeek",
+
+    # Doctor profile models
+    "DoctorProfileBase",
+    "DoctorProfileCreate",
+    "DoctorProfileUpdate",
+    "DoctorProfileInDB",
+
+    # Doctor document models
+    "DoctorDocumentBase",
+    "DoctorDocumentCreate",
+    "DoctorDocumentUpdate",
+    "DoctorDocumentInDB",
+
+    # Doctor availability models
+    "DoctorAvailabilityBase",
+    "DoctorAvailabilityCreate",
+    "DoctorAvailabilityUpdate",
+    "DoctorAvailabilityInDB",
 ]

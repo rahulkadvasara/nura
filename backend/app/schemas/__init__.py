@@ -14,6 +14,21 @@ from app.schemas.auth import (
     ErrorResponse
 )
 
+from app.schemas.doctor import (
+    # Doctor profile schemas
+    DoctorProfileCreateSchema,
+    DoctorProfileUpdateSchema,
+    DoctorProfileResponse,
+    # Doctor document schemas
+    DoctorDocumentCreateSchema,
+    DoctorDocumentUpdateSchema,
+    DoctorDocumentResponse,
+    # Doctor availability schemas
+    DoctorAvailabilityCreateSchema,
+    DoctorAvailabilityUpdateSchema,
+    DoctorAvailabilityResponse,
+)
+
 __all__ = [
     # Authentication schemas
     "UserLogin",
@@ -24,4 +39,19 @@ __all__ = [
     "TokenUser",
     "SuccessResponse",
     "ErrorResponse",
+
+    # Doctor profile schemas
+    "DoctorProfileCreateSchema",
+    "DoctorProfileUpdateSchema",
+    "DoctorProfileResponse",
+
+    # Doctor document schemas
+    "DoctorDocumentCreateSchema",
+    "DoctorDocumentUpdateSchema",
+    "DoctorDocumentResponse",
+
+    # Doctor availability schemas
+    "DoctorAvailabilityCreateSchema",
+    "DoctorAvailabilityUpdateSchema",
+    "DoctorAvailabilityResponse",
 ]
