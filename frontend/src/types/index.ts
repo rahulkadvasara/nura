@@ -175,4 +175,39 @@ export interface DoctorVerificationResponse {
   }
   documents: DoctorDocument[]
 }
+
+// Doctor Availability Types
+export interface DoctorAvailability {
+  id: string
+  doctor_id: string
+  date: string
+  day_of_week: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday'
+  start_time: string
+  end_time: string
+  slot_duration: number
+  is_available: boolean
+  active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface DoctorAvailabilityCreateRequest {
+  date: string
+  day_of_week?: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday'
+  start_time: string
+  end_time: string
+  slot_duration?: number
+  is_available?: boolean
+  active?: boolean
+}
+
+export interface DoctorAvailabilityUpdateRequest {
+  date?: string
+  day_of_week?: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday'
+  start_time?: string
+  end_time?: string
+  slot_duration?: number
+  is_available?: boolean
+  active?: boolean
+}
 

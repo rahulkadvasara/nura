@@ -14,6 +14,7 @@ from app.models.doctor import (
     DocumentType,
     DocumentVerificationStatus,
     DoctorDocumentUpdate,
+    DoctorProfileInDB,
 )
 from app.schemas.auth import SuccessResponse
 from app.schemas.doctor import (
@@ -23,13 +24,18 @@ from app.schemas.doctor import (
     DoctorProfileCreateSchema,
     DoctorProfileUpdateSchema,
     DoctorDocumentCreateSchema,
+    DoctorAvailabilityCreateSchema,
+    DoctorAvailabilityUpdateSchema,
+    DoctorAvailabilityResponse,
 )
 from app.core.dependencies import (
     require_active_user,
     get_doctor_profile_service,
     get_doctor_document_service,
+    get_doctor_availability_service,
+    require_verified_doctor,
 )
-from app.services.doctor_service import DoctorProfileService, DoctorDocumentService
+from app.services.doctor_service import DoctorProfileService, DoctorDocumentService, DoctorAvailabilityService
 
 logger = logging.getLogger(__name__)
 
@@ -285,4 +291,155 @@ async def update_application(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update doctor application"
+        ) from exc
+
+
+# ---------------------------------------------------------------------------
+# Doctor Availability Management
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/availability",
+    response_model=SuccessResponse,
+    summary="Get Doctor Availability Slots",
+    description="Retrieve all availability slots for the verified doctor."
+)
+async def get_availability(
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    doctor_availability_service: DoctorAvailabilityService = Depends(get_doctor_availability_service),
+) -> SuccessResponse:
+    """Get all slots for the authenticated verified doctor."""
+    try:
+        slots = await doctor_availability_service.get_availability_by_doctor(current_doctor.id)
+        return SuccessResponse(
+            success=True,
+            message="Doctor availability slots retrieved successfully",
+            data={"availability": [doctor_availability_service.to_response(s).model_dump() for s in slots]}
+        )
+    except Exception as exc:
+        logger.exception("Failed to retrieve availability slots for doctor %s", current_doctor.id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve availability slots"
+        ) from exc
+
+
+@router.post(
+    "/availability",
+    response_model=SuccessResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Add Doctor Availability Slot",
+    description="Create a new availability slot for the verified doctor."
+)
+async def create_availability_slot(
+    schema: DoctorAvailabilityCreateSchema,
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    doctor_availability_service: DoctorAvailabilityService = Depends(get_doctor_availability_service),
+) -> SuccessResponse:
+    """Create a new availability slot. Validates overlaps and duration."""
+    try:
+        created_slot = await doctor_availability_service.create_availability(current_doctor.id, schema)
+        return SuccessResponse(
+            success=True,
+            message="Doctor availability slot created successfully",
+            data=doctor_availability_service.to_response(created_slot).model_dump()
+        )
+    except ValueError as val_err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(val_err)
+        )
+    except Exception as exc:
+        logger.exception("Failed to create availability slot for doctor %s", current_doctor.id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create availability slot"
+        ) from exc
+
+
+@router.put(
+    "/availability/{slot_id}",
+    response_model=SuccessResponse,
+    summary="Update Doctor Availability Slot",
+    description="Update an existing availability slot if not booked by an approved appointment."
+)
+async def update_availability_slot(
+    slot_id: str,
+    schema: DoctorAvailabilityUpdateSchema,
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    doctor_availability_service: DoctorAvailabilityService = Depends(get_doctor_availability_service),
+) -> SuccessResponse:
+    """Update an existing availability slot. Prevents updates if the slot has an approved appointment."""
+    existing_slot = await doctor_availability_service.get_availability_by_id(slot_id)
+    if not existing_slot or existing_slot.doctor_id != current_doctor.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Availability slot not found"
+        )
+
+    try:
+        updated = await doctor_availability_service.update_availability(slot_id, schema)
+        if not updated:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update availability slot"
+            )
+        return SuccessResponse(
+            success=True,
+            message="Doctor availability slot updated successfully",
+            data=doctor_availability_service.to_response(updated).model_dump()
+        )
+    except ValueError as val_err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(val_err)
+        )
+    except Exception as exc:
+        logger.exception("Failed to update availability slot %s for doctor %s", slot_id, current_doctor.id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update availability slot"
+        ) from exc
+
+
+@router.delete(
+    "/availability/{slot_id}",
+    response_model=SuccessResponse,
+    summary="Delete Doctor Availability Slot",
+    description="Delete an existing availability slot if not booked by an approved appointment."
+)
+async def delete_availability_slot(
+    slot_id: str,
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    doctor_availability_service: DoctorAvailabilityService = Depends(get_doctor_availability_service),
+) -> SuccessResponse:
+    """Delete an availability slot. Prevents deletion if the slot has an approved appointment."""
+    existing_slot = await doctor_availability_service.get_availability_by_id(slot_id)
+    if not existing_slot or existing_slot.doctor_id != current_doctor.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Availability slot not found"
+        )
+
+    try:
+        success = await doctor_availability_service.delete_availability(slot_id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to delete availability slot"
+            )
+        return SuccessResponse(
+            success=True,
+            message="Doctor availability slot deleted successfully"
+        )
+    except ValueError as val_err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(val_err)
+        )
+    except Exception as exc:
+        logger.exception("Failed to delete availability slot %s for doctor %s", slot_id, current_doctor.id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete availability slot"
         ) from exc

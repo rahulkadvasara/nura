@@ -18,6 +18,7 @@ from app.repositories import (
     OTPRepository,
     DoctorProfileRepository,
     DoctorDocumentRepository,
+    DoctorAvailabilityRepository,
 )
 from app.services import (
     UserService,
@@ -26,6 +27,7 @@ from app.services import (
     EmailService,
     DoctorProfileService,
     DoctorDocumentService,
+    DoctorAvailabilityService,
 )
 
 
@@ -94,6 +96,22 @@ def get_doctor_document_service() -> DoctorDocumentService:
     """Get DoctorDocumentService instance"""
     document_repository = get_doctor_document_repository()
     return DoctorDocumentService(document_repository)
+
+
+def get_doctor_availability_repository() -> DoctorAvailabilityRepository:
+    """Get DoctorAvailabilityRepository instance"""
+    database: AsyncIOMotorDatabase = get_database()
+    return DoctorAvailabilityRepository(database.doctor_availability)
+
+
+def get_doctor_availability_service(
+    availability_repository: DoctorAvailabilityRepository = Depends(get_doctor_availability_repository)
+) -> DoctorAvailabilityService:
+    """Get DoctorAvailabilityService instance"""
+    database: AsyncIOMotorDatabase = get_database()
+    from app.repositories.appointment_repository import AppointmentRepository
+    appointment_repository = AppointmentRepository(database.appointments)
+    return DoctorAvailabilityService(availability_repository, appointment_repository)
 
 
 def get_audit_log_repository():
@@ -193,6 +211,26 @@ def require_role(required_role: UserRole):
             )
         return current_user
     return dependency
+
+
+async def require_verified_doctor(
+    current_user: UserInDB = Depends(require_role(UserRole.DOCTOR)),
+    doctor_profile_service: DoctorProfileService = Depends(get_doctor_profile_service),
+):
+    """Enforce that current user is a verified doctor (role is exactly doctor and profile verified)"""
+    from app.models.doctor import DoctorProfileStatus, DoctorProfileInDB
+    if current_user.role != UserRole.DOCTOR:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only verified doctors can manage availability"
+        )
+    profile = await doctor_profile_service.get_profile_by_user_id(current_user.id)
+    if not profile or profile.profile_status != DoctorProfileStatus.VERIFIED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Doctor profile must be verified to manage availability"
+        )
+    return profile
 
 
 # ---------------------------------------------------------------------------

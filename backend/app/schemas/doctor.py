@@ -4,8 +4,8 @@ Pydantic v2 schemas for doctor API requests and responses
 """
 
 from datetime import datetime
-from typing import List, Optional
-from pydantic import BaseModel, Field, ConfigDict
+from typing import List, Optional, Any
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from app.models.doctor import (
     DoctorProfileStatus,
@@ -106,31 +106,69 @@ class DoctorDocumentResponse(BaseModel):
 
 class DoctorAvailabilityCreateSchema(BaseModel):
     """Request schema for creating a new availability slot"""
-    day_of_week: DayOfWeek = Field(..., description="Day of the week")
+    date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$", description="Slot date (YYYY-MM-DD)")
+    day_of_week: Optional[DayOfWeek] = Field(None, description="Day of the week")
     start_time: str = Field(..., pattern=r"^\d{2}:\d{2}$", description="Start time (HH:MM)")
     end_time: str = Field(..., pattern=r"^\d{2}:\d{2}$", description="End time (HH:MM)")
     slot_duration: int = Field(default=30, ge=5, le=240, description="Slot duration in minutes")
+    is_available: bool = Field(default=True, description="Whether slot is available")
     active: bool = Field(default=True, description="Whether availability is active")
+
+    @model_validator(mode="before")
+    @classmethod
+    def set_day_of_week(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            date_val = data.get("date")
+            if date_val and not data.get("day_of_week"):
+                try:
+                    dt = datetime.strptime(date_val, "%Y-%m-%d")
+                    day_name = dt.strftime("%A").lower()
+                    data["day_of_week"] = day_name
+                except Exception:
+                    pass
+        return data
 
 
 class DoctorAvailabilityUpdateSchema(BaseModel):
     """Request schema for updating an existing availability slot"""
+    date: Optional[str] = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$")
     day_of_week: Optional[DayOfWeek] = None
     start_time: Optional[str] = Field(None, pattern=r"^\d{2}:\d{2}$")
     end_time: Optional[str] = Field(None, pattern=r"^\d{2}:\d{2}$")
     slot_duration: Optional[int] = Field(None, ge=5, le=240)
+    is_available: Optional[bool] = None
     active: Optional[bool] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def set_day_of_week(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            date_val = data.get("date")
+            if date_val and not data.get("day_of_week"):
+                try:
+                    dt = datetime.strptime(date_val, "%Y-%m-%d")
+                    day_name = dt.strftime("%A").lower()
+                    data["day_of_week"] = day_name
+                except Exception:
+                    pass
+        return data
 
 
 class DoctorAvailabilityResponse(BaseModel):
     """Response schema for a doctor availability slot"""
+    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+
     id: str = Field(..., description="Availability record ID")
     doctor_id: str = Field(..., description="Associated doctor profile ID")
+    date: str = Field(..., description="Slot date (YYYY-MM-DD)")
     day_of_week: DayOfWeek = Field(..., description="Day of the week")
     start_time: str = Field(..., description="Start time (HH:MM)")
     end_time: str = Field(..., description="End time (HH:MM)")
     slot_duration: int = Field(..., description="Slot duration in minutes")
+    is_available: bool = Field(..., description="Whether slot is available")
     active: bool = Field(..., description="Whether availability is active")
+    created_at: datetime = Field(..., description="Creation timestamp")
+    updated_at: datetime = Field(..., description="Last update timestamp")
 
 
 # ---------------------------------------------------------------------------

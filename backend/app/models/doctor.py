@@ -6,7 +6,7 @@ MongoDB models for doctor_profiles, doctor_documents, and doctor_availability co
 from datetime import datetime, timezone
 from enum import Enum
 from typing import List, Optional
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 
 def utc_now() -> datetime:
@@ -190,11 +190,24 @@ class DoctorAvailabilityBase(BaseModel):
     """Base fields shared across doctor availability models"""
     model_config = ConfigDict(populate_by_name=True)
 
-    day_of_week: DayOfWeek = Field(..., description="Day of the week for this availability slot")
+    date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$", description="Slot date (YYYY-MM-DD)")
+    day_of_week: Optional[DayOfWeek] = Field(None, description="Day of the week for this availability slot (automatically calculated)")
     start_time: str = Field(..., pattern=r"^\d{2}:\d{2}$", description="Slot start time (HH:MM)")
     end_time: str = Field(..., pattern=r"^\d{2}:\d{2}$", description="Slot end time (HH:MM)")
     slot_duration: int = Field(default=30, ge=5, le=240, description="Duration of each appointment slot in minutes")
-    active: bool = Field(default=True, description="Whether this availability is currently active")
+    is_available: bool = Field(default=True, description="Whether this slot is available")
+    active: bool = Field(default=True, description="Whether this availability is currently active (legacy)")
+
+    @model_validator(mode="after")
+    def calculate_day_of_week(self) -> "DoctorAvailabilityBase":
+        if self.date and not self.day_of_week:
+            try:
+                dt = datetime.strptime(self.date, "%Y-%m-%d")
+                day_name = dt.strftime("%A").lower()
+                self.day_of_week = DayOfWeek(day_name)
+            except Exception:
+                pass
+        return self
 
 
 class DoctorAvailabilityCreate(DoctorAvailabilityBase):
@@ -204,10 +217,12 @@ class DoctorAvailabilityCreate(DoctorAvailabilityBase):
 
 class DoctorAvailabilityUpdate(BaseModel):
     """Schema used to update an existing availability record (all fields optional)"""
+    date: Optional[str] = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$")
     day_of_week: Optional[DayOfWeek] = None
     start_time: Optional[str] = Field(None, pattern=r"^\d{2}:\d{2}$")
     end_time: Optional[str] = Field(None, pattern=r"^\d{2}:\d{2}$")
     slot_duration: Optional[int] = Field(None, ge=5, le=240)
+    is_available: Optional[bool] = None
     active: Optional[bool] = None
 
 
@@ -215,6 +230,8 @@ class DoctorAvailabilityInDB(DoctorAvailabilityBase):
     """Doctor availability as stored in MongoDB"""
     id: str = Field(..., description="Document ID")
     doctor_id: str = Field(..., description="Reference to the doctor profile")
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
     @classmethod
     def from_mongo(cls, data: dict) -> "DoctorAvailabilityInDB":

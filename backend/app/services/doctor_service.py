@@ -85,11 +85,15 @@ def _availability_to_response(avail: DoctorAvailabilityInDB) -> DoctorAvailabili
     return DoctorAvailabilityResponse(
         id=avail.id,
         doctor_id=avail.doctor_id,
+        date=avail.date,
         day_of_week=avail.day_of_week,
         start_time=avail.start_time,
         end_time=avail.end_time,
         slot_duration=avail.slot_duration,
+        is_available=avail.is_available,
         active=avail.active,
+        created_at=avail.created_at,
+        updated_at=avail.updated_at,
     )
 
 
@@ -327,9 +331,10 @@ class DoctorAvailabilityService(
 ):
     """Service layer for doctor availability operations."""
 
-    def __init__(self, availability_repository: DoctorAvailabilityRepository):
+    def __init__(self, availability_repository: DoctorAvailabilityRepository, appointment_repository):
         super().__init__()
         self.availability_repository = availability_repository
+        self.appointment_repository = appointment_repository
 
     # ---- Validation --------------------------------------------------------
 
@@ -353,6 +358,60 @@ class DoctorAvailabilityService(
                 f"end_time '{end_time}' must be after start_time '{start_time}'"
             )
 
+    async def _check_overlaps(
+        self,
+        doctor_id: str,
+        date_str: str,
+        start_time: str,
+        end_time: str,
+        exclude_id: Optional[str] = None
+    ) -> None:
+        """Check if a proposed slot overlaps with any existing slot for the doctor on the same date.
+
+        Raises:
+            ValueError: If an overlap is found.
+        """
+        slots = await self.availability_repository.get_many(
+            {"doctor_id": doctor_id, "date": date_str}
+        )
+
+        def time_to_min(t: str) -> int:
+            h, m = map(int, t.split(":"))
+            return h * 60 + m
+
+        p_start = time_to_min(start_time)
+        p_end = time_to_min(end_time)
+
+        for slot in slots:
+            if exclude_id and slot.id == exclude_id:
+                continue
+            
+            s_start = time_to_min(slot.start_time)
+            s_end = time_to_min(slot.end_time)
+
+            if max(p_start, s_start) < min(p_end, s_end):
+                raise ValueError(
+                    f"The time slot {start_time}-{end_time} overlaps with an existing slot "
+                    f"{slot.start_time}-{slot.end_time} on {date_str}"
+                )
+
+    async def _check_appointment_lock(self, availability_id: str) -> None:
+        """Raise ValueError if there is an approved appointment matching this slot."""
+        slot = await self.availability_repository.get(availability_id)
+        if not slot:
+            raise ValueError("Availability slot not found")
+
+        has_approved_appt = await self.appointment_repository.exists({
+            "doctor_id": slot.doctor_id,
+            "slot_date": slot.date,
+            "slot_time": slot.start_time,
+            "status": "approved"
+        })
+        if has_approved_appt:
+            raise ValueError(
+                "Cannot modify or delete this slot because there is an approved appointment scheduled for it"
+            )
+
     # ---- Create ------------------------------------------------------------
 
     async def create_availability(
@@ -363,19 +422,32 @@ class DoctorAvailabilityService(
         """Create a new availability slot for a doctor.
 
         Raises:
-            ValueError: If the time range is invalid.
+            ValueError: If the time range is invalid or overlaps with an existing slot.
         """
         self._validate_time_range(schema.start_time, schema.end_time)
+        await self._check_overlaps(doctor_id, schema.date, schema.start_time, schema.end_time)
 
+        now = datetime.now(timezone.utc)
         avail_create = DoctorAvailabilityCreate(
             doctor_id=doctor_id,
-            day_of_week=schema.day_of_week,
+            date=schema.date,
+            day_of_week=schema.day_of_week or DayOfWeek(datetime.strptime(schema.date, "%Y-%m-%d").strftime("%A").lower()),
             start_time=schema.start_time,
             end_time=schema.end_time,
             slot_duration=schema.slot_duration,
+            is_available=schema.is_available,
             active=schema.active,
         )
-        return await self.availability_repository.create(avail_create)
+
+        doc_dict = avail_create.model_dump()
+        doc_dict["created_at"] = now
+        doc_dict["updated_at"] = now
+
+        result = await self.availability_repository.collection.insert_one(doc_dict)
+        created = await self.availability_repository.collection.find_one({"_id": result.inserted_id})
+        if created is None:
+            raise RuntimeError("Doctor availability was inserted but could not be retrieved")
+        return DoctorAvailabilityInDB.from_mongo(created)
 
     # ---- Read --------------------------------------------------------------
 
@@ -413,36 +485,56 @@ class DoctorAvailabilityService(
         """Update an existing availability slot.
 
         Raises:
-            ValueError: If the resulting time range is invalid.
+            ValueError: If the resulting time range is invalid or overlaps with an existing slot,
+                        or if the slot is locked by an approved appointment.
         """
-        # Resolve final start/end times for validation when only one is provided
         existing = await self.get_availability_by_id(availability_id)
-        if existing:
-            start = schema.start_time or existing.start_time
-            end = schema.end_time or existing.end_time
-            self._validate_time_range(start, end)
+        if not existing:
+            return None
+
+        # Check approved appointment lock
+        await self._check_appointment_lock(availability_id)
+
+        # Resolve final start/end times for validation when only one is provided
+        start = schema.start_time or existing.start_time
+        end = schema.end_time or existing.end_time
+        date_str = schema.date or existing.date
+        self._validate_time_range(start, end)
+
+        # Overlap check
+        if schema.date is not None or schema.start_time is not None or schema.end_time is not None:
+            await self._check_overlaps(existing.doctor_id, date_str, start, end, exclude_id=availability_id)
 
         update = DoctorAvailabilityUpdate(
+            date=schema.date,
             day_of_week=schema.day_of_week,
             start_time=schema.start_time,
             end_time=schema.end_time,
             slot_duration=schema.slot_duration,
+            is_available=schema.is_available,
             active=schema.active,
         )
         return await self.availability_repository.update(availability_id, update)
 
     async def deactivate_availability(self, availability_id: str) -> Optional[DoctorAvailabilityInDB]:
         """Mark a specific slot as inactive."""
+        await self._check_appointment_lock(availability_id)
         return await self.availability_repository.set_active(availability_id, False)
 
     async def activate_availability(self, availability_id: str) -> Optional[DoctorAvailabilityInDB]:
         """Mark a specific slot as active."""
+        await self._check_appointment_lock(availability_id)
         return await self.availability_repository.set_active(availability_id, True)
 
     # ---- Delete ------------------------------------------------------------
 
     async def delete_availability(self, availability_id: str) -> bool:
-        """Permanently delete an availability slot."""
+        """Permanently delete an availability slot.
+
+        Raises:
+            ValueError: If the slot is locked by an approved appointment.
+        """
+        await self._check_appointment_lock(availability_id)
         return await self.availability_repository.delete(availability_id)
 
     # ---- Serialisation -----------------------------------------------------
