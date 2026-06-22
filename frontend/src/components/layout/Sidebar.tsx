@@ -44,6 +44,7 @@ export function Sidebar() {
     if (role === 'admin') {
       return [
         { name: 'Dashboard', href: '/dashboard/admin', icon: LayoutDashboard },
+        { name: 'Verify Doctors', href: '/dashboard/admin/doctors', icon: Award },
         { name: 'Users', href: '/dashboard/users', icon: Users },
         { name: 'System Logs', href: '/dashboard/logs', icon: Activity },
         { name: 'Settings', href: '/dashboard/settings/profile', icon: Settings },

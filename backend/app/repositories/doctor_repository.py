@@ -64,18 +64,23 @@ class DoctorProfileRepository(BaseRepository[DoctorProfileInDB, DoctorProfileCre
         self,
         profile_id: str,
         new_status: DoctorProfileStatus,
+        rejection_reason: Optional[str] = None,
     ) -> Optional[DoctorProfileInDB]:
         """Change the verification status of a doctor profile."""
+        update_dict = {
+            "profile_status": new_status.value,
+            "updated_at": datetime.now(timezone.utc),
+        }
+        if new_status == DoctorProfileStatus.REJECTED:
+            update_dict["rejection_reason"] = rejection_reason
+        else:
+            update_dict["rejection_reason"] = None
+
         result = await self.collection.update_one(
             {"_id": ObjectId(profile_id)},
-            {
-                "$set": {
-                    "profile_status": new_status.value,
-                    "updated_at": datetime.now(timezone.utc),
-                }
-            },
+            {"$set": update_dict},
         )
-        if result.modified_count:
+        if result.matched_count:
             return await self.get(profile_id)
         return None
 

@@ -27,6 +27,11 @@ from app.schemas.doctor import (
     DoctorAvailabilityCreateSchema,
     DoctorAvailabilityUpdateSchema,
     DoctorAvailabilityResponse,
+    # Admin verification schemas
+    AdminDoctorListResponse,
+    DoctorVerificationResponse,
+    DoctorApprovalRequest,
+    DoctorRejectionRequest,
 )
 
 from app.schemas.appointment import (
@@ -128,6 +133,12 @@ __all__ = [
     "DoctorAvailabilityCreateSchema",
     "DoctorAvailabilityUpdateSchema",
     "DoctorAvailabilityResponse",
+
+    # Admin verification schemas
+    "AdminDoctorListResponse",
+    "DoctorVerificationResponse",
+    "DoctorApprovalRequest",
+    "DoctorRejectionRequest",
 
     # Appointment schemas
     "AppointmentCreateSchema",

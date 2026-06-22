@@ -60,6 +60,7 @@ def _profile_to_response(profile: DoctorProfileInDB) -> DoctorProfileResponse:
         profile_status=profile.profile_status,
         average_rating=profile.average_rating,
         total_reviews=profile.total_reviews,
+        rejection_reason=profile.rejection_reason,
         created_at=profile.created_at,
         updated_at=profile.updated_at,
     )
@@ -198,9 +199,9 @@ class DoctorProfileService(BaseService[DoctorProfileInDB, DoctorProfileCreate, D
         """Mark a doctor profile as verified (admin action)."""
         return await self.profile_repository.update_status(profile_id, DoctorProfileStatus.VERIFIED)
 
-    async def reject_profile(self, profile_id: str) -> Optional[DoctorProfileInDB]:
+    async def reject_profile(self, profile_id: str, rejection_reason: Optional[str] = None) -> Optional[DoctorProfileInDB]:
         """Mark a doctor profile as rejected (admin action)."""
-        return await self.profile_repository.update_status(profile_id, DoctorProfileStatus.REJECTED)
+        return await self.profile_repository.update_status(profile_id, DoctorProfileStatus.REJECTED, rejection_reason)
 
     # ---- Delete ------------------------------------------------------------
 

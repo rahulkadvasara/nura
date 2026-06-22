@@ -78,6 +78,21 @@ class UserService(BaseService[UserInDB, UserCreate, UserUpdate]):
     async def verify_user_email(self, user_id: str) -> Optional[UserInDB]:
         return await self.user_repository.verify_email(user_id)
 
+    async def update_user_role(self, user_id: str, role: UserRole, is_active: bool = True) -> Optional[UserInDB]:
+        from datetime import datetime, timezone
+        from bson import ObjectId
+        result = await self.user_repository.collection.update_one(
+            {"_id": ObjectId(user_id)},
+            {
+                "$set": {
+                    "role": role.value if hasattr(role, "value") else role,
+                    "is_active": is_active,
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            },
+        )
+        return await self.get_user_by_id(user_id)
+
     async def user_exists(self, email: str) -> bool:
         return await self.user_repository.exists_by_email(email)
 

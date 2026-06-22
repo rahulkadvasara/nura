@@ -212,14 +212,22 @@ export default function DoctorApplicationPage() {
                 {profile.profile_status}
               </Badge>
             </div>
-            <p className="text-sm opacity-90 leading-relaxed">
+            <div className="text-sm opacity-90 leading-relaxed">
               {application_status === 'Pending Review' && 
                 'Your onboarding application is currently under review by our medical directors. This process normally takes 2-3 business days. You will be notified via email.'}
               {application_status === 'Approved' && 
                 'Congratulations! Your credentials have been successfully verified. You will be promoted to the Doctor role shortly. Our support team will guide you on next steps.'}
-              {application_status === 'Rejected' && 
-                'Unfortunately, your application was not approved. Please contact our support desk for detailed clarification on document requirements.'}
-            </p>
+              {application_status === 'Rejected' && (
+                <div className="space-y-2">
+                  <p>Unfortunately, your application was not approved. Please contact our support desk for detailed clarification on document requirements.</p>
+                  {profile.rejection_reason && (
+                    <div className="mt-3 p-3 bg-red-100/50 border border-red-200 rounded-lg text-rose-950 text-xs">
+                      <span className="font-bold">Reason for Rejection:</span> {profile.rejection_reason}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             {application_status === 'Pending Review' && (
               <div className="pt-3">
                 <Button 

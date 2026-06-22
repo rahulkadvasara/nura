@@ -13,6 +13,7 @@ from app.models.doctor import (
     DocumentVerificationStatus,
     DayOfWeek,
 )
+from app.schemas.auth import TokenUser
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +64,7 @@ class DoctorProfileResponse(BaseModel):
     profile_status: DoctorProfileStatus = Field(..., description="Verification status")
     average_rating: float = Field(..., description="Average rating (0-5)")
     total_reviews: int = Field(..., description="Total reviews count")
+    rejection_reason: Optional[str] = Field(None, description="Reason for rejection if applicable")
     created_at: datetime = Field(..., description="Profile creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
@@ -177,3 +179,45 @@ class DoctorApplicationResponse(BaseModel):
     profile_status: DoctorProfileStatus = Field(..., description="Status of the profile")
     profile: DoctorProfileResponse = Field(..., description="Detailed profile data")
     documents: List[DoctorDocumentResponse] = Field(..., description="List of verification documents")
+    rejection_reason: Optional[str] = Field(None, description="Reason for rejection if applicable")
+
+
+# ---------------------------------------------------------------------------
+# Admin Verification Schemas
+# ---------------------------------------------------------------------------
+
+class AdminDoctorListResponse(BaseModel):
+    """Response schema representing an item in the admin review queue"""
+    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+
+    id: str = Field(..., description="Doctor profile ID")
+    user_id: str = Field(..., description="Associated user ID")
+    full_name: str = Field(..., description="Full name of applicant")
+    email: str = Field(..., description="Email address of applicant")
+    specialization: str = Field(..., description="Medical specialization")
+    experience_years: int = Field(..., description="Years of experience")
+    consultation_fee: float = Field(..., description="Consultation fee in INR")
+    hospital: Optional[str] = Field(None, description="Hospital affiliation")
+    license_number: Optional[str] = Field(None, description="Medical license number")
+    education: Optional[str] = Field(None, description="Education details")
+    profile_status: DoctorProfileStatus = Field(..., description="Verification status")
+    created_at: datetime = Field(..., description="Submission date")
+
+
+class DoctorVerificationResponse(BaseModel):
+    """Full detail response of an applicant for admin review"""
+    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+
+    profile: DoctorProfileResponse = Field(..., description="Detailed profile data")
+    user: TokenUser = Field(..., description="Associated user data")
+    documents: List[DoctorDocumentResponse] = Field(..., description="Submitted credentials and documents")
+
+
+class DoctorApprovalRequest(BaseModel):
+    """Request payload for doctor approval (currently empty)"""
+    pass
+
+
+class DoctorRejectionRequest(BaseModel):
+    """Request payload for doctor rejection containing reason"""
+    rejection_reason: str = Field(..., min_length=1, description="Reason for rejecting the credentials")

@@ -12,7 +12,7 @@ from app.core.logging import setup_logging
 from app.db.mongodb import connect_to_mongodb, close_mongodb_connection, get_database
 from app.db.qdrant import connect_to_qdrant, close_qdrant_connection
 from app.db.init import setup_database
-from app.api.v1 import health, auth, users, dashboard, doctor
+from app.api.v1 import health, auth, users, dashboard, doctor, admin
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi import Request, HTTPException, status
@@ -112,6 +112,11 @@ def create_application() -> FastAPI:
         doctor.router,
         prefix=settings.API_V1_PREFIX + "/doctor",
         tags=["doctor"]
+    )
+    app.include_router(
+        admin.router,
+        prefix=settings.API_V1_PREFIX + "/admin",
+        tags=["admin"]
     )
 
     return app

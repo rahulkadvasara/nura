@@ -96,6 +96,21 @@ def get_doctor_document_service() -> DoctorDocumentService:
     return DoctorDocumentService(document_repository)
 
 
+def get_audit_log_repository():
+    """Get AuditLogRepository instance"""
+    from app.repositories.audit_log_repository import AuditLogRepository
+    database = get_database()
+    return AuditLogRepository(database.audit_logs)
+
+
+def get_audit_log_service():
+    """Get AuditLogService instance"""
+    from app.services.audit_log_service import AuditLogService
+    audit_log_repository = get_audit_log_repository()
+    user_repository = get_user_repository()
+    return AuditLogService(audit_log_repository, user_repository)
+
+
 reusable_oauth2 = HTTPBearer()
 
 

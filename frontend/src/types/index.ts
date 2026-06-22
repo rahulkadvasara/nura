@@ -135,6 +135,7 @@ export interface DoctorProfile {
   hospital?: string
   license_number?: string
   profile_status: 'pending' | 'verified' | 'rejected'
+  rejection_reason?: string
   average_rating: number
   total_reviews: number
   created_at: string
@@ -145,6 +146,33 @@ export interface DoctorApplicationData {
   application_status: string
   profile_status: 'pending' | 'verified' | 'rejected'
   profile: DoctorProfile
+  documents: DoctorDocument[]
+}
+
+export interface AdminDoctorListResponse {
+  id: string
+  user_id: string
+  full_name: string
+  email: string
+  specialization: string
+  experience_years: number
+  consultation_fee: number
+  hospital?: string
+  license_number?: string
+  education?: string
+  profile_status: 'pending' | 'verified' | 'rejected'
+  created_at: string
+}
+
+export interface DoctorVerificationResponse {
+  profile: DoctorProfile
+  user: {
+    id: string
+    role: 'patient' | 'doctor' | 'admin'
+    email: string
+    full_name: string
+    email_verified: boolean
+  }
   documents: DoctorDocument[]
 }
 

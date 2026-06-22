@@ -11,6 +11,7 @@ import {
   VerificationOverviewCard,
   ActivityOverviewCard,
   AdminQuickActions,
+  PendingReviewsSection,
 } from '@/components/admin-dashboard'
 
 function getGreeting(): string {
@@ -111,6 +112,7 @@ function AdminDashboardContent() {
             remindersCount={data.reminders_count} 
             chatsCount={data.active_chats_count} 
           />
+          <PendingReviewsSection />
           <AdminQuickActions />
         </div>
 
