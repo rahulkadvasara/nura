@@ -39,3 +39,19 @@ export interface HealthStatus {
   mongodb: string
   qdrant: string
 }
+
+// Dashboard Types
+export interface RecentHealthInsight {
+  id: string
+  title: string
+  severity: 'low' | 'medium' | 'high' | null
+  created_at: string
+}
+
+export interface PatientDashboardData {
+  upcoming_appointments_count: number
+  active_reminders_count: number
+  reports_count: number
+  unread_notifications_count: number
+  recent_health_insights: RecentHealthInsight[]
+}
