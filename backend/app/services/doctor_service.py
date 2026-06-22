@@ -35,6 +35,7 @@ from app.schemas.doctor import (
     DoctorAvailabilityCreateSchema,
     DoctorAvailabilityUpdateSchema,
     DoctorAvailabilityResponse,
+    DoctorProfileManagementUpdateSchema,
 )
 from app.services.base import BaseService
 
@@ -188,13 +189,28 @@ class DoctorProfileService(BaseService[DoctorProfileInDB, DoctorProfileCreate, D
         """Update non-status fields of a doctor profile."""
         update = DoctorProfileUpdate(
             specialization=schema.specialization,
-            qualifications=schema.qualifications,
+            qualifications=None,
             experience_years=schema.experience_years,
             consultation_fee=schema.consultation_fee,
             bio=schema.bio,
             languages=schema.languages,
             hospital=schema.hospital,
             license_number=schema.license_number,
+            education=schema.education,
+        )
+        return await self.profile_repository.update(profile_id, update)
+
+    async def update_doctor_profile_management(
+        self,
+        profile_id: str,
+        schema: DoctorProfileManagementUpdateSchema,
+    ) -> Optional[DoctorProfileInDB]:
+        """Update only the allowed practitioner self-managed fields of a doctor profile."""
+        update = DoctorProfileUpdate(
+            experience_years=schema.experience_years,
+            consultation_fee=schema.consultation_fee,
+            bio=schema.bio,
+            languages=schema.languages,
             education=schema.education,
         )
         return await self.profile_repository.update(profile_id, update)

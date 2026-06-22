@@ -95,6 +95,7 @@ def sample_document_in_db():
 def sample_availability_create():
     return DoctorAvailabilityCreate(
         doctor_id="507f1f77bcf86cd799439010",
+        date="2026-06-22",
         day_of_week=DayOfWeek.MONDAY,
         start_time="09:00",
         end_time="17:00",
@@ -108,6 +109,7 @@ def sample_availability_in_db():
     return DoctorAvailabilityInDB(
         id="507f1f77bcf86cd799439030",
         doctor_id="507f1f77bcf86cd799439010",
+        date="2026-06-22",
         day_of_week=DayOfWeek.MONDAY,
         start_time="09:00",
         end_time="17:00",
@@ -308,6 +310,7 @@ class TestDoctorAvailabilityModel:
     def test_availability_default_values(self):
         avail = DoctorAvailabilityCreate(
             doctor_id="abc",
+            date="2026-06-22",
             day_of_week=DayOfWeek.FRIDAY,
             start_time="10:00",
             end_time="12:00",
@@ -335,6 +338,7 @@ class TestDoctorAvailabilityModel:
         raw = {
             "_id": ObjectId("507f1f77bcf86cd799439030"),
             "doctor_id": ObjectId("507f1f77bcf86cd799439010"),
+            "date": "2026-06-22",
             "day_of_week": "monday",
             "start_time": "09:00",
             "end_time": "17:00",
@@ -349,6 +353,7 @@ class TestDoctorAvailabilityModel:
         with pytest.raises(Exception):
             DoctorAvailabilityCreate(
                 doctor_id="abc",
+                date="2026-06-22",
                 day_of_week=DayOfWeek.MONDAY,
                 start_time="9:00",   # missing leading zero
                 end_time="17:00",
@@ -358,6 +363,7 @@ class TestDoctorAvailabilityModel:
         with pytest.raises(Exception):
             DoctorAvailabilityCreate(
                 doctor_id="abc",
+                date="2026-06-22",
                 day_of_week=DayOfWeek.MONDAY,
                 start_time="09:00",
                 end_time="17:00",
@@ -366,6 +372,7 @@ class TestDoctorAvailabilityModel:
         with pytest.raises(Exception):
             DoctorAvailabilityCreate(
                 doctor_id="abc",
+                date="2026-06-22",
                 day_of_week=DayOfWeek.MONDAY,
                 start_time="09:00",
                 end_time="17:00",

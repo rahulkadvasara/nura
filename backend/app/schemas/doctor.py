@@ -259,3 +259,20 @@ class DoctorApprovalRequest(BaseModel):
 class DoctorRejectionRequest(BaseModel):
     """Request payload for doctor rejection containing reason"""
     rejection_reason: str = Field(..., min_length=1, description="Reason for rejecting the credentials")
+
+
+class DoctorProfileManagementUpdateSchema(BaseModel):
+    """Request schema for doctor self-updating their professional profile"""
+    bio: Optional[str] = Field(None, max_length=2000, description="Doctor biography")
+    consultation_fee: Optional[float] = Field(None, ge=0, description="Consultation fee in INR")
+    languages: Optional[List[str]] = Field(None, description="Languages spoken")
+    education: Optional[str] = Field(None, max_length=500, description="Education details")
+    experience_years: Optional[int] = Field(None, ge=0, le=80, description="Years of experience")
+
+
+class DoctorProfileManagementResponse(BaseModel):
+    """Response schema containing the profile details and uploaded document statuses"""
+    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+
+    profile: DoctorProfileResponse = Field(..., description="Doctor profile data")
+    documents: List[DoctorDocumentResponse] = Field(..., description="Uploaded verification documents metadata")

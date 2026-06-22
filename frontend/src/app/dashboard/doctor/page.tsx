@@ -4,7 +4,8 @@ import { useAuthStore } from '@/stores/auth'
 import { useDoctorDashboard } from '@/hooks/use-dashboard'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Button } from '@/components/ui/button'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, User } from 'lucide-react'
+import Link from 'next/link'
 import {
   DoctorStatCards,
   EarningsCard,
@@ -102,13 +103,21 @@ function DoctorDashboardContent() {
   return (
     <div className="space-y-6">
       {/* Greeting */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-          {getGreeting()}, {doctorName}
-        </h1>
-        <p className="text-slate-500">
-          Here is an overview of your medical practice today.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+            {getGreeting()}, {doctorName}
+          </h1>
+          <p className="text-slate-500">
+            Here is an overview of your medical practice today.
+          </p>
+        </div>
+        <Link href="/dashboard/profile">
+          <Button className="bg-teal-600 hover:bg-teal-700 text-white flex items-center gap-2">
+            <User className="h-4 w-4" />
+            Edit Profile
+          </Button>
+        </Link>
       </div>
 
       {/* Stat Cards */}

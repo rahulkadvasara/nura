@@ -81,6 +81,7 @@ def sample_availability():
     return DoctorAvailabilityInDB(
         id="507f1f77bcf86cd799439030",
         doctor_id="507f1f77bcf86cd799439010",
+        date="2026-06-22",
         day_of_week=DayOfWeek.MONDAY,
         start_time="09:00",
         end_time="17:00",
@@ -204,7 +205,7 @@ class TestDoctorProfileService:
         result = await service.reject_profile("507f1f77bcf86cd799439010")
         assert result is not None
         repo.update_status.assert_called_once_with(
-            "507f1f77bcf86cd799439010", DoctorProfileStatus.REJECTED
+            "507f1f77bcf86cd799439010", DoctorProfileStatus.REJECTED, None
         )
 
     @pytest.mark.asyncio
@@ -324,6 +325,7 @@ class TestDoctorDocumentService:
 class TestDoctorAvailabilityService:
 
     def _make_service(self, sample_availability):
+        from bson import ObjectId
         repo = AsyncMock()
         repo.create = AsyncMock(return_value=sample_availability)
         repo.get = AsyncMock(return_value=sample_availability)
@@ -334,12 +336,27 @@ class TestDoctorAvailabilityService:
         repo.delete = AsyncMock(return_value=True)
         repo.set_active = AsyncMock(return_value=sample_availability)
         repo.list_availability = AsyncMock(return_value=[sample_availability])
-        return DoctorAvailabilityService(repo), repo
+        
+        # Configure MongoDB collection mocks for create_availability
+        repo.collection = AsyncMock()
+        insert_result = MagicMock()
+        insert_result.inserted_id = ObjectId(sample_availability.id)
+        repo.collection.insert_one = AsyncMock(return_value=insert_result)
+        
+        avail_dict = sample_availability.model_dump()
+        avail_dict["_id"] = ObjectId(avail_dict.pop("id"))
+        repo.collection.find_one = AsyncMock(return_value=avail_dict)
+        
+        appt_repo = AsyncMock()
+        appt_repo.exists = AsyncMock(return_value=False)
+        
+        return DoctorAvailabilityService(repo, appt_repo), repo
 
     @pytest.mark.asyncio
     async def test_create_availability(self, sample_availability):
         service, repo = self._make_service(sample_availability)
         schema = DoctorAvailabilityCreateSchema(
+            date="2026-06-22",
             day_of_week=DayOfWeek.MONDAY,
             start_time="09:00",
             end_time="17:00",
@@ -347,12 +364,13 @@ class TestDoctorAvailabilityService:
         result = await service.create_availability("507f1f77bcf86cd799439010", schema)
         assert isinstance(result, DoctorAvailabilityInDB)
         assert result.day_of_week == DayOfWeek.MONDAY
-        repo.create.assert_called_once()
+        repo.collection.insert_one.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_create_availability_invalid_time_range(self, sample_availability):
         service, repo = self._make_service(sample_availability)
         schema = DoctorAvailabilityCreateSchema(
+            date="2026-06-22",
             day_of_week=DayOfWeek.MONDAY,
             start_time="17:00",
             end_time="09:00",  # before start
@@ -364,6 +382,7 @@ class TestDoctorAvailabilityService:
     async def test_create_availability_same_time_range(self, sample_availability):
         service, repo = self._make_service(sample_availability)
         schema = DoctorAvailabilityCreateSchema(
+            date="2026-06-22",
             day_of_week=DayOfWeek.MONDAY,
             start_time="09:00",
             end_time="09:00",  # same as start

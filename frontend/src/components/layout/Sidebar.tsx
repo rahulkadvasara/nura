@@ -36,7 +36,7 @@ export function Sidebar() {
         { name: 'Patients', href: '/dashboard/patients', icon: Users },
         { name: 'Availability', href: '/dashboard/availability', icon: Clock },
         { name: 'Earnings', href: '/dashboard/earnings', icon: IndianRupee },
-        { name: 'Profile', href: '/dashboard/settings/profile', icon: UserIcon },
+        { name: 'Profile', href: '/dashboard/profile', icon: UserIcon },
       ]
     }
 

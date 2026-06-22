@@ -27,6 +27,8 @@ from app.schemas.doctor import (
     DoctorAvailabilityCreateSchema,
     DoctorAvailabilityUpdateSchema,
     DoctorAvailabilityResponse,
+    DoctorProfileManagementUpdateSchema,
+    DoctorProfileManagementResponse,
 )
 from app.core.dependencies import (
     require_active_user,
@@ -442,4 +444,77 @@ async def delete_availability_slot(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete availability slot"
+        ) from exc
+
+
+# ---------------------------------------------------------------------------
+# Doctor Profile Management
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/profile",
+    response_model=SuccessResponse,
+    summary="Get Doctor Self Profile",
+    description="Retrieve detailed profile and documents verification status for the verified doctor."
+)
+async def get_doctor_profile(
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    doctor_profile_service: DoctorProfileService = Depends(get_doctor_profile_service),
+    doctor_document_service: DoctorDocumentService = Depends(get_doctor_document_service),
+) -> SuccessResponse:
+    """Retrieve detailed practitioner profile and credentials statuses."""
+    try:
+        docs = await doctor_document_service.get_documents_by_doctor(current_doctor.id)
+        response_data = DoctorProfileManagementResponse(
+            profile=doctor_profile_service.to_response(current_doctor),
+            documents=[doctor_document_service.to_response(d) for d in docs]
+        )
+        return SuccessResponse(
+            success=True,
+            message="Doctor profile retrieved successfully",
+            data=response_data.model_dump()
+        )
+    except Exception as exc:
+        logger.exception("Failed to retrieve doctor profile for user %s", current_doctor.user_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve doctor profile"
+        ) from exc
+
+
+@router.put(
+    "/profile",
+    response_model=SuccessResponse,
+    summary="Update Doctor Self Profile",
+    description="Update self-managed profile settings (bio, fee, languages, education, experience)."
+)
+async def update_doctor_profile(
+    schema: DoctorProfileManagementUpdateSchema,
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    doctor_profile_service: DoctorProfileService = Depends(get_doctor_profile_service),
+    doctor_document_service: DoctorDocumentService = Depends(get_doctor_document_service),
+) -> SuccessResponse:
+    """Update practitioner profile details (bio, fee, languages, education, experience)."""
+    try:
+        updated = await doctor_profile_service.update_doctor_profile_management(current_doctor.id, schema)
+        if not updated:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update doctor profile"
+            )
+        docs = await doctor_document_service.get_documents_by_doctor(current_doctor.id)
+        response_data = DoctorProfileManagementResponse(
+            profile=doctor_profile_service.to_response(updated),
+            documents=[doctor_document_service.to_response(d) for d in docs]
+        )
+        return SuccessResponse(
+            success=True,
+            message="Doctor profile updated successfully",
+            data=response_data.model_dump()
+        )
+    except Exception as exc:
+        logger.exception("Failed to update doctor profile for user %s", current_doctor.user_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update doctor profile"
         ) from exc

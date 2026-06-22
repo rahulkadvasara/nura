@@ -90,6 +90,7 @@ def make_availability_doc(
     return {
         "_id": ObjectId(avail_id),
         "doctor_id": doctor_id,
+        "date": "2026-06-22",
         "day_of_week": "monday",
         "start_time": "09:00",
         "end_time": "17:00",
@@ -398,6 +399,7 @@ class TestDoctorAvailabilityRepository:
         repo = DoctorAvailabilityRepository(collection)
         avail_create = DoctorAvailabilityCreate(
             doctor_id="507f1f77bcf86cd799439010",
+            date="2026-06-22",
             day_of_week=DayOfWeek.MONDAY,
             start_time="09:00",
             end_time="17:00",
