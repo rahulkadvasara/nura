@@ -136,18 +136,23 @@ export default function DashboardPage() {
   const role = user?.role || 'patient'
 
   useEffect(() => {
-    if (!authLoading && role === 'doctor') {
-      router.replace('/dashboard/doctor')
+    if (!authLoading) {
+      if (role === 'doctor') {
+        router.replace('/dashboard/doctor')
+      } else if (role === 'admin') {
+        router.replace('/dashboard/admin')
+      }
     }
   }, [role, authLoading, router])
 
-  if (authLoading || role === 'doctor') {
+  if (authLoading || role === 'doctor' || role === 'admin') {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
       </div>
     )
   }
+
 
   // Only patients get the full dashboard; doctor/admin see a placeholder for now
   if (role === 'patient') {

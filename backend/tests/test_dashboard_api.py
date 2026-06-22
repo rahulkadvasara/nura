@@ -90,8 +90,14 @@ def _admin_dashboard_data() -> AdminDashboardResponse:
         pending_doctor_verifications_count=5,
         total_appointments_count=300,
         total_revenue=150000.0,
+        platform_earnings=22500.0,
         active_consultations_count=45,
+        reports_count=120,
+        reminders_count=65,
+        active_chats_count=15,
+        verified_doctors_count=15,
     )
+
 
 
 # ---------------------------------------------------------------------------
@@ -243,7 +249,13 @@ class TestAdminDashboardAPI:
         assert data["data"]["pending_doctor_verifications_count"] == 5
         assert data["data"]["total_appointments_count"] == 300
         assert data["data"]["total_revenue"] == 150000.0
+        assert data["data"]["platform_earnings"] == 22500.0
         assert data["data"]["active_consultations_count"] == 45
+        assert data["data"]["reports_count"] == 120
+        assert data["data"]["reminders_count"] == 65
+        assert data["data"]["active_chats_count"] == 15
+        assert data["data"]["verified_doctors_count"] == 15
+
 
     def test_patient_blocked_from_admin_dashboard(self, client):
         """Patient role is blocked from GET /dashboard/admin (403)"""

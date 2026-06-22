@@ -66,4 +66,20 @@ export interface DoctorDashboardData {
   pending_balance: number
   profile_status: 'pending' | 'verified' | 'rejected'
   document_status: 'pending' | 'approved' | 'rejected'
-}
+}
+
+export interface AdminDashboardData {
+  total_users_count: number
+  total_patients_count: number
+  total_doctors_count: number
+  pending_doctor_verifications_count: number
+  total_appointments_count: number
+  total_revenue: number
+  platform_earnings: number
+  active_consultations_count: number
+  reports_count: number
+  reminders_count: number
+  active_chats_count: number
+  verified_doctors_count: number
+}
+

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { dashboardService } from '@/services/dashboard.service'
-import { PatientDashboardData, DoctorDashboardData } from '@/types'
+import { PatientDashboardData, DoctorDashboardData, AdminDashboardData } from '@/types'
 
 export function usePatientDashboard() {
   return useQuery<PatientDashboardData>({
@@ -31,4 +31,20 @@ export function useDoctorDashboard() {
     refetchOnWindowFocus: true,
   })
 }
+
+export function useAdminDashboard() {
+  return useQuery<AdminDashboardData>({
+    queryKey: ['dashboard', 'admin'],
+    queryFn: async () => {
+      const response = await dashboardService.getAdminDashboard()
+      if (response.success && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to load dashboard')
+    },
+    staleTime: 30_000, // 30 seconds
+    refetchOnWindowFocus: true,
+  })
+}
+
 

@@ -191,6 +191,9 @@ def get_admin_dashboard_service():
     from app.repositories.consultation_repository import ConsultationRepository
     from app.repositories.payment_repository import PaymentRepository
     from app.repositories.doctor_repository import DoctorProfileRepository
+    from app.repositories.report_repository import ReportRepository
+    from app.repositories.reminder_repository import ReminderRepository
+    from app.repositories.chat_session_repository import ChatSessionRepository
 
     database = get_database()
     return AdminDashboardService(
@@ -199,5 +202,9 @@ def get_admin_dashboard_service():
         consultation_repository=ConsultationRepository(database.consultations),
         payment_repository=PaymentRepository(database.payments),
         doctor_profile_repository=DoctorProfileRepository(database.doctor_profiles),
+        report_repository=ReportRepository(database.reports),
+        reminder_repository=ReminderRepository(database.reminders),
+        chat_session_repository=ChatSessionRepository(database.chat_sessions),
     )
+
 

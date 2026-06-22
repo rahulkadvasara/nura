@@ -132,7 +132,28 @@ class AdminDashboardResponse(BaseModel):
         default=0.0,
         description="Total revenue collected (sum of all payment amounts, INR)",
     )
+    platform_earnings: float = Field(
+        default=0.0,
+        description="Total platform earnings from fee splits, INR",
+    )
     active_consultations_count: int = Field(
         default=0,
         description="Total number of consultation records on the platform",
     )
+    reports_count: int = Field(
+        default=0,
+        description="Total number of uploaded reports across the platform",
+    )
+    reminders_count: int = Field(
+        default=0,
+        description="Total number of active reminders across the platform",
+    )
+    active_chats_count: int = Field(
+        default=0,
+        description="Total number of active chat sessions on the platform",
+    )
+    verified_doctors_count: int = Field(
+        default=0,
+        description="Total number of verified doctor profiles",
+    )
+
