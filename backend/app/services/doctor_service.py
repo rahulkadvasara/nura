@@ -36,8 +36,10 @@ from app.schemas.doctor import (
     DoctorAvailabilityUpdateSchema,
     DoctorAvailabilityResponse,
     DoctorProfileManagementUpdateSchema,
+    DoctorDiscoveryResponse,
 )
 from app.services.base import BaseService
+from app.repositories.user_repository import UserRepository
 
 
 # ---------------------------------------------------------------------------
@@ -105,9 +107,10 @@ def _availability_to_response(avail: DoctorAvailabilityInDB) -> DoctorAvailabili
 class DoctorProfileService(BaseService[DoctorProfileInDB, DoctorProfileCreate, DoctorProfileUpdate]):
     """Service layer for doctor profile operations."""
 
-    def __init__(self, profile_repository: DoctorProfileRepository):
+    def __init__(self, profile_repository: DoctorProfileRepository, user_repository: Optional[UserRepository] = None):
         super().__init__()
         self.profile_repository = profile_repository
+        self.user_repository = user_repository
 
     # ---- Create ------------------------------------------------------------
 
@@ -233,7 +236,119 @@ class DoctorProfileService(BaseService[DoctorProfileInDB, DoctorProfileCreate, D
 
     def to_response(self, profile: DoctorProfileInDB) -> DoctorProfileResponse:
         """Convert internal model to API response."""
-        return _profile_to_response(profile)
+        return DoctorProfileResponse(
+            id=profile.id,
+            user_id=profile.user_id,
+            specialization=profile.specialization,
+            qualifications=profile.qualifications,
+            experience_years=profile.experience_years,
+            consultation_fee=profile.consultation_fee,
+            bio=profile.bio,
+            languages=profile.languages,
+            hospital=profile.hospital,
+            license_number=profile.license_number,
+            education=profile.education,
+            profile_status=profile.profile_status,
+            average_rating=profile.average_rating,
+            total_reviews=profile.total_reviews,
+            rejection_reason=profile.rejection_reason,
+            created_at=profile.created_at,
+            updated_at=profile.updated_at,
+        )
+
+    # ---- Discovery & Search Methods -----------------------------------------
+
+    async def search_verified_doctors(
+        self,
+        name_query: Optional[str] = None,
+        specialization: Optional[str] = None,
+        min_experience: Optional[int] = None,
+    ) -> List[DoctorDiscoveryResponse]:
+        """Search and filter verified doctor profiles, returning discovery schemas."""
+        # 1. Build user query filter for active doctor users
+        user_filter = {"role": "doctor", "is_active": True}
+        if name_query:
+            user_filter["full_name"] = {"$regex": name_query, "$options": "i"}
+
+        if not self.user_repository:
+            from app.core.dependencies import get_user_repository
+            self.user_repository = get_user_repository()
+
+        matching_users = await self.user_repository.get_many(user_filter)
+        if not matching_users:
+            return []
+
+        user_map = {u.id: u for u in matching_users}
+        user_ids = list(user_map.keys())
+
+        # 2. Build doctor profiles query
+        doc_filter = {
+            "user_id": {"$in": user_ids},
+            "profile_status": DoctorProfileStatus.VERIFIED.value
+        }
+        if specialization:
+            doc_filter["specialization"] = {"$regex": specialization, "$options": "i"}
+        if min_experience is not None:
+            doc_filter["experience_years"] = {"$gte": min_experience}
+
+        profiles = await self.profile_repository.get_many(doc_filter)
+
+        # 3. Build response models list
+        results = []
+        for profile in profiles:
+            user = user_map.get(profile.user_id)
+            if user:
+                results.append(
+                    DoctorDiscoveryResponse(
+                        id=profile.id,
+                        user_id=profile.user_id,
+                        name=user.full_name,
+                        specialization=profile.specialization,
+                        qualifications=profile.qualifications,
+                        experience_years=profile.experience_years,
+                        consultation_fee=profile.consultation_fee,
+                        bio=profile.bio,
+                        languages=profile.languages,
+                        hospital=profile.hospital,
+                        education=profile.education,
+                        profile_picture=user.profile_picture,
+                        average_rating=profile.average_rating,
+                        total_reviews=profile.total_reviews,
+                    )
+                )
+        return results
+
+    async def get_verified_doctor_by_id(self, doctor_id: str) -> Optional[DoctorDiscoveryResponse]:
+        """Get details of a specific verified doctor profile."""
+        profile = await self.profile_repository.get(doctor_id)
+        if not profile or profile.profile_status != DoctorProfileStatus.VERIFIED:
+            return None
+
+        # Fetch associated user details
+        if not self.user_repository:
+            from app.core.dependencies import get_user_repository
+            self.user_repository = get_user_repository()
+
+        user = await self.user_repository.get(profile.user_id)
+        if not user or not user.is_active:
+            return None
+
+        return DoctorDiscoveryResponse(
+            id=profile.id,
+            user_id=profile.user_id,
+            name=user.full_name,
+            specialization=profile.specialization,
+            qualifications=profile.qualifications,
+            experience_years=profile.experience_years,
+            consultation_fee=profile.consultation_fee,
+            bio=profile.bio,
+            languages=profile.languages,
+            hospital=profile.hospital,
+            education=profile.education,
+            profile_picture=user.profile_picture,
+            average_rating=profile.average_rating,
+            total_reviews=profile.total_reviews,
+        )
 
 
 # ---------------------------------------------------------------------------

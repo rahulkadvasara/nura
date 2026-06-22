@@ -276,3 +276,23 @@ class DoctorProfileManagementResponse(BaseModel):
 
     profile: DoctorProfileResponse = Field(..., description="Doctor profile data")
     documents: List[DoctorDocumentResponse] = Field(..., description="Uploaded verification documents metadata")
+
+
+class DoctorDiscoveryResponse(BaseModel):
+    """Response schema representing a verified doctor profile details for patient discovery"""
+    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+
+    id: str = Field(..., description="Doctor profile ID")
+    user_id: str = Field(..., description="Associated user ID")
+    name: str = Field(..., description="Full name of the doctor")
+    specialization: str = Field(..., description="Medical specialization")
+    qualifications: List[str] = Field(default_factory=list, description="Qualifications list")
+    experience_years: int = Field(..., description="Years of experience")
+    consultation_fee: float = Field(..., description="Consultation fee in INR")
+    bio: Optional[str] = Field(None, description="Doctor biography")
+    languages: List[str] = Field(default_factory=list, description="Languages spoken")
+    hospital: Optional[str] = Field(None, description="Hospital or clinic affiliation")
+    education: Optional[str] = Field(None, description="Education details")
+    profile_picture: Optional[str] = Field(None, description="Profile picture URL")
+    average_rating: float = Field(..., description="Average rating")
+    total_reviews: int = Field(..., description="Total reviews count")

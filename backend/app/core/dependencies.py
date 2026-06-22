@@ -89,7 +89,8 @@ def get_doctor_document_repository() -> DoctorDocumentRepository:
 def get_doctor_profile_service() -> DoctorProfileService:
     """Get DoctorProfileService instance"""
     profile_repository = get_doctor_profile_repository()
-    return DoctorProfileService(profile_repository)
+    user_repository = get_user_repository()
+    return DoctorProfileService(profile_repository, user_repository)
 
 
 def get_doctor_document_service() -> DoctorDocumentService:
