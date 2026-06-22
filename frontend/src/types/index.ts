@@ -82,4 +82,69 @@ export interface AdminDashboardData {
   active_chats_count: number
   verified_doctors_count: number
 }
+
+// Doctor Application Types
+export interface DoctorApplicationRequest {
+  specialization: string
+  experience_years: number
+  consultation_fee: number
+  bio?: string
+  education: string
+  languages: string[]
+  hospital?: string
+  license_number?: string
+  degree_certificate_url: string
+  medical_license_url: string
+  identity_proof_url: string
+}
+
+export interface DoctorApplicationUpdateRequest {
+  specialization?: string
+  experience_years?: number
+  consultation_fee?: number
+  bio?: string
+  education?: string
+  languages?: string[]
+  hospital?: string
+  license_number?: string
+  degree_certificate_url?: string
+  medical_license_url?: string
+  identity_proof_url?: string
+}
+
+export interface DoctorDocument {
+  id: string
+  doctor_id: string
+  document_type: 'license' | 'degree' | 'certificate' | 'id_proof' | 'other'
+  document_url: string
+  verification_status: 'pending' | 'approved' | 'rejected'
+  uploaded_at: string
+  verified_at?: string
+  verified_by?: string
+}
+
+export interface DoctorProfile {
+  id: string
+  user_id: string
+  specialization: string
+  experience_years: number
+  consultation_fee: number
+  bio?: string
+  education?: string
+  languages: string[]
+  hospital?: string
+  license_number?: string
+  profile_status: 'pending' | 'verified' | 'rejected'
+  average_rating: number
+  total_reviews: number
+  created_at: string
+  updated_at: string
+}
+
+export interface DoctorApplicationData {
+  application_status: string
+  profile_status: 'pending' | 'verified' | 'rejected'
+  profile: DoctorProfile
+  documents: DoctorDocument[]
+}
 

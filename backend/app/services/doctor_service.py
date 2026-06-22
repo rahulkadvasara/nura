@@ -56,6 +56,7 @@ def _profile_to_response(profile: DoctorProfileInDB) -> DoctorProfileResponse:
         languages=profile.languages,
         hospital=profile.hospital,
         license_number=profile.license_number,
+        education=profile.education,
         profile_status=profile.profile_status,
         average_rating=profile.average_rating,
         total_reviews=profile.total_reviews,
@@ -128,6 +129,7 @@ class DoctorProfileService(BaseService[DoctorProfileInDB, DoctorProfileCreate, D
             languages=schema.languages,
             hospital=schema.hospital,
             license_number=schema.license_number,
+            education=schema.education,
             profile_status=DoctorProfileStatus.PENDING,
             average_rating=0.0,
             total_reviews=0,
@@ -188,6 +190,7 @@ class DoctorProfileService(BaseService[DoctorProfileInDB, DoctorProfileCreate, D
             languages=schema.languages,
             hospital=schema.hospital,
             license_number=schema.license_number,
+            education=schema.education,
         )
         return await self.profile_repository.update(profile_id, update)
 

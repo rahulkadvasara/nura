@@ -177,9 +177,15 @@ class TestDoctorDashboardService:
         wallet_col = MagicMock()
         wallet_col.find_one = AsyncMock(return_value=wallet_doc)
 
+        profile_repo = AsyncMock()
+        profile_repo.get_by_user_id.return_value = None
+        doc_repo = AsyncMock()
+
         service = DoctorDashboardService(
             appointment_repository=AppointmentRepository(appt_col),
             doctor_wallet_repository=DoctorWalletRepository(wallet_col),
+            doctor_profile_repository=profile_repo,
+            doctor_document_repository=doc_repo,
         )
 
         result = await service.get_dashboard(doctor_id)
@@ -207,9 +213,15 @@ class TestDoctorDashboardService:
         wallet_col = MagicMock()
         wallet_col.find_one = AsyncMock(return_value=None)
 
+        profile_repo = AsyncMock()
+        profile_repo.get_by_user_id.return_value = None
+        doc_repo = AsyncMock()
+
         service = DoctorDashboardService(
             appointment_repository=AppointmentRepository(appt_col),
             doctor_wallet_repository=DoctorWalletRepository(wallet_col),
+            doctor_profile_repository=profile_repo,
+            doctor_document_repository=doc_repo,
         )
 
         result = await service.get_dashboard(doctor_id)
@@ -234,9 +246,17 @@ class TestDoctorDashboardService:
         wallet_col = MagicMock()
         wallet_col.find_one = AsyncMock(return_value=None)
 
+        from app.repositories.doctor_repository import DoctorProfileRepository, DoctorDocumentRepository
+        
+        profile_repo = AsyncMock()
+        profile_repo.get_by_user_id.return_value = None
+        doc_repo = AsyncMock()
+        
         service = DoctorDashboardService(
             appointment_repository=AppointmentRepository(appt_col),
             doctor_wallet_repository=DoctorWalletRepository(wallet_col),
+            doctor_profile_repository=profile_repo,
+            doctor_document_repository=doc_repo,
         )
 
         result = await service.get_dashboard(doctor_id)
@@ -285,12 +305,22 @@ class TestAdminDashboardService:
         consult_col = MagicMock()
         consult_col.count_documents = AsyncMock(return_value=50)
 
+        # Mock other collections with zero counts
+        col_zero = MagicMock()
+        col_zero.count_documents = AsyncMock(return_value=0)
+
+        from app.repositories.report_repository import ReportRepository
+        from app.repositories.reminder_repository import ReminderRepository
+        from app.repositories.chat_session_repository import ChatSessionRepository
         service = AdminDashboardService(
             user_repository=UserRepository(user_col),
             appointment_repository=AppointmentRepository(appt_col),
             consultation_repository=ConsultationRepository(consult_col),
             payment_repository=PaymentRepository(payment_col),
             doctor_profile_repository=DoctorProfileRepository(doctor_col),
+            report_repository=ReportRepository(col_zero),
+            reminder_repository=ReminderRepository(col_zero),
+            chat_session_repository=ChatSessionRepository(col_zero),
         )
 
         result = await service.get_dashboard()
@@ -322,12 +352,18 @@ class TestAdminDashboardService:
         payment_col.aggregate = MagicMock(return_value=cursor_empty)
         payment_col.count_documents = AsyncMock(return_value=0)
 
+        from app.repositories.report_repository import ReportRepository
+        from app.repositories.reminder_repository import ReminderRepository
+        from app.repositories.chat_session_repository import ChatSessionRepository
         service = AdminDashboardService(
             user_repository=UserRepository(col_zero),
             appointment_repository=AppointmentRepository(col_zero),
             consultation_repository=ConsultationRepository(col_zero),
             payment_repository=PaymentRepository(payment_col),
             doctor_profile_repository=DoctorProfileRepository(col_zero),
+            report_repository=ReportRepository(col_zero),
+            reminder_repository=ReminderRepository(col_zero),
+            chat_session_repository=ChatSessionRepository(col_zero),
         )
 
         result = await service.get_dashboard()

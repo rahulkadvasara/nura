@@ -12,8 +12,21 @@ from jose import jwt, JWTError, ExpiredSignatureError
 from app.core.config import settings
 from app.db import get_database
 from app.models import UserInDB, UserRole
-from app.repositories import UserRepository, RefreshTokenRepository, OTPRepository
-from app.services import UserService, AuthService, OTPService, EmailService
+from app.repositories import (
+    UserRepository,
+    RefreshTokenRepository,
+    OTPRepository,
+    DoctorProfileRepository,
+    DoctorDocumentRepository,
+)
+from app.services import (
+    UserService,
+    AuthService,
+    OTPService,
+    EmailService,
+    DoctorProfileService,
+    DoctorDocumentService,
+)
 
 
 
@@ -57,6 +70,30 @@ def get_otp_service() -> OTPService:
 def get_email_service() -> EmailService:
     """Get EmailService instance"""
     return EmailService()
+
+
+def get_doctor_profile_repository() -> DoctorProfileRepository:
+    """Get DoctorProfileRepository instance"""
+    database: AsyncIOMotorDatabase = get_database()
+    return DoctorProfileRepository(database.doctor_profiles)
+
+
+def get_doctor_document_repository() -> DoctorDocumentRepository:
+    """Get DoctorDocumentRepository instance"""
+    database: AsyncIOMotorDatabase = get_database()
+    return DoctorDocumentRepository(database.doctor_documents)
+
+
+def get_doctor_profile_service() -> DoctorProfileService:
+    """Get DoctorProfileService instance"""
+    profile_repository = get_doctor_profile_repository()
+    return DoctorProfileService(profile_repository)
+
+
+def get_doctor_document_service() -> DoctorDocumentService:
+    """Get DoctorDocumentService instance"""
+    document_repository = get_doctor_document_repository()
+    return DoctorDocumentService(document_repository)
 
 
 reusable_oauth2 = HTTPBearer()

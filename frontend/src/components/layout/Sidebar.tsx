@@ -17,6 +17,7 @@ import {
   User as UserIcon,
   Clock,
   IndianRupee,
+  Award,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -57,6 +58,7 @@ export function Sidebar() {
       { name: 'Doctors', href: '/dashboard/doctors', icon: Stethoscope },
       { name: 'Appointments', href: '/dashboard/appointments', icon: Calendar },
       { name: 'Medications & Reminders', href: '/dashboard/reminders', icon: Pill },
+      { name: 'Apply as Doctor', href: '/dashboard/doctor-application', icon: Award },
       { name: 'Profile', href: '/dashboard/settings/profile', icon: UserIcon },
     ]
   }

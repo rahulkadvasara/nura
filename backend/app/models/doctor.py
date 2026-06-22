@@ -68,6 +68,7 @@ class DoctorProfileBase(BaseModel):
     languages: List[str] = Field(default_factory=list, description="Languages the doctor speaks")
     hospital: Optional[str] = Field(None, max_length=300, description="Hospital or clinic affiliation")
     license_number: Optional[str] = Field(None, max_length=100, description="Medical license number")
+    education: Optional[str] = Field(None, max_length=500, description="Doctor education/degrees")
 
 
 class DoctorProfileCreate(DoctorProfileBase):
@@ -91,6 +92,7 @@ class DoctorProfileUpdate(BaseModel):
     languages: Optional[List[str]] = None
     hospital: Optional[str] = Field(None, max_length=300)
     license_number: Optional[str] = Field(None, max_length=100)
+    education: Optional[str] = Field(None, max_length=500)
     profile_status: Optional[DoctorProfileStatus] = None
     average_rating: Optional[float] = Field(None, ge=0.0, le=5.0)
     total_reviews: Optional[int] = Field(None, ge=0)
