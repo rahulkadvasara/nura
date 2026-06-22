@@ -84,6 +84,20 @@ class DoctorDashboardResponse(BaseModel):
         default=0.0,
         description="Total lifetime earnings (INR)",
     )
+    pending_balance: float = Field(
+        default=0.0,
+        description="Earnings currently held in escrow/pending (INR)",
+    )
+    profile_status: str = Field(
+        default="pending",
+        description="Verification status of the doctor profile (pending/verified/rejected)",
+    )
+    document_status: str = Field(
+        default="pending",
+        description="Verification status of the doctor documents (pending/approved/rejected)",
+    )
+
+
 
 
 # ---------------------------------------------------------------------------

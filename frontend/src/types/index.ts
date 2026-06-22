@@ -55,3 +55,15 @@ export interface PatientDashboardData {
   unread_notifications_count: number
   recent_health_insights: RecentHealthInsight[]
 }
+
+export interface DoctorDashboardData {
+  todays_appointments_count: number
+  upcoming_appointments_count: number
+  total_patients_count: number
+  pending_approvals_count: number
+  wallet_balance: number
+  total_earnings: number
+  pending_balance: number
+  profile_status: 'pending' | 'verified' | 'rejected'
+  document_status: 'pending' | 'approved' | 'rejected'
+}

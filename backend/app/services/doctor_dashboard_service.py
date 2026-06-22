@@ -8,6 +8,7 @@ from datetime import date
 from app.schemas.dashboard import DoctorDashboardResponse
 from app.repositories.appointment_repository import AppointmentRepository
 from app.repositories.doctor_wallet_repository import DoctorWalletRepository
+from app.repositories.doctor_repository import DoctorProfileRepository, DoctorDocumentRepository
 
 
 def _today_iso() -> str:
@@ -22,9 +23,13 @@ class DoctorDashboardService:
         self,
         appointment_repository: AppointmentRepository,
         doctor_wallet_repository: DoctorWalletRepository,
+        doctor_profile_repository: DoctorProfileRepository,
+        doctor_document_repository: DoctorDocumentRepository,
     ):
         self.appointment_repository = appointment_repository
         self.doctor_wallet_repository = doctor_wallet_repository
+        self.doctor_profile_repository = doctor_profile_repository
+        self.doctor_document_repository = doctor_document_repository
 
     async def get_dashboard(self, doctor_id: str) -> DoctorDashboardResponse:
         """Aggregate all doctor dashboard data for the given doctor_id."""
@@ -60,12 +65,33 @@ class DoctorDashboardService:
         # 5. Wallet balance and total earnings from doctor_wallets
         wallet_balance = 0.0
         total_earnings = 0.0
+        pending_balance = 0.0
         wallet_doc = await self.doctor_wallet_repository.collection.find_one(
             {"doctor_id": doctor_id}
         )
         if wallet_doc:
             wallet_balance = float(wallet_doc.get("available_balance", 0.0))
             total_earnings = float(wallet_doc.get("total_earned", 0.0))
+            pending_balance = float(wallet_doc.get("pending_balance", 0.0))
+
+
+        # 6. Profile status and document status
+        profile_status = "pending"
+        document_status = "pending"
+        
+        doctor_profile = await self.doctor_profile_repository.get_by_user_id(doctor_id)
+        if doctor_profile:
+            profile_status = doctor_profile.profile_status.value
+            
+            # Fetch documents using profile id
+            documents = await self.doctor_document_repository.get_by_doctor_id(doctor_profile.id)
+            if documents:
+                if any(doc.verification_status.value == "rejected" for doc in documents):
+                    document_status = "rejected"
+                elif all(doc.verification_status.value == "approved" for doc in documents):
+                    document_status = "approved"
+                else:
+                    document_status = "pending"
 
         return DoctorDashboardResponse(
             todays_appointments_count=todays_appointments_count,
@@ -74,4 +100,9 @@ class DoctorDashboardService:
             pending_approvals_count=pending_approvals_count,
             wallet_balance=wallet_balance,
             total_earnings=total_earnings,
+            pending_balance=pending_balance,
+            profile_status=profile_status,
+            document_status=document_status,
         )
+
+

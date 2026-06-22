@@ -171,12 +171,16 @@ def get_doctor_dashboard_service():
     from app.services.doctor_dashboard_service import DoctorDashboardService
     from app.repositories.appointment_repository import AppointmentRepository
     from app.repositories.doctor_wallet_repository import DoctorWalletRepository
+    from app.repositories.doctor_repository import DoctorProfileRepository, DoctorDocumentRepository
 
     database = get_database()
     return DoctorDashboardService(
         appointment_repository=AppointmentRepository(database.appointments),
         doctor_wallet_repository=DoctorWalletRepository(database.doctor_wallets),
+        doctor_profile_repository=DoctorProfileRepository(database.doctor_profiles),
+        doctor_document_repository=DoctorDocumentRepository(database.doctor_documents),
     )
+
 
 
 def get_admin_dashboard_service():

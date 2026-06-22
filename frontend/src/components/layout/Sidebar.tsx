@@ -15,6 +15,8 @@ import {
   Stethoscope,
   Pill,
   User as UserIcon,
+  Clock,
+  IndianRupee,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -28,13 +30,15 @@ export function Sidebar() {
     
     if (role === 'doctor') {
       return [
-        { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+        { name: 'Dashboard', href: '/dashboard/doctor', icon: LayoutDashboard },
         { name: 'Appointments', href: '/dashboard/appointments', icon: Calendar },
         { name: 'Patients', href: '/dashboard/patients', icon: Users },
-        { name: 'Reports', href: '/dashboard/reports', icon: FileText },
-        { name: 'Settings', href: '/dashboard/settings/profile', icon: Settings },
+        { name: 'Availability', href: '/dashboard/availability', icon: Clock },
+        { name: 'Earnings', href: '/dashboard/earnings', icon: IndianRupee },
+        { name: 'Profile', href: '/dashboard/settings/profile', icon: UserIcon },
       ]
     }
+
     
     if (role === 'admin') {
       return [

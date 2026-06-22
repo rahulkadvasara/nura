@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/stores/auth'
 import { usePatientDashboard } from '@/hooks/use-dashboard'
 import { Button } from '@/components/ui/button'
@@ -129,8 +131,23 @@ function PatientDashboard() {
 }
 
 export default function DashboardPage() {
-  const { user } = useAuthStore()
+  const router = useRouter()
+  const { user, isLoading: authLoading } = useAuthStore()
   const role = user?.role || 'patient'
+
+  useEffect(() => {
+    if (!authLoading && role === 'doctor') {
+      router.replace('/dashboard/doctor')
+    }
+  }, [role, authLoading, router])
+
+  if (authLoading || role === 'doctor') {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
+      </div>
+    )
+  }
 
   // Only patients get the full dashboard; doctor/admin see a placeholder for now
   if (role === 'patient') {
