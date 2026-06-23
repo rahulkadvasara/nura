@@ -5,7 +5,7 @@ Pydantic v2 schemas for appointment, consultation, and prescription API requests
 
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, AliasChoices
 
 from app.models.appointment import AppointmentStatus, PaymentStatus
 
@@ -17,10 +17,14 @@ from app.models.appointment import AppointmentStatus, PaymentStatus
 class AppointmentCreateSchema(BaseModel):
     """Request schema for creating a new appointment"""
     doctor_id: str = Field(..., description="Reference to the doctor profile ID")
-    slot_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$", description="Date of the slot (YYYY-MM-DD)")
-    slot_time: str = Field(..., pattern=r"^\d{2}:\d{2}$", description="Time of the slot (HH:MM)")
-    duration_minutes: int = Field(default=30, ge=5, le=240, description="Duration in minutes")
-    consultation_fee: float = Field(..., ge=0, description="Consultation fee in INR")
+    availability_id: str = Field(..., validation_alias=AliasChoices("availability_id", "availability_slot_id"), description="Reference to the doctor availability slot ID")
+    reason: str = Field(..., validation_alias=AliasChoices("reason", "reason_for_visit"), description="Reason for visit")
+    
+    # Keep old fields optional to maintain backwards compatibility
+    slot_date: Optional[str] = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$", description="Date of the slot (YYYY-MM-DD)")
+    slot_time: Optional[str] = Field(None, pattern=r"^\d{2}:\d{2}$", description="Time of the slot (HH:MM)")
+    duration_minutes: Optional[int] = Field(default=30, ge=5, le=240, description="Duration in minutes")
+    consultation_fee: Optional[float] = Field(default=0.0, ge=0, description="Consultation fee in INR")
     notes: Optional[str] = Field(None, max_length=1000, description="Optional patient notes")
 
 
@@ -43,15 +47,32 @@ class AppointmentResponse(BaseModel):
     id: str = Field(..., description="Appointment ID")
     patient_id: str = Field(..., description="Patient user ID")
     doctor_id: str = Field(..., description="Doctor profile ID")
+    availability_id: Optional[str] = Field(None, description="Availability slot ID")
     slot_date: str = Field(..., description="Date of the slot (YYYY-MM-DD)")
     slot_time: str = Field(..., description="Time of the slot (HH:MM)")
     duration_minutes: int = Field(..., description="Duration in minutes")
     consultation_fee: float = Field(..., description="Consultation fee in INR")
     status: AppointmentStatus = Field(..., description="Appointment status")
     payment_status: PaymentStatus = Field(..., description="Payment status")
+    reason: Optional[str] = Field(None, description="Reason for visit")
     notes: Optional[str] = Field(None, description="Optional patient notes")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
+
+
+class PatientAppointmentHistoryItem(BaseModel):
+    """Schema representing an appointment in the patient's list/history view"""
+    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+
+    id: str
+    doctor_id: str
+    doctor_name: str
+    specialization: str
+    appointment_date: str
+    appointment_time: str
+    status: AppointmentStatus
+    reason: Optional[str] = None
+    created_at: datetime
 
 
 # ---------------------------------------------------------------------------

@@ -47,12 +47,14 @@ class AppointmentBase(BaseModel):
 
     patient_id: str = Field(..., description="Reference to the patient user ID")
     doctor_id: str = Field(..., description="Reference to the doctor profile ID")
+    availability_id: Optional[str] = Field(None, description="Reference to the doctor availability slot ID")
     slot_date: str = Field(..., description="Date of the slot (YYYY-MM-DD)")
     slot_time: str = Field(..., description="Time of the slot (HH:MM)")
     duration_minutes: int = Field(default=30, ge=5, le=240, description="Duration in minutes")
     consultation_fee: float = Field(..., ge=0, description="Consultation fee in INR")
     status: AppointmentStatus = Field(default=AppointmentStatus.PENDING, description="Appointment status")
     payment_status: PaymentStatus = Field(default=PaymentStatus.PENDING, description="Payment status")
+    reason: Optional[str] = Field(None, description="Reason for visit")
     notes: Optional[str] = Field(None, max_length=1000, description="Optional patient notes")
 
 
@@ -65,12 +67,14 @@ class AppointmentUpdate(BaseModel):
     """Model used to update an existing appointment"""
     patient_id: Optional[str] = None
     doctor_id: Optional[str] = None
+    availability_id: Optional[str] = None
     slot_date: Optional[str] = None
     slot_time: Optional[str] = None
     duration_minutes: Optional[int] = Field(None, ge=5, le=240)
     consultation_fee: Optional[float] = Field(None, ge=0)
     status: Optional[AppointmentStatus] = None
     payment_status: Optional[PaymentStatus] = None
+    reason: Optional[str] = None
     notes: Optional[str] = Field(None, max_length=1000)
 
 

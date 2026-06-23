@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { 
   ArrowLeft, 
@@ -20,6 +21,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useDoctorDetails, useDoctorAvailability } from '@/hooks/use-doctor-discovery'
+import { useCreateAppointment } from '@/hooks/use-appointments'
+import { toast } from 'sonner'
 import { DoctorAvailability } from '@/types'
 
 function formatDateHeader(dateStr: string): string {
@@ -39,6 +42,27 @@ function DoctorDetailsContent() {
   const params = useParams()
   const router = useRouter()
   const doctorId = params.doctorId as string
+
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [reason, setReason] = useState('')
+  const { mutateAsync: createAppointment, isPending: isBookingPending } = useCreateAppointment()
+
+  const handleConfirmBooking = async () => {
+    if (!selectedSlotId || !reason.trim()) return
+    try {
+      await createAppointment({
+        doctor_id: doctorId,
+        availability_id: selectedSlotId,
+        reason: reason.trim(),
+      })
+      toast.success('Appointment requested successfully!')
+      setIsModalOpen(false)
+      router.push('/dashboard/appointments')
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to request appointment')
+    }
+  }
 
   const { 
     data: doctor, 
@@ -223,14 +247,22 @@ function DoctorDetailsContent() {
                       </h4>
                       {/* Slot Timings Grid */}
                       <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                        {groupedSlots[dateStr].map((slot) => (
-                          <div 
-                            key={slot.id}
-                            className="bg-slate-50/70 border border-slate-100 text-slate-700 py-2 px-2.5 text-center text-xs font-semibold rounded-lg hover:border-teal-500/30 hover:bg-teal-50/20 cursor-not-allowed transition-colors select-none"
-                          >
-                            {slot.start_time}
-                          </div>
-                        ))}
+                        {groupedSlots[dateStr].map((slot) => {
+                          const isSelected = selectedSlotId === slot.id
+                          return (
+                            <button 
+                              key={slot.id}
+                              onClick={() => setSelectedSlotId(slot.id)}
+                              className={`py-2 px-2.5 text-center text-xs font-semibold rounded-lg border transition-all duration-200 select-none
+                                ${isSelected 
+                                  ? 'bg-teal-600 border-teal-600 text-white shadow-sm' 
+                                  : 'bg-slate-50/70 border-slate-100 text-slate-700 hover:border-teal-500/30 hover:bg-teal-50/20 cursor-pointer'
+                                }`}
+                            >
+                              {slot.start_time}
+                            </button>
+                          )
+                        })}
                       </div>
                     </div>
                   ))}
@@ -257,16 +289,20 @@ function DoctorDetailsContent() {
                 </span>
               </div>
 
-              {/* Disabled booking CTA button */}
+              {/* Booking CTA button */}
               <div className="space-y-3">
                 <Button 
-                  disabled 
-                  className="w-full bg-teal-600 disabled:opacity-50 text-white font-bold py-2.5 text-sm cursor-not-allowed"
+                  disabled={!selectedSlotId}
+                  onClick={() => {
+                    setReason('')
+                    setIsModalOpen(true)
+                  }}
+                  className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 text-sm transition-colors"
                 >
                   Book Appointment
                 </Button>
                 <p className="text-[10px] text-slate-400 leading-relaxed text-center font-medium">
-                  * Online scheduling is currently locked. Booking functions will be activated in Phase 6, Sprint 2.
+                  * Select an available slot above to request an appointment.
                 </p>
               </div>
             </CardContent>
@@ -302,6 +338,39 @@ function DoctorDetailsContent() {
           </Card>
         </div>
       </div>
+
+      {/* Booking Confirmation Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm transition-all duration-300">
+          <div className="bg-white border border-slate-200 rounded-xl shadow-xl w-full max-w-md p-6 m-4 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Request Appointment</h3>
+              <p className="text-xs text-slate-500 mt-1">Provide a brief reason for your visit with Dr. {doctor.name}.</p>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Reason for Visit</label>
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="e.g. Chronic back pain follow-up, general health checkup"
+                className="w-full min-h-[100px] text-sm p-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-600 focus:border-transparent resize-none"
+              />
+            </div>
+            <div className="flex gap-3 justify-end pt-2">
+              <Button variant="outline" onClick={() => setIsModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleConfirmBooking} 
+                disabled={!reason.trim() || isBookingPending}
+                className="bg-teal-600 hover:bg-teal-700 text-white font-semibold"
+              >
+                {isBookingPending ? 'Submitting...' : 'Confirm Request'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

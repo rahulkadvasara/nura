@@ -159,6 +159,7 @@ class TestAppointmentService:
             "created_at": utc_now(),
             "updated_at": utc_now(),
         })
+        app_repo.get_many = AsyncMock(return_value=[])
 
         doc_repo = AsyncMock()
         doc_repo.get = AsyncMock(return_value=sample_doctor_profile)
@@ -166,9 +167,23 @@ class TestAppointmentService:
         user_repo = AsyncMock()
         user_repo.get = AsyncMock(return_value=sample_user)
 
-        service = AppointmentService(app_repo, doc_repo, user_repo)
+        doc_avail_repo = AsyncMock()
+        slot = MagicMock()
+        slot.id = "507f1f77bcf86cd799439020"
+        slot.doctor_id = sample_doctor_profile.id
+        slot.date = "2026-06-25"
+        slot.start_time = "10:00"
+        slot.end_time = "10:30"
+        slot.slot_duration = 30
+        slot.is_available = True
+        slot.active = True
+        doc_avail_repo.get = AsyncMock(return_value=slot)
+
+        service = AppointmentService(app_repo, doc_repo, user_repo, doc_avail_repo)
         schema = AppointmentCreateSchema(
             doctor_id=sample_doctor_profile.id,
+            availability_id="507f1f77bcf86cd799439020",
+            reason="Regular checkup",
             slot_date="2026-06-25",
             slot_time="10:00",
             consultation_fee=500.0,
@@ -180,6 +195,7 @@ class TestAppointmentService:
         assert result.id == "507f1f77bcf86cd799439050"
         user_repo.get.assert_called_once_with(sample_user.id)
         doc_repo.get.assert_called_once_with(sample_doctor_profile.id)
+        doc_avail_repo.get.assert_called_once_with("507f1f77bcf86cd799439020")
 
     @pytest.mark.asyncio
     async def test_create_appointment_patient_not_found(self, sample_doctor_profile):
@@ -191,6 +207,8 @@ class TestAppointmentService:
         service = AppointmentService(app_repo, doc_repo, user_repo)
         schema = AppointmentCreateSchema(
             doctor_id=sample_doctor_profile.id,
+            availability_id="507f1f77bcf86cd799439020",
+            reason="Patient not found test",
             slot_date="2026-06-25",
             slot_time="10:00",
             consultation_fee=500.0,
@@ -210,6 +228,8 @@ class TestAppointmentService:
         service = AppointmentService(app_repo, doc_repo, user_repo)
         schema = AppointmentCreateSchema(
             doctor_id="invalid_doctor",
+            availability_id="507f1f77bcf86cd799439020",
+            reason="Doctor not found test",
             slot_date="2026-06-25",
             slot_time="10:00",
             consultation_fee=500.0,
@@ -217,6 +237,7 @@ class TestAppointmentService:
 
         with pytest.raises(ValueError, match="Doctor.*does not exist"):
             await service.create_appointment(sample_user.id, schema)
+
 
 
 class TestConsultationService:

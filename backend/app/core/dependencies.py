@@ -19,6 +19,7 @@ from app.repositories import (
     DoctorProfileRepository,
     DoctorDocumentRepository,
     DoctorAvailabilityRepository,
+    AppointmentRepository,
 )
 from app.services import (
     UserService,
@@ -28,6 +29,7 @@ from app.services import (
     DoctorProfileService,
     DoctorDocumentService,
     DoctorAvailabilityService,
+    AppointmentService,
 )
 
 
@@ -113,6 +115,27 @@ def get_doctor_availability_service(
     from app.repositories.appointment_repository import AppointmentRepository
     appointment_repository = AppointmentRepository(database.appointments)
     return DoctorAvailabilityService(availability_repository, appointment_repository)
+
+
+def get_appointment_repository() -> AppointmentRepository:
+    """Get AppointmentRepository instance"""
+    database: AsyncIOMotorDatabase = get_database()
+    return AppointmentRepository(database.appointments)
+
+
+def get_appointment_service(
+    appointment_repository: AppointmentRepository = Depends(get_appointment_repository),
+    doctor_profile_repository: DoctorProfileRepository = Depends(get_doctor_profile_repository),
+    user_repository: UserRepository = Depends(get_user_repository),
+    doctor_availability_repository: DoctorAvailabilityRepository = Depends(get_doctor_availability_repository),
+) -> AppointmentService:
+    """Get AppointmentService instance"""
+    return AppointmentService(
+        appointment_repository=appointment_repository,
+        doctor_profile_repository=doctor_profile_repository,
+        user_repository=user_repository,
+        doctor_availability_repository=doctor_availability_repository,
+    )
 
 
 def get_audit_log_repository():

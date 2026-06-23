@@ -3,8 +3,8 @@ Nura - Appointment Service
 Business logic and validation for appointments
 """
 
-from datetime import datetime, timezone
-from typing import List, Optional
+from datetime import datetime, timezone, timedelta
+from typing import List, Optional, Any
 
 from app.models.appointment import (
     AppointmentCreate,
@@ -33,12 +33,14 @@ def _appointment_to_response(appointment: AppointmentInDB) -> AppointmentRespons
         id=appointment.id,
         patient_id=appointment.patient_id,
         doctor_id=appointment.doctor_id,
+        availability_id=appointment.availability_id,
         slot_date=appointment.slot_date,
         slot_time=appointment.slot_time,
         duration_minutes=appointment.duration_minutes,
         consultation_fee=appointment.consultation_fee,
         status=appointment.status,
         payment_status=appointment.payment_status,
+        reason=appointment.reason,
         notes=appointment.notes,
         created_at=appointment.created_at,
         updated_at=appointment.updated_at,
@@ -53,18 +55,20 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
         appointment_repository: AppointmentRepository,
         doctor_profile_repository: DoctorProfileRepository,
         user_repository: UserRepository,
+        doctor_availability_repository: Optional[Any] = None,
     ):
         super().__init__()
         self.appointment_repository = appointment_repository
         self.doctor_profile_repository = doctor_profile_repository
         self.user_repository = user_repository
+        self.doctor_availability_repository = doctor_availability_repository
 
     async def create_appointment(
         self,
         patient_id: str,
         schema: AppointmentCreateSchema,
     ) -> AppointmentInDB:
-        """Create a new appointment after validating patient and doctor existence"""
+        """Create a new appointment request after performing strict booking validation rules"""
         # Validate patient exists
         patient = await self.user_repository.get(patient_id)
         if not patient:
@@ -75,16 +79,77 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
         if not doctor:
             raise ValueError(f"Doctor profile with ID {schema.doctor_id} does not exist")
 
+        # Validate doctor is verified
+        from app.models.doctor import DoctorProfileStatus
+        if doctor.profile_status != DoctorProfileStatus.VERIFIED:
+            raise ValueError("Doctor profile is not verified")
+
+        # Validate own doctor account booking block
+        if patient_id == doctor.user_id:
+            raise ValueError("You cannot book an appointment with your own doctor profile")
+
+        # Fetch and validate availability slot
+        if not self.doctor_availability_repository:
+            from app.db.mongodb import get_database
+            from app.repositories.doctor_repository import DoctorAvailabilityRepository
+            db = get_database()
+            self.doctor_availability_repository = DoctorAvailabilityRepository(db.doctor_availability)
+
+        slot = await self.doctor_availability_repository.get(schema.availability_id)
+        if not slot:
+            raise ValueError(f"Availability slot with ID {schema.availability_id} does not exist")
+
+        # Validate slot is active and available
+        if not slot.active or not slot.is_available:
+            raise ValueError("This slot is not available for booking")
+
+        # Validate slot belongs to the requested doctor
+        if slot.doctor_id != schema.doctor_id:
+            raise ValueError("This availability slot does not belong to the specified doctor")
+
+        # Validate slot is not expired (using IST timezone comparison)
+        ist_now = datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)
+        current_date_str = ist_now.strftime("%Y-%m-%d")
+        current_time_str = ist_now.strftime("%H:%M")
+        
+        is_future_date = slot.date > current_date_str
+        is_future_time = slot.date == current_date_str and slot.start_time >= current_time_str
+        if not (is_future_date or is_future_time):
+            raise ValueError("Cannot book an expired slot in the past")
+
+        # Prevent double booking same slot by any patient
+        existing_any = await self.appointment_repository.get_many({
+            "doctor_id": schema.doctor_id,
+            "slot_date": slot.date,
+            "slot_time": slot.start_time,
+            "status": {"$in": [AppointmentStatus.PENDING.value, AppointmentStatus.APPROVED.value, AppointmentStatus.COMPLETED.value]}
+        })
+        if existing_any:
+            raise ValueError("This slot has already been booked or has a pending request")
+
+        # Prevent duplicate pending appointment by the same patient for the same slot
+        existing_patient = await self.appointment_repository.get_many({
+            "patient_id": patient_id,
+            "doctor_id": schema.doctor_id,
+            "slot_date": slot.date,
+            "slot_time": slot.start_time,
+            "status": {"$in": [AppointmentStatus.PENDING.value, AppointmentStatus.APPROVED.value]}
+        })
+        if existing_patient:
+            raise ValueError("You already have a pending or approved appointment request for this slot")
+
         now = utc_now()
         appointment_create = AppointmentCreate(
             patient_id=patient_id,
             doctor_id=schema.doctor_id,
-            slot_date=schema.slot_date,
-            slot_time=schema.slot_time,
-            duration_minutes=schema.duration_minutes,
-            consultation_fee=schema.consultation_fee,
+            availability_id=schema.availability_id,
+            slot_date=slot.date,
+            slot_time=slot.start_time,
+            duration_minutes=slot.slot_duration,
+            consultation_fee=doctor.consultation_fee,
             status=AppointmentStatus.PENDING,
             payment_status=PaymentStatus.PENDING,
+            reason=schema.reason,
             notes=schema.notes,
         )
 
@@ -123,6 +188,63 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
     ) -> List[AppointmentInDB]:
         """Fetch all appointments for a doctor"""
         return await self.appointment_repository.get_by_doctor_id(doctor_id, limit=limit, skip=skip)
+
+    async def list_patient_appointments_history(
+        self,
+        patient_id: str,
+        limit: int = 100,
+        skip: int = 0,
+    ) -> List[dict]:
+        """Fetch patient appointment requests with associated doctor user details, sorted newest first"""
+        appts = await self.appointment_repository.get_many(
+            {"patient_id": patient_id},
+            limit=limit,
+            skip=skip
+        )
+        
+        # Sort by created_at descending (newest first)
+        appts.sort(key=lambda a: a.created_at, reverse=True)
+
+        history = []
+        for appt in appts:
+            doctor_profile = await self.doctor_profile_repository.get(appt.doctor_id)
+            doctor_name = "Unknown Doctor"
+            specialization = "General Medicine"
+            if doctor_profile:
+                specialization = doctor_profile.specialization
+                doctor_user = await self.user_repository.get(doctor_profile.user_id)
+                if doctor_user:
+                    doctor_name = doctor_user.full_name
+
+            history.append({
+                "id": appt.id,
+                "doctor_id": appt.doctor_id,
+                "doctor_name": doctor_name,
+                "specialization": specialization,
+                "appointment_date": appt.slot_date,
+                "appointment_time": appt.slot_time,
+                "status": appt.status.value if hasattr(appt.status, "value") else appt.status,
+                "reason": appt.reason or appt.notes or "General Consultation",
+                "created_at": appt.created_at
+            })
+
+        return history
+
+    async def cancel_patient_appointment(
+        self,
+        appointment_id: str,
+        patient_id: str,
+    ) -> Optional[AppointmentInDB]:
+        """Cancel a pending appointment request. Status is updated to cancelled."""
+        appt = await self.appointment_repository.get(appointment_id)
+        if not appt or appt.patient_id != patient_id:
+            raise ValueError("Appointment not found or access denied")
+
+        if appt.status != AppointmentStatus.PENDING:
+            raise ValueError(f"Cannot cancel appointment with status: {appt.status.value if hasattr(appt.status, 'value') else appt.status}")
+
+        update = AppointmentUpdate(status=AppointmentStatus.CANCELLED)
+        return await self.appointment_repository.update(appointment_id, update)
 
     async def update_appointment(
         self,

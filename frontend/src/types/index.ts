@@ -210,4 +210,40 @@ export interface DoctorAvailabilityUpdateRequest {
   is_available?: boolean
   active?: boolean
 }
+
+// Appointment Types
+export interface Appointment {
+  id: string
+  patient_id: string
+  doctor_id: string
+  availability_id?: string
+  slot_date: string
+  slot_time: string
+  duration_minutes: number
+  consultation_fee: number
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed'
+  payment_status: 'pending' | 'held' | 'approved' | 'completed' | 'refunded' | 'failed'
+  reason?: string
+  notes?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface PatientAppointmentHistoryItem {
+  id: string
+  doctor_id: string
+  doctor_name: string
+  specialization: string
+  appointment_date: string
+  appointment_time: string
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed'
+  reason?: string
+  created_at: string
+}
+
+export interface AppointmentCreateRequest {
+  doctor_id: string
+  availability_id: string
+  reason: string
+}
 
