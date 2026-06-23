@@ -2,11 +2,12 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Calendar, ArrowRight, Clock, User, CheckCircle, XCircle } from 'lucide-react'
-import { useDoctorAppointments, useApproveAppointment, useRejectAppointment } from '@/hooks/use-appointments'
+import { Calendar, ArrowRight, Clock, User, CheckCircle, XCircle, Play, FileText, ArrowUpRight } from 'lucide-react'
+import { useDoctorAppointments, useApproveAppointment, useRejectAppointment, useStartConsultation } from '@/hooks/use-appointments'
 import { toast } from 'sonner'
 
 interface AppointmentOverviewCardProps {
@@ -14,13 +15,15 @@ interface AppointmentOverviewCardProps {
   upcomingCount: number
 }
 
-type TabType = 'pending' | 'today' | 'upcoming'
+type TabType = 'pending' | 'today' | 'completed'
 
 export function AppointmentOverviewCard({ todaysCount, upcomingCount }: AppointmentOverviewCardProps) {
+  const router = useRouter()
   const [activeSubTab, setActiveSubTab] = useState<TabType>('pending')
   const { data: appointments = [], isLoading, isError } = useDoctorAppointments()
-  const { mutateAsync: approveAppointment, isPending: isApproving } = useApproveAppointment()
-  const { mutateAsync: rejectAppointment, isPending: isRejecting } = useRejectAppointment()
+  const { mutateAsync: approveAppointment } = useApproveAppointment()
+  const { mutateAsync: rejectAppointment } = useRejectAppointment()
+  const { mutateAsync: startConsultation } = useStartConsultation()
   const [selectedActionId, setSelectedActionId] = useState<string | null>(null)
 
   // Get local YYYY-MM-DD
@@ -32,8 +35,12 @@ export function AppointmentOverviewCard({ todaysCount, upcomingCount }: Appointm
 
   // Categorize
   const pendingList = appointments.filter(a => a.status === 'pending')
-  const todayList = appointments.filter(a => (a.status === 'approved' || a.status === 'completed') && a.appointment_date === todayStr)
-  const upcomingList = appointments.filter(a => (a.status === 'approved' || a.status === 'completed') && a.appointment_date > todayStr)
+  // Today's Consultations includes approved, in_progress, and completed today
+  const todayList = appointments.filter(a => 
+    (a.status === 'approved' || a.status === 'in_progress' || a.status === 'completed') && 
+    a.appointment_date === todayStr
+  )
+  const completedList = appointments.filter(a => a.status === 'completed')
 
   const handleApprove = async (id: string) => {
     try {
@@ -66,21 +73,47 @@ export function AppointmentOverviewCard({ todaysCount, upcomingCount }: Appointm
     }
   }
 
+  const handleStart = async (id: string) => {
+    try {
+      setSelectedActionId(id)
+      await startConsultation(id)
+      toast.success('Consultation started successfully.')
+      router.push('/dashboard/doctor/consultations')
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to start consultation')
+    } finally {
+      setSelectedActionId(null)
+    }
+  }
+
   const getActiveList = () => {
     switch (activeSubTab) {
       case 'pending':
         return pendingList.slice(0, 2)
       case 'today':
         return todayList.slice(0, 2)
-      case 'upcoming':
-        return upcomingList.slice(0, 2)
+      case 'completed':
+        return completedList.slice(0, 2)
       default:
         return []
     }
   }
 
   const activeList = getActiveList()
-  const totalCount = activeSubTab === 'pending' ? pendingList.length : activeSubTab === 'today' ? todayList.length : upcomingList.length
+  const totalCount = activeSubTab === 'pending' ? pendingList.length : activeSubTab === 'today' ? todayList.length : completedList.length
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'approved':
+        return <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 border-emerald-100 text-[10px]">Approved</Badge>
+      case 'in_progress':
+        return <Badge className="bg-indigo-50 text-indigo-700 hover:bg-indigo-50 border-indigo-100 text-[10px]">In Progress</Badge>
+      case 'completed':
+        return <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 border-blue-100 text-[10px]">Completed</Badge>
+      default:
+        return <Badge className="text-[10px]">{status}</Badge>
+    }
+  }
 
   return (
     <Card className="border-slate-200 shadow-sm h-full flex flex-col justify-between bg-white overflow-hidden">
@@ -119,17 +152,17 @@ export function AppointmentOverviewCard({ todaysCount, upcomingCount }: Appointm
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            Today ({todayList.length})
+            Today&apos;s Consults ({todayList.length})
           </button>
           <button
-            onClick={() => setActiveSubTab('upcoming')}
+            onClick={() => setActiveSubTab('completed')}
             className={`flex-1 text-center py-1 text-[11px] font-bold rounded-md transition-all ${
-              activeSubTab === 'upcoming'
+              activeSubTab === 'completed'
                 ? 'bg-white text-teal-700 shadow-sm'
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            Upcoming ({upcomingList.length})
+            Completed ({completedList.length})
           </button>
         </div>
       </CardHeader>
@@ -149,14 +182,14 @@ export function AppointmentOverviewCard({ todaysCount, upcomingCount }: Appointm
               <Calendar className="h-5 w-5" />
             </div>
             <p className="text-xs font-bold text-slate-700 mb-0.5">
-              No requests found
+              No records found
             </p>
             <p className="text-[10px] text-slate-400 max-w-[180px] leading-relaxed">
               {activeSubTab === 'pending'
                 ? 'You do not have any pending patient requests.'
                 : activeSubTab === 'today'
-                ? 'No approved consultations scheduled for today.'
-                : 'No upcoming approved appointments found.'}
+                ? 'No consultations scheduled for today.'
+                : 'No completed consultation files yet.'}
             </p>
           </div>
         )}
@@ -168,7 +201,7 @@ export function AppointmentOverviewCard({ todaysCount, upcomingCount }: Appointm
                 key={appt.id}
                 className="flex items-center justify-between p-3 border border-slate-100 bg-slate-50/50 rounded-xl hover:border-teal-500/20 transition-all duration-200"
               >
-                <div className="space-y-1 max-w-[65%]">
+                <div className="space-y-1 max-w-[60%]">
                   <div className="flex items-center gap-1.5">
                     <User className="h-3.5 w-3.5 text-teal-600 shrink-0" />
                     <span className="font-bold text-xs text-slate-900 truncate">
@@ -181,7 +214,7 @@ export function AppointmentOverviewCard({ todaysCount, upcomingCount }: Appointm
                   </div>
                 </div>
 
-                {appt.status === 'pending' ? (
+                {activeSubTab === 'pending' && (
                   <div className="flex gap-1.5 shrink-0">
                     <Button
                       size="icon"
@@ -203,10 +236,40 @@ export function AppointmentOverviewCard({ todaysCount, upcomingCount }: Appointm
                       <XCircle className="h-3.5 w-3.5" />
                     </Button>
                   </div>
-                ) : (
-                  <Badge className="text-[9px] font-bold py-0.5 px-1.5 rounded bg-teal-50 text-teal-700 hover:bg-teal-50 border-teal-100">
-                    {appt.status === 'completed' ? 'Completed' : 'Approved'}
-                  </Badge>
+                )}
+
+                {activeSubTab === 'today' && (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {appt.status === 'approved' && (
+                      <Button
+                        size="sm"
+                        onClick={() => handleStart(appt.id)}
+                        disabled={selectedActionId === appt.id}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white h-7 px-2.5 rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-sm"
+                      >
+                        <Play className="h-2.5 w-2.5 fill-current" />
+                        Start
+                      </Button>
+                    )}
+                    {appt.status === 'in_progress' && (
+                      <Link href="/dashboard/doctor/consultations">
+                        <Button
+                          size="sm"
+                          className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-150 h-7 px-2.5 rounded-lg text-[10px] font-bold flex items-center gap-1"
+                        >
+                          <ArrowUpRight className="h-2.5 w-2.5" />
+                          Resume
+                        </Button>
+                      </Link>
+                    )}
+                    {appt.status === 'completed' && getStatusBadge(appt.status)}
+                  </div>
+                )}
+
+                {activeSubTab === 'completed' && (
+                  <div className="shrink-0">
+                    {getStatusBadge(appt.status)}
+                  </div>
                 )}
               </div>
             ))}
@@ -215,9 +278,9 @@ export function AppointmentOverviewCard({ todaysCount, upcomingCount }: Appointm
 
         {totalCount > 2 && (
           <div className="text-center pt-2 border-t border-slate-50 mt-2">
-            <Link href="/dashboard/doctor/appointments">
+            <Link href={activeSubTab === 'completed' ? "/dashboard/doctor/consultations" : "/dashboard/doctor/appointments"}>
               <Button variant="ghost" size="sm" className="text-[11px] font-semibold text-teal-600 hover:text-teal-700 py-1 h-7">
-                View remaining {totalCount - 2} requests
+                View remaining {totalCount - 2} records
               </Button>
             </Link>
           </div>

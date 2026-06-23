@@ -30,7 +30,14 @@ from app.schemas.doctor import (
     DoctorProfileManagementUpdateSchema,
     DoctorProfileManagementResponse,
 )
-from app.schemas.appointment import DoctorAppointmentItem, AppointmentRejectSchema, AppointmentResponse
+from app.schemas.appointment import (
+    DoctorAppointmentItem,
+    AppointmentRejectSchema,
+    AppointmentResponse,
+    ConsultationCompleteSchema,
+    ConsultationResponse,
+    DoctorConsultationItemResponse,
+)
 from app.core.dependencies import (
     require_active_user,
     get_doctor_profile_service,
@@ -40,11 +47,13 @@ from app.core.dependencies import (
     get_appointment_service,
     get_notification_service,
     get_audit_log_service,
+    get_consultation_service,
 )
 from app.services.doctor_service import DoctorProfileService, DoctorDocumentService, DoctorAvailabilityService
 from app.services.appointment_service import AppointmentService
 from app.services.notification_service import NotificationService
 from app.services.audit_log_service import AuditLogService
+from app.services.consultation_service import ConsultationService
 
 logger = logging.getLogger(__name__)
 
@@ -662,5 +671,148 @@ async def reject_appointment(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to reject appointment request",
+        ) from exc
+
+
+@router.post(
+    "/appointments/{appointment_id}/start",
+    response_model=SuccessResponse,
+    summary="Start Consultation",
+    description="Transition appointment state from approved to in_progress and record start time.",
+)
+async def start_consultation(
+    appointment_id: str,
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    appointment_service: AppointmentService = Depends(get_appointment_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> SuccessResponse:
+    try:
+        updated = await appointment_service.start_consultation(
+            appointment_id=appointment_id,
+            doctor_profile_id=current_doctor.id,
+            doctor_user_id=current_doctor.user_id,
+            audit_log_service=audit_log_service,
+        )
+        return SuccessResponse(
+            success=True,
+            message="Consultation started successfully",
+            data=appointment_service.to_response(updated).model_dump(),
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Failed to start consultation for %s", appointment_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to start consultation",
+        ) from exc
+
+
+@router.post(
+    "/appointments/{appointment_id}/complete",
+    response_model=SuccessResponse,
+    summary="Complete Consultation",
+    description="Complete the active consultation, create the consultation record, and update appointment to completed.",
+)
+async def complete_consultation(
+    appointment_id: str,
+    schema: ConsultationCompleteSchema,
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    appointment_service: AppointmentService = Depends(get_appointment_service),
+    consultation_service: ConsultationService = Depends(get_consultation_service),
+    notification_service: NotificationService = Depends(get_notification_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> SuccessResponse:
+    try:
+        consultation = await appointment_service.complete_consultation(
+            appointment_id=appointment_id,
+            doctor_profile_id=current_doctor.id,
+            doctor_user_id=current_doctor.user_id,
+            schema=schema,
+            consultation_service=consultation_service,
+            notification_service=notification_service,
+            audit_log_service=audit_log_service,
+        )
+        return SuccessResponse(
+            success=True,
+            message="Consultation completed successfully",
+            data=consultation_service.to_response(consultation).model_dump(),
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Failed to complete consultation for %s", appointment_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to complete consultation",
+        ) from exc
+
+
+@router.get(
+    "/consultations",
+    response_model=SuccessResponse,
+    summary="Get Doctor's Consultations List",
+    description="Retrieves a list of consultation records created by the logged-in doctor.",
+)
+async def get_doctor_consultations(
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    consultation_service: ConsultationService = Depends(get_consultation_service),
+) -> SuccessResponse:
+    try:
+        from app.core.dependencies import get_user_repository
+        user_repository = get_user_repository()
+        queue = await consultation_service.list_doctor_consultations(
+            doctor_profile_id=current_doctor.id,
+            user_repository=user_repository,
+        )
+        return SuccessResponse(
+            success=True,
+            message="Consultations retrieved successfully",
+            data={"consultations": queue},
+        )
+    except Exception as exc:
+        logger.exception("Failed to retrieve doctor consultations list")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve consultations list",
+        ) from exc
+
+
+@router.get(
+    "/consultations/{consultation_id}",
+    response_model=SuccessResponse,
+    summary="Get Consultation Details",
+    description="Retrieves detailed information of a specific consultation record.",
+)
+async def get_consultation_details(
+    consultation_id: str,
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    consultation_service: ConsultationService = Depends(get_consultation_service),
+) -> SuccessResponse:
+    try:
+        consultation = await consultation_service.get_consultation_by_id(consultation_id)
+        if not consultation or consultation.doctor_id != current_doctor.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Consultation not found",
+            )
+        return SuccessResponse(
+            success=True,
+            message="Consultation details retrieved successfully",
+            data=consultation_service.to_response(consultation).model_dump(),
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to retrieve consultation details for %s", consultation_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve consultation details",
         ) from exc
 

@@ -221,11 +221,13 @@ export interface Appointment {
   slot_time: string
   duration_minutes: number
   consultation_fee: number
-  status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed'
+  status: 'pending' | 'approved' | 'in_progress' | 'rejected' | 'cancelled' | 'completed'
   payment_status: 'pending' | 'held' | 'approved' | 'completed' | 'refunded' | 'failed'
   reason?: string
   notes?: string
   rejection_reason?: string
+  consultation_started_at?: string
+  consultation_completed_at?: string
   created_at: string
   updated_at: string
 }
@@ -237,7 +239,7 @@ export interface PatientAppointmentHistoryItem {
   specialization: string
   appointment_date: string
   appointment_time: string
-  status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed'
+  status: 'pending' | 'approved' | 'in_progress' | 'rejected' | 'cancelled' | 'completed'
   reason?: string
   rejection_reason?: string
   created_at: string
@@ -250,7 +252,7 @@ export interface DoctorAppointmentItem {
   appointment_date: string
   appointment_time: string
   reason: string
-  status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed'
+  status: 'pending' | 'approved' | 'in_progress' | 'rejected' | 'cancelled' | 'completed'
   rejection_reason?: string
   created_at: string
 }
@@ -259,5 +261,38 @@ export interface AppointmentCreateRequest {
   doctor_id: string
   availability_id: string
   reason: string
+}
+
+export interface ConsultationCompleteRequest {
+  diagnosis: string
+  notes: string
+  follow_up_required: boolean
+  follow_up_date?: string
+}
+
+export interface Consultation {
+  id: string
+  appointment_id: string
+  patient_id: string
+  doctor_id: string
+  consultation_notes: string
+  diagnosis: string
+  recommendations?: string
+  follow_up_required: boolean
+  follow_up_date?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface DoctorConsultationItem {
+  id: string
+  appointment_id: string
+  patient_id: string
+  patient_name: string
+  diagnosis: string
+  consultation_notes: string
+  follow_up_required: boolean
+  follow_up_date?: string
+  created_at: string
 }
 

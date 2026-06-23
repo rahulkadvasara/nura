@@ -103,3 +103,54 @@ export function useRejectAppointment() {
     },
   })
 }
+
+export function useStartConsultation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (appointmentId: string) => {
+      const response = await appointmentsService.startConsultation(appointmentId)
+      if (response.success && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to start consultation')
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appointments'] })
+      queryClient.invalidateQueries({ queryKey: ['consultations'] })
+      queryClient.invalidateQueries({ queryKey: ['doctor', 'dashboard'] })
+    },
+  })
+}
+
+export function useCompleteConsultation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ appointmentId, payload }: { appointmentId: string; payload: any }) => {
+      const response = await appointmentsService.completeConsultation(appointmentId, payload)
+      if (response.success && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to complete consultation')
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appointments'] })
+      queryClient.invalidateQueries({ queryKey: ['consultations'] })
+      queryClient.invalidateQueries({ queryKey: ['doctor', 'dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['patient', 'dashboard'] })
+    },
+  })
+}
+
+export function useDoctorConsultations() {
+  return useQuery({
+    queryKey: ['consultations', 'doctor'],
+    queryFn: async () => {
+      const response = await appointmentsService.getDoctorConsultations()
+      if (response.success && response.data) {
+        return response.data.consultations
+      }
+      throw new Error(response.message || 'Failed to fetch consultations')
+    },
+    staleTime: 15_000,
+  })
+}

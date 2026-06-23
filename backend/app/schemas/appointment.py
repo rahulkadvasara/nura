@@ -57,6 +57,8 @@ class AppointmentResponse(BaseModel):
     reason: Optional[str] = Field(None, description="Reason for visit")
     notes: Optional[str] = Field(None, description="Optional patient notes")
     rejection_reason: Optional[str] = Field(None, description="Reason for rejection")
+    consultation_started_at: Optional[datetime] = Field(None, description="Timestamp of when the consultation started")
+    consultation_completed_at: Optional[datetime] = Field(None, description="Timestamp of when the consultation completed")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
@@ -109,7 +111,7 @@ class ConsultationCreateSchema(BaseModel):
     doctor_id: str = Field(..., description="Reference to the doctor profile ID")
     consultation_notes: str = Field(..., min_length=1, max_length=5000, description="Notes written by the doctor")
     diagnosis: str = Field(..., min_length=1, max_length=2000, description="Diagnosis details")
-    recommendations: str = Field(..., min_length=1, max_length=3000, description="Treatment and other recommendations")
+    recommendations: Optional[str] = Field(default=None, max_length=3000, description="Treatment and other recommendations")
     follow_up_required: bool = Field(default=False, description="Whether a follow-up is required")
     follow_up_date: Optional[datetime] = Field(None, description="Optional follow-up date")
 
@@ -133,11 +135,34 @@ class ConsultationResponse(BaseModel):
     doctor_id: str = Field(..., description="Doctor profile ID")
     consultation_notes: str = Field(..., description="Notes written by the doctor")
     diagnosis: str = Field(..., description="Diagnosis details")
-    recommendations: str = Field(..., description="Treatment and other recommendations")
+    recommendations: Optional[str] = Field(None, description="Treatment and other recommendations")
     follow_up_required: bool = Field(..., description="Whether a follow-up is required")
     follow_up_date: Optional[datetime] = Field(None, description="Optional follow-up date")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
+
+
+class ConsultationCompleteSchema(BaseModel):
+    """Request schema for completing a consultation"""
+    diagnosis: str = Field(..., min_length=1, max_length=2000, description="Diagnosis details")
+    notes: str = Field(..., min_length=1, max_length=5000, description="Notes written by the doctor")
+    follow_up_required: bool = Field(default=False, description="Whether a follow-up is required")
+    follow_up_date: Optional[datetime] = Field(None, description="Optional follow-up date")
+
+
+class DoctorConsultationItemResponse(BaseModel):
+    """Schema representing an item in the doctor's consultation list"""
+    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+
+    id: str
+    appointment_id: str
+    patient_id: str
+    patient_name: str
+    diagnosis: str
+    consultation_notes: str
+    follow_up_required: bool
+    follow_up_date: Optional[datetime] = None
+    created_at: datetime
 
 
 # ---------------------------------------------------------------------------

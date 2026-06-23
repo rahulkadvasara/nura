@@ -42,6 +42,9 @@ def _appointment_to_response(appointment: AppointmentInDB) -> AppointmentRespons
         payment_status=appointment.payment_status,
         reason=appointment.reason,
         notes=appointment.notes,
+        rejection_reason=appointment.rejection_reason,
+        consultation_started_at=appointment.consultation_started_at,
+        consultation_completed_at=appointment.consultation_completed_at,
         created_at=appointment.created_at,
         updated_at=appointment.updated_at,
     )
@@ -437,3 +440,123 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
     def to_response(self, appointment: AppointmentInDB) -> AppointmentResponse:
         """Convert internal model to API response"""
         return _appointment_to_response(appointment)
+
+    async def start_consultation(
+        self,
+        appointment_id: str,
+        doctor_profile_id: str,
+        doctor_user_id: str,
+        audit_log_service: Any,
+    ) -> AppointmentInDB:
+        """Start a consultation for an approved appointment"""
+        appt = await self.appointment_repository.get(appointment_id)
+        if not appt or appt.doctor_id != doctor_profile_id:
+            raise ValueError("Appointment not found or access denied")
+
+        if appt.status != AppointmentStatus.APPROVED:
+            raise ValueError(f"Cannot start consultation with status: {appt.status.value if hasattr(appt.status, 'value') else appt.status}")
+
+        now = utc_now()
+        update = AppointmentUpdate(status=AppointmentStatus.IN_PROGRESS, consultation_started_at=now)
+        updated = await self.appointment_repository.update(appointment_id, update)
+        if not updated:
+            raise RuntimeError("Failed to start consultation")
+
+        # Create Audit Log
+        try:
+            from app.schemas.observability import AuditLogCreateSchema
+            audit_schema = AuditLogCreateSchema(
+                user_id=doctor_user_id,
+                action="appointment_started",
+                resource_type="appointments",
+                resource_id=appointment_id,
+                old_value={"status": "approved"},
+                new_value={"status": "in_progress", "consultation_started_at": now.isoformat()},
+            )
+            await audit_log_service.create_log(audit_schema)
+        except Exception:
+            pass
+
+        return updated
+
+    async def complete_consultation(
+        self,
+        appointment_id: str,
+        doctor_profile_id: str,
+        doctor_user_id: str,
+        schema: Any,  # ConsultationCompleteSchema
+        consultation_service: Any,
+        notification_service: Any,
+        audit_log_service: Any,
+    ) -> Any:  # ConsultationInDB
+        """Complete a consultation and create the consultation record"""
+        appt = await self.appointment_repository.get(appointment_id)
+        if not appt or appt.doctor_id != doctor_profile_id:
+            raise ValueError("Appointment not found or access denied")
+
+        if appt.status != AppointmentStatus.IN_PROGRESS:
+            raise ValueError(f"Cannot complete consultation with status: {appt.status.value if hasattr(appt.status, 'value') else appt.status}")
+
+        now = utc_now()
+        
+        # 1. Create Consultation record
+        from app.schemas.appointment import ConsultationCreateSchema
+        consult_schema = ConsultationCreateSchema(
+            appointment_id=appointment_id,
+            patient_id=appt.patient_id,
+            doctor_id=doctor_profile_id,
+            consultation_notes=schema.notes,
+            diagnosis=schema.diagnosis,
+            recommendations="", # Default empty string
+            follow_up_required=schema.follow_up_required,
+            follow_up_date=schema.follow_up_date,
+        )
+        consultation = await consultation_service.create_consultation(consult_schema)
+        
+        # 2. Update appointment to completed
+        update = AppointmentUpdate(status=AppointmentStatus.COMPLETED, consultation_completed_at=now)
+        updated_appt = await self.appointment_repository.update(appointment_id, update)
+        if not updated_appt:
+            raise RuntimeError("Failed to complete appointment status update")
+
+        # Resolve doctor name for notification
+        doctor_name = "Doctor"
+        doctor_profile = await self.doctor_profile_repository.get(doctor_profile_id)
+        if doctor_profile:
+            doctor_user = await self.user_repository.get(doctor_profile.user_id)
+            if doctor_user:
+                doctor_name = doctor_user.full_name
+
+        # 3. Create Notification for patient
+        try:
+            from app.schemas.notification import NotificationCreateSchema
+            from app.models.notification import NotificationType, NotificationPriority
+            notif_schema = NotificationCreateSchema(
+                user_id=appt.patient_id,
+                notification_type=NotificationType.CONSULTATION_COMPLETED,
+                title="Consultation Completed",
+                message=f"Your consultation with Dr. {doctor_name} has been completed.",
+                priority=NotificationPriority.MEDIUM,
+                related_entity_type="consultation",
+                related_entity_id=consultation.id,
+            )
+            await notification_service.create_notification(notif_schema)
+        except Exception:
+            pass
+
+        # 4. Create Audit Log
+        try:
+            from app.schemas.observability import AuditLogCreateSchema
+            audit_schema = AuditLogCreateSchema(
+                user_id=doctor_user_id,
+                action="appointment_completed",
+                resource_type="appointments",
+                resource_id=appointment_id,
+                old_value={"status": "in_progress"},
+                new_value={"status": "completed", "consultation_completed_at": now.isoformat()},
+            )
+            await audit_log_service.create_log(audit_schema)
+        except Exception:
+            pass
+
+        return consultation

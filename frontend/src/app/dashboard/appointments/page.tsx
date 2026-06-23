@@ -33,7 +33,7 @@ function AppointmentsContent() {
 
   // Segment appointments
   const pendingRequests = appointments.filter(a => a.status === 'pending')
-  const approvedRequests = appointments.filter(a => a.status === 'approved' || a.status === 'completed')
+  const approvedRequests = appointments.filter(a => a.status === 'approved' || a.status === 'in_progress' || a.status === 'completed')
   const cancelledRequests = appointments.filter(a => a.status === 'cancelled' || a.status === 'rejected')
 
   const getActiveList = () => {
@@ -55,6 +55,8 @@ function AppointmentsContent() {
     switch (status) {
       case 'approved':
         return <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">Approved</Badge>
+      case 'in_progress':
+        return <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200">In Progress</Badge>
       case 'completed':
         return <Badge className="bg-blue-50 text-blue-700 border-blue-200">Completed</Badge>
       case 'pending':

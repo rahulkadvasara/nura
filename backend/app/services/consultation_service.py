@@ -4,7 +4,7 @@ Business logic and validation for consultations
 """
 
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Any
 
 from app.models.appointment import (
     ConsultationCreate,
@@ -131,3 +131,41 @@ class ConsultationService(BaseService[ConsultationInDB, ConsultationCreate, Cons
     def to_response(self, consultation: ConsultationInDB) -> ConsultationResponse:
         """Convert internal model to API response"""
         return _consultation_to_response(consultation)
+
+    async def list_doctor_consultations(
+        self,
+        doctor_profile_id: str,
+        user_repository: Any,
+        limit: int = 100,
+        skip: int = 0,
+    ) -> List[dict]:
+        """Fetch doctor consultation records with patient details, sorted newest first"""
+        records = await self.consultation_repository.get_many(
+            {"doctor_id": doctor_profile_id},
+            limit=limit,
+            skip=skip
+        )
+        
+        # Sort by created_at descending (newest first)
+        records.sort(key=lambda r: r.created_at, reverse=True)
+
+        queue = []
+        for r in records:
+            patient = await user_repository.get(r.patient_id)
+            patient_name = "Unknown Patient"
+            if patient:
+                patient_name = patient.full_name
+
+            queue.append({
+                "id": r.id,
+                "appointment_id": r.appointment_id,
+                "patient_id": r.patient_id,
+                "patient_name": patient_name,
+                "diagnosis": r.diagnosis,
+                "consultation_notes": r.consultation_notes,
+                "follow_up_required": r.follow_up_required,
+                "follow_up_date": r.follow_up_date,
+                "created_at": r.created_at
+            })
+
+        return queue

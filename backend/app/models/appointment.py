@@ -22,6 +22,7 @@ class AppointmentStatus(str, Enum):
     """Status of an appointment"""
     PENDING = "pending"
     APPROVED = "approved"
+    IN_PROGRESS = "in_progress"
     REJECTED = "rejected"
     CANCELLED = "cancelled"
     COMPLETED = "completed"
@@ -57,6 +58,8 @@ class AppointmentBase(BaseModel):
     reason: Optional[str] = Field(None, description="Reason for visit")
     notes: Optional[str] = Field(None, max_length=1000, description="Optional patient notes")
     rejection_reason: Optional[str] = Field(None, description="Reason for rejecting the appointment")
+    consultation_started_at: Optional[datetime] = Field(None, description="Timestamp of when the consultation started")
+    consultation_completed_at: Optional[datetime] = Field(None, description="Timestamp of when the consultation completed")
 
 
 class AppointmentCreate(AppointmentBase):
@@ -78,6 +81,8 @@ class AppointmentUpdate(BaseModel):
     reason: Optional[str] = None
     notes: Optional[str] = Field(None, max_length=1000)
     rejection_reason: Optional[str] = None
+    consultation_started_at: Optional[datetime] = None
+    consultation_completed_at: Optional[datetime] = None
 
 
 class AppointmentInDB(AppointmentBase):
@@ -111,7 +116,7 @@ class ConsultationBase(BaseModel):
     doctor_id: str = Field(..., description="Reference to the doctor profile ID")
     consultation_notes: str = Field(..., max_length=5000, description="Notes written by the doctor")
     diagnosis: str = Field(..., max_length=2000, description="Diagnosis details")
-    recommendations: str = Field(..., max_length=3000, description="Treatment and other recommendations")
+    recommendations: Optional[str] = Field(default=None, max_length=3000, description="Treatment and other recommendations")
     follow_up_required: bool = Field(default=False, description="Whether a follow-up is required")
     follow_up_date: Optional[datetime] = Field(None, description="Optional follow-up date")
 

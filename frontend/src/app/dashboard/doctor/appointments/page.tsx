@@ -1,21 +1,24 @@
 'use client'
 
 import { useState } from 'react'
-import { Calendar, Clock, User, AlertCircle, CheckCircle, XCircle, FileText } from 'lucide-react'
+import { Calendar, Clock, User, AlertCircle, CheckCircle, XCircle, FileText, Stethoscope } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { useDoctorAppointments, useApproveAppointment, useRejectAppointment } from '@/hooks/use-appointments'
+import { useDoctorAppointments, useApproveAppointment, useRejectAppointment, useStartConsultation } from '@/hooks/use-appointments'
 import { toast } from 'sonner'
 
 type TabType = 'pending' | 'approved' | 'rejected'
 
 function DoctorAppointmentsContent() {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState<TabType>('pending')
   const { data: appointments = [], isLoading, isError, error, refetch } = useDoctorAppointments()
   const { mutateAsync: approveAppointment, isPending: isApproving } = useApproveAppointment()
   const { mutateAsync: rejectAppointment, isPending: isRejecting } = useRejectAppointment()
+  const { mutateAsync: startConsultation, isPending: isStarting } = useStartConsultation()
 
   const [selectedApptId, setSelectedApptId] = useState<string | null>(null)
   const [showRejectModal, setShowRejectModal] = useState(false)
@@ -28,6 +31,19 @@ function DoctorAppointmentsContent() {
       toast.success('Appointment approved successfully.')
     } catch (err: any) {
       toast.error(err.message || 'Failed to approve appointment')
+    } finally {
+      setSelectedApptId(null)
+    }
+  }
+
+  const handleStartConsultation = async (id: string) => {
+    try {
+      setSelectedApptId(id)
+      await startConsultation(id)
+      toast.success('Consultation started successfully.')
+      router.push('/dashboard/doctor/consultations')
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to start consultation')
     } finally {
       setSelectedApptId(null)
     }
@@ -60,7 +76,7 @@ function DoctorAppointmentsContent() {
 
   // Segment appointments
   const pendingRequests = appointments.filter(a => a.status === 'pending')
-  const approvedAppointments = appointments.filter(a => a.status === 'approved' || a.status === 'completed')
+  const approvedAppointments = appointments.filter(a => a.status === 'approved' || a.status === 'in_progress' || a.status === 'completed')
   const rejectedHistory = appointments.filter(a => a.status === 'rejected' || a.status === 'cancelled')
 
   const getActiveList = () => {
@@ -82,6 +98,8 @@ function DoctorAppointmentsContent() {
     switch (status) {
       case 'approved':
         return <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">Approved</Badge>
+      case 'in_progress':
+        return <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200">In Progress</Badge>
       case 'completed':
         return <Badge className="bg-blue-50 text-blue-700 border-blue-200">Completed</Badge>
       case 'pending':
@@ -230,6 +248,20 @@ function DoctorAppointmentsContent() {
                     >
                       <XCircle className="h-3.5 w-3.5" />
                       Reject
+                    </Button>
+                  </div>
+                )}
+
+                {appt.status === 'approved' && (
+                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                    <Button
+                      size="sm"
+                      onClick={() => handleStartConsultation(appt.id)}
+                      disabled={isStarting && selectedApptId === appt.id}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-9 px-3 rounded-lg flex items-center gap-1"
+                    >
+                      <Stethoscope className="h-3.5 w-3.5" />
+                      {isStarting && selectedApptId === appt.id ? 'Starting...' : 'Start Consultation'}
                     </Button>
                   </div>
                 )}
