@@ -225,6 +225,7 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
                 "appointment_time": appt.slot_time,
                 "status": appt.status.value if hasattr(appt.status, "value") else appt.status,
                 "reason": appt.reason or appt.notes or "General Consultation",
+                "rejection_reason": appt.rejection_reason,
                 "created_at": appt.created_at
             })
 
@@ -263,6 +264,175 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
     async def delete_appointment(self, appointment_id: str) -> bool:
         """Permanently delete an appointment"""
         return await self.appointment_repository.delete(appointment_id)
+
+    async def list_doctor_appointments(
+        self,
+        doctor_profile_id: str,
+        limit: int = 100,
+        skip: int = 0,
+    ) -> List[dict]:
+        """Fetch doctor appointment queue with patient user details, sorted pending first and newest first"""
+        appts = await self.appointment_repository.get_many(
+            {"doctor_id": doctor_profile_id},
+            limit=limit,
+            skip=skip
+        )
+        
+        # Sort by created_at descending (newest first)
+        appts.sort(key=lambda a: a.created_at, reverse=True)
+        # Stable sort putting pending status first
+        appts.sort(key=lambda a: a.status != AppointmentStatus.PENDING)
+
+        queue = []
+        for appt in appts:
+            patient = await self.user_repository.get(appt.patient_id)
+            patient_name = "Unknown Patient"
+            if patient:
+                patient_name = patient.full_name
+
+            queue.append({
+                "id": appt.id,
+                "patient_id": appt.patient_id,
+                "patient_name": patient_name,
+                "appointment_date": appt.slot_date,
+                "appointment_time": appt.slot_time,
+                "reason": appt.reason or appt.notes or "General Consultation",
+                "status": appt.status.value if hasattr(appt.status, "value") else appt.status,
+                "rejection_reason": appt.rejection_reason,
+                "created_at": appt.created_at
+            })
+
+        return queue
+
+    async def approve_appointment(
+        self,
+        appointment_id: str,
+        doctor_profile_id: str,
+        doctor_user_id: str,
+        notification_service: Any,
+        audit_log_service: Any,
+    ) -> AppointmentInDB:
+        """Approve a pending appointment request and perform audit log / notification side effects"""
+        appt = await self.appointment_repository.get(appointment_id)
+        if not appt or appt.doctor_id != doctor_profile_id:
+            raise ValueError("Appointment not found or access denied")
+
+        if appt.status != AppointmentStatus.PENDING:
+            raise ValueError(f"Cannot approve appointment with status: {appt.status.value if hasattr(appt.status, 'value') else appt.status}")
+
+        # Update status
+        update = AppointmentUpdate(status=AppointmentStatus.APPROVED)
+        updated = await self.appointment_repository.update(appointment_id, update)
+        if not updated:
+            raise RuntimeError("Failed to update appointment status")
+
+        # Resolve doctor name
+        doctor_profile = await self.doctor_profile_repository.get(doctor_profile_id)
+        doctor_name = "Doctor"
+        if doctor_profile:
+            doctor_user = await self.user_repository.get(doctor_profile.user_id)
+            if doctor_user:
+                doctor_name = doctor_user.full_name
+        
+        # Send Notification to patient
+        try:
+            from app.schemas.notification import NotificationCreateSchema
+            from app.models.notification import NotificationType, NotificationPriority
+            notif_schema = NotificationCreateSchema(
+                user_id=appt.patient_id,
+                notification_type=NotificationType.APPOINTMENT_APPROVED,
+                title="Appointment Approved",
+                message=f"Your appointment request with Dr. {doctor_name} has been approved.",
+                priority=NotificationPriority.HIGH,
+                related_entity_type="appointment",
+                related_entity_id=appointment_id,
+            )
+            await notification_service.create_notification(notif_schema)
+        except Exception:
+            # Don't fail the transaction if notification fails, but log it
+            pass
+
+        # Create Audit Log
+        try:
+            from app.schemas.observability import AuditLogCreateSchema
+            audit_schema = AuditLogCreateSchema(
+                user_id=doctor_user_id,
+                action="appointment_approved",
+                resource_type="appointments",
+                resource_id=appointment_id,
+                old_value={"status": "pending"},
+                new_value={"status": "approved"},
+            )
+            await audit_log_service.create_log(audit_schema)
+        except Exception:
+            pass
+
+        return updated
+
+    async def reject_appointment(
+        self,
+        appointment_id: str,
+        doctor_profile_id: str,
+        doctor_user_id: str,
+        rejection_reason: str,
+        notification_service: Any,
+        audit_log_service: Any,
+    ) -> AppointmentInDB:
+        """Reject a pending appointment request and perform audit log / notification side effects"""
+        appt = await self.appointment_repository.get(appointment_id)
+        if not appt or appt.doctor_id != doctor_profile_id:
+            raise ValueError("Appointment not found or access denied")
+
+        if appt.status != AppointmentStatus.PENDING:
+            raise ValueError(f"Cannot reject appointment with status: {appt.status.value if hasattr(appt.status, 'value') else appt.status}")
+
+        # Update status and rejection reason
+        update = AppointmentUpdate(status=AppointmentStatus.REJECTED, rejection_reason=rejection_reason)
+        updated = await self.appointment_repository.update(appointment_id, update)
+        if not updated:
+            raise RuntimeError("Failed to update appointment status")
+
+        # Resolve doctor name
+        doctor_profile = await self.doctor_profile_repository.get(doctor_profile_id)
+        doctor_name = "Doctor"
+        if doctor_profile:
+            doctor_user = await self.user_repository.get(doctor_profile.user_id)
+            if doctor_user:
+                doctor_name = doctor_user.full_name
+        
+        # Send Notification to patient
+        try:
+            from app.schemas.notification import NotificationCreateSchema
+            from app.models.notification import NotificationType, NotificationPriority
+            notif_schema = NotificationCreateSchema(
+                user_id=appt.patient_id,
+                notification_type=NotificationType.APPOINTMENT_REJECTED,
+                title="Appointment Rejected",
+                message=f"Your appointment request with Dr. {doctor_name} has been rejected. Reason: {rejection_reason}",
+                priority=NotificationPriority.MEDIUM,
+                related_entity_type="appointment",
+                related_entity_id=appointment_id,
+            )
+            await notification_service.create_notification(notif_schema)
+        except Exception:
+            pass
+
+        # Create Audit Log
+        try:
+            from app.schemas.observability import AuditLogCreateSchema
+            audit_schema = AuditLogCreateSchema(
+                user_id=doctor_user_id,
+                action="appointment_rejected",
+                resource_type="appointments",
+                resource_id=appointment_id,
+                old_value={"status": "pending"},
+                new_value={"status": "rejected", "rejection_reason": rejection_reason},
+            )
+            await audit_log_service.create_log(audit_schema)
+        except Exception:
+            pass
+
+        return updated
 
     def to_response(self, appointment: AppointmentInDB) -> AppointmentResponse:
         """Convert internal model to API response"""

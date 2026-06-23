@@ -30,14 +30,21 @@ from app.schemas.doctor import (
     DoctorProfileManagementUpdateSchema,
     DoctorProfileManagementResponse,
 )
+from app.schemas.appointment import DoctorAppointmentItem, AppointmentRejectSchema, AppointmentResponse
 from app.core.dependencies import (
     require_active_user,
     get_doctor_profile_service,
     get_doctor_document_service,
     get_doctor_availability_service,
     require_verified_doctor,
+    get_appointment_service,
+    get_notification_service,
+    get_audit_log_service,
 )
 from app.services.doctor_service import DoctorProfileService, DoctorDocumentService, DoctorAvailabilityService
+from app.services.appointment_service import AppointmentService
+from app.services.notification_service import NotificationService
+from app.services.audit_log_service import AuditLogService
 
 logger = logging.getLogger(__name__)
 
@@ -518,3 +525,142 @@ async def update_doctor_profile(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update doctor profile"
         ) from exc
+
+
+@router.get(
+    "/appointments",
+    response_model=SuccessResponse,
+    summary="Get Doctor Appointment Queue",
+    description="Retrieves the appointment request queue (pending, approved, rejected) for the logged-in verified doctor.",
+)
+async def get_doctor_appointments(
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    appointment_service: AppointmentService = Depends(get_appointment_service),
+) -> SuccessResponse:
+    try:
+        queue = await appointment_service.list_doctor_appointments(current_doctor.id)
+        return SuccessResponse(
+            success=True,
+            message="Doctor appointments queue retrieved successfully",
+            data={"appointments": queue},
+        )
+    except Exception as exc:
+        logger.exception("Failed to retrieve doctor appointments queue")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve appointments queue",
+        ) from exc
+
+
+@router.get(
+    "/appointments/{appointment_id}",
+    response_model=SuccessResponse,
+    summary="Get Doctor Appointment Details",
+    description="Retrieves detailed information of a specific appointment belonging to this doctor.",
+)
+async def get_doctor_appointment_details(
+    appointment_id: str,
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    appointment_service: AppointmentService = Depends(get_appointment_service),
+) -> SuccessResponse:
+    try:
+        appointment = await appointment_service.get_appointment_by_id(appointment_id)
+        if not appointment or appointment.doctor_id != current_doctor.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Appointment request not found",
+            )
+        return SuccessResponse(
+            success=True,
+            message="Appointment details retrieved successfully",
+            data=appointment_service.to_response(appointment).model_dump(),
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to retrieve doctor appointment details for %s", appointment_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve appointment details",
+        ) from exc
+
+
+@router.post(
+    "/appointments/{appointment_id}/approve",
+    response_model=SuccessResponse,
+    summary="Approve Appointment Request",
+    description="Allows a verified doctor to approve a pending appointment request.",
+)
+async def approve_appointment(
+    appointment_id: str,
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    appointment_service: AppointmentService = Depends(get_appointment_service),
+    notification_service: NotificationService = Depends(get_notification_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> SuccessResponse:
+    try:
+        approved = await appointment_service.approve_appointment(
+            appointment_id=appointment_id,
+            doctor_profile_id=current_doctor.id,
+            doctor_user_id=current_doctor.user_id,
+            notification_service=notification_service,
+            audit_log_service=audit_log_service,
+        )
+        return SuccessResponse(
+            success=True,
+            message="Appointment request approved successfully",
+            data=appointment_service.to_response(approved).model_dump(),
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Failed to approve appointment request %s", appointment_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to approve appointment request",
+        ) from exc
+
+
+@router.post(
+    "/appointments/{appointment_id}/reject",
+    response_model=SuccessResponse,
+    summary="Reject Appointment Request",
+    description="Allows a verified doctor to reject a pending appointment request with a reason.",
+)
+async def reject_appointment(
+    appointment_id: str,
+    schema: AppointmentRejectSchema,
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    appointment_service: AppointmentService = Depends(get_appointment_service),
+    notification_service: NotificationService = Depends(get_notification_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> SuccessResponse:
+    try:
+        rejected = await appointment_service.reject_appointment(
+            appointment_id=appointment_id,
+            doctor_profile_id=current_doctor.id,
+            doctor_user_id=current_doctor.user_id,
+            rejection_reason=schema.rejection_reason,
+            notification_service=notification_service,
+            audit_log_service=audit_log_service,
+        )
+        return SuccessResponse(
+            success=True,
+            message="Appointment request rejected successfully",
+            data=appointment_service.to_response(rejected).model_dump(),
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Failed to reject appointment request %s", appointment_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reject appointment request",
+        ) from exc
+

@@ -56,6 +56,7 @@ class AppointmentBase(BaseModel):
     payment_status: PaymentStatus = Field(default=PaymentStatus.PENDING, description="Payment status")
     reason: Optional[str] = Field(None, description="Reason for visit")
     notes: Optional[str] = Field(None, max_length=1000, description="Optional patient notes")
+    rejection_reason: Optional[str] = Field(None, description="Reason for rejecting the appointment")
 
 
 class AppointmentCreate(AppointmentBase):
@@ -76,6 +77,7 @@ class AppointmentUpdate(BaseModel):
     payment_status: Optional[PaymentStatus] = None
     reason: Optional[str] = None
     notes: Optional[str] = Field(None, max_length=1000)
+    rejection_reason: Optional[str] = None
 
 
 class AppointmentInDB(AppointmentBase):

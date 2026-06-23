@@ -56,6 +56,7 @@ class AppointmentResponse(BaseModel):
     payment_status: PaymentStatus = Field(..., description="Payment status")
     reason: Optional[str] = Field(None, description="Reason for visit")
     notes: Optional[str] = Field(None, description="Optional patient notes")
+    rejection_reason: Optional[str] = Field(None, description="Reason for rejection")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
@@ -72,7 +73,29 @@ class PatientAppointmentHistoryItem(BaseModel):
     appointment_time: str
     status: AppointmentStatus
     reason: Optional[str] = None
+    rejection_reason: Optional[str] = None
     created_at: datetime
+
+
+class DoctorAppointmentItem(BaseModel):
+    """Schema representing an appointment in the doctor's queue/list view"""
+    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+
+    id: str
+    patient_id: str
+    patient_name: str
+    appointment_date: str
+    appointment_time: str
+    reason: str
+    status: AppointmentStatus
+    rejection_reason: Optional[str] = None
+    created_at: datetime
+
+
+class AppointmentRejectSchema(BaseModel):
+    """Request schema for rejecting a pending appointment request"""
+    rejection_reason: str = Field(..., min_length=1, max_length=1000, description="Reason for rejection")
+
 
 
 # ---------------------------------------------------------------------------

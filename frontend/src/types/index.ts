@@ -225,6 +225,7 @@ export interface Appointment {
   payment_status: 'pending' | 'held' | 'approved' | 'completed' | 'refunded' | 'failed'
   reason?: string
   notes?: string
+  rejection_reason?: string
   created_at: string
   updated_at: string
 }
@@ -238,6 +239,19 @@ export interface PatientAppointmentHistoryItem {
   appointment_time: string
   status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed'
   reason?: string
+  rejection_reason?: string
+  created_at: string
+}
+
+export interface DoctorAppointmentItem {
+  id: string
+  patient_id: string
+  patient_name: string
+  appointment_date: string
+  appointment_time: string
+  reason: string
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed'
+  rejection_reason?: string
   created_at: string
 }
 

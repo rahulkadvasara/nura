@@ -32,7 +32,7 @@ export function Sidebar() {
     if (role === 'doctor') {
       return [
         { name: 'Dashboard', href: '/dashboard/doctor', icon: LayoutDashboard },
-        { name: 'Appointments', href: '/dashboard/appointments', icon: Calendar },
+        { name: 'Appointments', href: '/dashboard/doctor/appointments', icon: Calendar },
         { name: 'Patients', href: '/dashboard/patients', icon: Users },
         { name: 'Availability', href: '/dashboard/availability', icon: Clock },
         { name: 'Earnings', href: '/dashboard/earnings', icon: IndianRupee },

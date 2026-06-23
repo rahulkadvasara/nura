@@ -53,3 +53,53 @@ export function useCancelAppointment() {
     },
   })
 }
+
+export function useDoctorAppointments() {
+  return useQuery({
+    queryKey: ['appointments', 'doctor'],
+    queryFn: async () => {
+      const response = await appointmentsService.getDoctorAppointments()
+      if (response.success && response.data) {
+        return response.data.appointments
+      }
+      throw new Error(response.message || 'Failed to fetch doctor appointments')
+    },
+    staleTime: 15_000,
+  })
+}
+
+export function useApproveAppointment() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (appointmentId: string) => {
+      const response = await appointmentsService.approveAppointment(appointmentId)
+      if (response.success && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to approve appointment')
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appointments'] })
+      queryClient.invalidateQueries({ queryKey: ['doctor', 'dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['patient', 'dashboard'] })
+    },
+  })
+}
+
+export function useRejectAppointment() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ appointmentId, rejectionReason }: { appointmentId: string; rejectionReason: string }) => {
+      const response = await appointmentsService.rejectAppointment(appointmentId, rejectionReason)
+      if (response.success && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to reject appointment')
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appointments'] })
+      queryClient.invalidateQueries({ queryKey: ['doctor', 'dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['patient', 'dashboard'] })
+    },
+  })
+}

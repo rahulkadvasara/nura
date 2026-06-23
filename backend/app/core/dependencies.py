@@ -20,6 +20,7 @@ from app.repositories import (
     DoctorDocumentRepository,
     DoctorAvailabilityRepository,
     AppointmentRepository,
+    NotificationRepository,
 )
 from app.services import (
     UserService,
@@ -30,6 +31,7 @@ from app.services import (
     DoctorDocumentService,
     DoctorAvailabilityService,
     AppointmentService,
+    NotificationService,
 )
 
 
@@ -99,6 +101,20 @@ def get_doctor_document_service() -> DoctorDocumentService:
     """Get DoctorDocumentService instance"""
     document_repository = get_doctor_document_repository()
     return DoctorDocumentService(document_repository)
+
+
+def get_notification_repository() -> NotificationRepository:
+    """Get NotificationRepository instance"""
+    database: AsyncIOMotorDatabase = get_database()
+    return NotificationRepository(database.notifications)
+
+
+def get_notification_service(
+    notification_repository: NotificationRepository = Depends(get_notification_repository),
+    user_repository: UserRepository = Depends(get_user_repository),
+) -> NotificationService:
+    """Get NotificationService instance"""
+    return NotificationService(notification_repository, user_repository)
 
 
 def get_doctor_availability_repository() -> DoctorAvailabilityRepository:
