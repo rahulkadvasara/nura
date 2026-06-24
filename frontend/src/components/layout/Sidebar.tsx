@@ -18,6 +18,7 @@ import {
   Clock,
   IndianRupee,
   Award,
+  Shield,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -47,11 +48,13 @@ export function Sidebar() {
       return [
         { name: 'Dashboard', href: '/dashboard/admin', icon: LayoutDashboard },
         { name: 'Verify Doctors', href: '/dashboard/admin/doctors', icon: Award },
+        { name: 'Administrators', href: '/dashboard/admin/admins', icon: Shield },
         { name: 'Users', href: '/dashboard/users', icon: Users },
         { name: 'System Logs', href: '/dashboard/logs', icon: Activity },
         { name: 'Settings', href: '/dashboard/settings/profile', icon: Settings },
       ]
     }
+
 
     // Default: patient — matches v0 screenshot sidebar
     return [

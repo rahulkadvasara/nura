@@ -108,6 +108,13 @@ from app.schemas.dashboard import (
     AdminDashboardResponse,
 )
 
+from app.schemas.admin import (
+    AdminCreateRequest,
+    AdminCreateResponse,
+    AdminDetailResponse,
+)
+
+
 __all__ = [
     # Authentication schemas
     "UserLogin",
@@ -204,4 +211,9 @@ __all__ = [
     "PatientDashboardResponse",
     "DoctorDashboardResponse",
     "AdminDashboardResponse",
+
+    # Admin Management schemas
+    "AdminCreateRequest",
+    "AdminCreateResponse",
+    "AdminDetailResponse",
 ]

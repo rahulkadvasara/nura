@@ -40,6 +40,7 @@ class UserBase(BaseModel):
     auth_provider: AuthProvider = Field(default=AuthProvider.LOCAL, description="Authentication provider")
     email_verified: bool = Field(default=False, description="Email verification status")
     is_active: bool = Field(default=True, description="Account active status")
+    last_login_at: Optional[datetime] = Field(None, description="Last login timestamp")
 
     @field_validator("email", mode="before")
     @classmethod
@@ -74,6 +75,7 @@ class UserUpdate(BaseModel):
     profile_picture: Optional[str] = Field(None, description="Profile picture URL")
     is_active: Optional[bool] = Field(None, description="Account active status")
     password_hash: Optional[str] = Field(None, description="Hashed password (internal use only)")
+    last_login_at: Optional[datetime] = Field(None, description="Last login timestamp")
 
 
 class UserInDB(UserBase):
@@ -109,3 +111,4 @@ class UserResponse(BaseModel):
     is_active: bool = Field(..., description="Account active status")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
+    last_login_at: Optional[datetime] = Field(None, description="Last login timestamp")

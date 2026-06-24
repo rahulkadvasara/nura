@@ -115,3 +115,12 @@ class AuditLogService(BaseService[AuditLogInDB, AuditLogCreate, AuditLogUpdate])
     def to_response(self, log: AuditLogInDB) -> AuditLogResponse:
         """Convert internal model to API response"""
         return _log_to_response(log)
+
+    async def get_admin_audit_logs(
+        self,
+        admin_id: str,
+        limit: int = 50,
+    ) -> List[AuditLogInDB]:
+        """Fetch audit logs where the admin is the actor or the target, sorted newest first"""
+        return await self.audit_log_repository.get_admin_audit_logs(admin_id, limit)
+

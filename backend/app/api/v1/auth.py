@@ -173,6 +173,10 @@ async def login(
             detail="Email not verified",
         )
 
+    # Update last_login_at
+    from app.models.user import UserUpdate
+    await user_service.update_user(user.id, UserUpdate(last_login_at=datetime.now(timezone.utc)))
+
     # Generate tokens
     token_response, raw_refresh, refresh_token_create = await auth_service._build_token_pair(user)
 
@@ -488,6 +492,10 @@ async def google_login(
             profile_picture=profile_picture,
             provider=AuthProvider.GOOGLE,
         )
+
+    # Update last_login_at
+    from app.models.user import UserUpdate
+    await user_service.update_user(user.id, UserUpdate(last_login_at=datetime.now(timezone.utc)))
 
     # Issue access and refresh tokens
     token_response, raw_refresh, refresh_token_create = await auth_service._build_token_pair(user)

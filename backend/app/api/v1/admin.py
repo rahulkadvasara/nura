@@ -6,9 +6,9 @@ Endpoints for platform administrators to review and verify doctor onboarding app
 import logging
 from datetime import datetime, timezone
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 
-from app.models.user import UserInDB, UserRole
+from app.models.user import UserInDB, UserRole, UserResponse
 from app.models.doctor import DoctorProfileStatus
 from app.schemas.auth import SuccessResponse, TokenUser
 from app.schemas.doctor import (
@@ -17,7 +17,12 @@ from app.schemas.doctor import (
     DoctorApprovalRequest,
     DoctorRejectionRequest,
 )
-from app.schemas.observability import AuditLogCreateSchema
+from app.schemas.admin import (
+    AdminCreateRequest,
+    AdminCreateResponse,
+    AdminDetailResponse,
+)
+from app.schemas.observability import AuditLogCreateSchema, AuditLogResponse
 from app.core.dependencies import (
     require_role,
     get_user_service,
@@ -28,6 +33,7 @@ from app.core.dependencies import (
 from app.services.user_service import UserService
 from app.services.doctor_service import DoctorProfileService, DoctorDocumentService
 from app.services.audit_log_service import AuditLogService
+
 
 logger = logging.getLogger(__name__)
 
@@ -237,11 +243,6 @@ async def reject_doctor_application(
             detail="Failed to update doctor profile status"
         )
 
-    # 2. Update all pending verification documents to rejected
-    docs = await doctor_document_service.get_documents_by_doctor(doctor_profile_id)
-    for doc in docs:
-        await doctor_document_service.reject_document(doc.id, current_user.id)
-
     # 3. Create audit log
     audit_schema = AuditLogCreateSchema(
         user_id=current_user.id,
@@ -257,3 +258,249 @@ async def reject_doctor_application(
         success=True,
         message="Doctor application rejected successfully"
     )
+
+
+@router.get(
+    "/admins",
+    response_model=SuccessResponse,
+    summary="List Administrators",
+    description="Retrieve a list of all administrators, sorted by creation date descending."
+)
+async def list_admins(
+    user_service: UserService = Depends(get_user_service)
+) -> SuccessResponse:
+    try:
+        admins = await user_service.list_admins()
+        return SuccessResponse(
+            success=True,
+            message="Administrators retrieved successfully",
+            data={"admins": [user_service.to_response(admin).model_dump() for admin in admins]}
+        )
+    except Exception as e:
+        logger.exception("Failed to retrieve administrators")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve administrators"
+        ) from e
+
+
+@router.get(
+    "/admins/{admin_id}",
+    response_model=SuccessResponse,
+    summary="Get Administrator Details",
+    description="Retrieve profile details, account status, and recent audit log events for a specific administrator."
+)
+async def get_admin_details(
+    admin_id: str,
+    user_service: UserService = Depends(get_user_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> SuccessResponse:
+    admin = await user_service.get_user_by_id(admin_id)
+    if not admin or admin.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Administrator not found"
+        )
+
+    # Get recent audit logs involving this administrator
+    logs = await audit_log_service.get_admin_audit_logs(admin_id)
+    audit_responses = [audit_log_service.to_response(log) for log in logs]
+
+    admin_details = AdminDetailResponse(
+        profile=user_service.to_response(admin),
+        account_status={
+            "is_active": admin.is_active,
+            "email_verified": admin.email_verified
+        },
+        audit_summary=audit_responses
+    )
+
+    return SuccessResponse(
+        success=True,
+        message="Administrator details retrieved successfully",
+        data=admin_details.model_dump()
+    )
+
+
+@router.post(
+    "/admins",
+    response_model=SuccessResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create Administrator",
+    description="Create a new administrator account. Generates a temporary password."
+)
+async def create_admin(
+    body: AdminCreateRequest,
+    request: Request,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    user_service: UserService = Depends(get_user_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> SuccessResponse:
+    try:
+        new_admin, temp_password = await user_service.create_admin(
+            full_name=body.full_name,
+            email=body.email
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        ) from e
+
+    # Create audit log
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
+    audit_schema = AuditLogCreateSchema(
+        user_id=current_user.id,
+        action="ADMIN_CREATED",
+        resource_type="admin",
+        resource_id=new_admin.id,
+        old_value=None,
+        new_value={
+            "email": new_admin.email,
+            "full_name": new_admin.full_name,
+            "role": new_admin.role.value if hasattr(new_admin.role, "value") else new_admin.role
+        },
+        ip_address=ip_address,
+        user_agent=user_agent
+    )
+    await audit_log_service.create_log(audit_schema)
+
+    response_data = AdminCreateResponse(
+        id=new_admin.id,
+        full_name=new_admin.full_name,
+        email=new_admin.email,
+        role=new_admin.role.value if hasattr(new_admin.role, "value") else new_admin.role,
+        is_active=new_admin.is_active,
+        email_verified=new_admin.email_verified,
+        created_at=new_admin.created_at,
+        temporary_password=temp_password
+    )
+
+    return SuccessResponse(
+        success=True,
+        message="Administrator created successfully",
+        data=response_data.model_dump()
+    )
+
+
+@router.put(
+    "/admins/{admin_id}/enable",
+    response_model=SuccessResponse,
+    summary="Enable Administrator",
+    description="Reactivate a disabled administrator account."
+)
+async def enable_admin(
+    admin_id: str,
+    request: Request,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    user_service: UserService = Depends(get_user_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> SuccessResponse:
+    admin = await user_service.get_user_by_id(admin_id)
+    if not admin or admin.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Administrator not found"
+        )
+
+    if admin.is_active:
+        return SuccessResponse(
+            success=True,
+            message="Administrator account is already active"
+        )
+
+    # Enable user
+    updated_admin = await user_service.update_user_role(admin_id, UserRole.ADMIN, is_active=True)
+    if not updated_admin:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to enable administrator"
+        )
+
+    # Log audit event
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
+    audit_schema = AuditLogCreateSchema(
+        user_id=current_user.id,
+        action="ADMIN_ENABLED",
+        resource_type="admin",
+        resource_id=admin_id,
+        old_value={"is_active": False},
+        new_value={"is_active": True},
+        ip_address=ip_address,
+        user_agent=user_agent
+    )
+    await audit_log_service.create_log(audit_schema)
+
+    return SuccessResponse(
+        success=True,
+        message="Administrator account enabled successfully"
+    )
+
+
+@router.put(
+    "/admins/{admin_id}/disable",
+    response_model=SuccessResponse,
+    summary="Disable Administrator",
+    description="Deactivate an administrator account, enforcing that the last active administrator cannot be disabled."
+)
+async def disable_admin(
+    admin_id: str,
+    request: Request,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    user_service: UserService = Depends(get_user_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> SuccessResponse:
+    admin = await user_service.get_user_by_id(admin_id)
+    if not admin or admin.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Administrator not found"
+        )
+
+    if not admin.is_active:
+        return SuccessResponse(
+            success=True,
+            message="Administrator account is already disabled"
+        )
+
+    # Enforce last active admin check
+    active_admins = await user_service.count_active_admins()
+    if active_admins <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot disable the last active administrator. At least one active administrator must remain."
+        )
+
+    # Disable user
+    updated_admin = await user_service.update_user_role(admin_id, UserRole.ADMIN, is_active=False)
+    if not updated_admin:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to disable administrator"
+        )
+
+    # Log audit event
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
+    audit_schema = AuditLogCreateSchema(
+        user_id=current_user.id,
+        action="ADMIN_DISABLED",
+        resource_type="admin",
+        resource_id=admin_id,
+        old_value={"is_active": True},
+        new_value={"is_active": False},
+        ip_address=ip_address,
+        user_agent=user_agent
+    )
+    await audit_log_service.create_log(audit_schema)
+
+    return SuccessResponse(
+        success=True,
+        message="Administrator account disabled successfully"
+    )
+

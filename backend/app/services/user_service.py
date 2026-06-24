@@ -4,6 +4,8 @@ Business logic for user operations
 """
 
 from typing import Optional
+import secrets
+import string
 from passlib.context import CryptContext
 
 from app.models import UserCreate, UserUpdate, UserInDB, UserResponse, UserRole, AuthProvider
@@ -11,8 +13,29 @@ from app.repositories import UserRepository
 from app.services.base import BaseService
 
 
+def generate_temporary_password(length: int = 12) -> str:
+    """Generate a temporary password meeting strength requirements."""
+    uppercase = string.ascii_uppercase
+    lowercase = string.ascii_lowercase
+    digits = string.digits
+    all_chars = uppercase + lowercase + digits
+    
+    # Ensure at least one of each required type
+    password = [
+        secrets.choice(uppercase),
+        secrets.choice(lowercase),
+        secrets.choice(digits),
+    ]
+    # Fill the rest
+    password += [secrets.choice(all_chars) for _ in range(length - 3)]
+    # Shuffle
+    secrets.SystemRandom().shuffle(password)
+    return "".join(password)
+
+
 # Module-level bcrypt context (created once, thread-safe)
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 
 
 class UserService(BaseService[UserInDB, UserCreate, UserUpdate]):
@@ -163,6 +186,7 @@ class UserService(BaseService[UserInDB, UserCreate, UserUpdate]):
             is_active=user.is_active,
             created_at=user.created_at,
             updated_at=user.updated_at,
+            last_login_at=user.last_login_at,
         )
 
     async def create_oauth_user(
@@ -249,3 +273,48 @@ class UserService(BaseService[UserInDB, UserCreate, UserUpdate]):
             
         doc = await prefs_col.find_one({"user_id": ObjectId(user_id)})
         return NotificationPreferencesInDB.from_mongo(doc)
+
+    # ------------------------------------------------------------------
+    # Admin Management
+    # ------------------------------------------------------------------
+
+    async def list_admins(self) -> list[UserInDB]:
+        """List all administrators sorted by created_at descending."""
+        cursor = self.user_repository.collection.find({"role": "admin"}).sort("created_at", -1)
+        docs = await cursor.to_list(length=100)
+        return [UserInDB.from_mongo(doc) for doc in docs]
+
+    async def count_active_admins(self) -> int:
+        """Count active administrators."""
+        return await self.user_repository.count({"role": "admin", "is_active": True})
+
+    async def create_admin(self, full_name: str, email: str) -> tuple[UserInDB, str]:
+        """Create a new administrator with a generated temporary password."""
+        email_clean = email.lower().strip()
+        if await self.user_repository.exists_by_email(email_clean):
+            raise ValueError(f"User with email {email_clean} already exists")
+
+        temp_password = generate_temporary_password()
+        
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        
+        user_data = {
+            "email": email_clean,
+            "full_name": full_name,
+            "role": UserRole.ADMIN.value,
+            "auth_provider": AuthProvider.LOCAL.value,
+            "email_verified": True,
+            "is_active": True,
+            "password_hash": self.hash_password(temp_password),
+            "created_at": now,
+            "updated_at": now,
+            "last_login_at": None,
+        }
+        
+        result = await self.user_repository.collection.insert_one(user_data)
+        created_doc = await self.user_repository.collection.find_one({"_id": result.inserted_id})
+        if created_doc is None:
+            raise RuntimeError("Admin User was inserted but could not be retrieved")
+        return UserInDB.from_mongo(created_doc), temp_password
+

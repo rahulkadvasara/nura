@@ -380,4 +380,44 @@ export interface PatientPrescription {
   created_at: string
   updated_at: string
 }
+
+// Admin Management Types
+export interface AdminCreateRequest {
+  full_name: string
+  email: string
+}
+
+export interface AdminCreateResponse {
+  id: string
+  full_name: string
+  email: string
+  role: string
+  is_active: boolean
+  email_verified: boolean
+  created_at: string
+  temporary_password: string
+}
+
+export interface AuditLog {
+  id: string
+  user_id?: string
+  action: string
+  resource_type: string
+  resource_id?: string
+  old_value?: any
+  new_value?: any
+  ip_address?: string
+  user_agent?: string
+  created_at: string
+}
+
+export interface AdminDetailResponse {
+  profile: User
+  account_status: {
+    is_active: boolean
+    email_verified: boolean
+  }
+  audit_summary: AuditLog[]
+}
+
 

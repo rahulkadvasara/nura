@@ -34,3 +34,14 @@ class AuditLogRepository(BaseRepository[AuditLogInDB, AuditLogCreate, AuditLogUp
         if resource_id:
             query["resource_id"] = resource_id
         return await self.get_many(query, limit=limit, skip=skip)
+
+    async def get_admin_audit_logs(self, admin_id: str, limit: int = 50) -> List[AuditLogInDB]:
+        """Fetch audit logs where the admin is the actor or the target, sorted newest first"""
+        cursor = self.collection.find(
+            {"$or": [
+                {"user_id": admin_id},
+                {"resource_id": admin_id}
+            ]}
+        ).sort("created_at", -1).limit(limit)
+        docs = await cursor.to_list(length=limit)
+        return [AuditLogInDB.from_mongo(doc) for doc in docs]
