@@ -166,6 +166,7 @@ class Medication(BaseModel):
     dosage: str = Field(..., min_length=1, max_length=100, description="Dosage (e.g. 500mg, 1 tablet)")
     frequency: str = Field(..., min_length=1, max_length=100, description="Frequency (e.g. once daily, twice daily)")
     duration: str = Field(..., min_length=1, max_length=100, description="Duration (e.g. 5 days, 1 month)")
+    instructions: Optional[str] = Field(None, max_length=1000, description="Special instructions for this medication")
 
 
 class PrescriptionBase(BaseModel):

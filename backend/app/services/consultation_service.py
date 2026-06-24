@@ -169,3 +169,72 @@ class ConsultationService(BaseService[ConsultationInDB, ConsultationCreate, Cons
             })
 
         return queue
+
+    async def list_patient_consultation_history(
+        self,
+        patient_id: str,
+        doctor_profile_repository: Any,
+        user_repository: Any,
+        appointment_repository: Any,
+        prescription_repository: Any,
+        limit: int = 100,
+        skip: int = 0,
+    ) -> List[dict]:
+        """Fetch patient's consultation history with doctor name, specialization, date, and prescription status"""
+        records = await self.consultation_repository.get_many(
+            {"patient_id": patient_id},
+            limit=limit,
+            skip=skip
+        )
+        
+        # Sort by created_at descending (newest first)
+        records.sort(key=lambda r: r.created_at, reverse=True)
+
+        history = []
+        for r in records:
+            # Get doctor profile details
+            doctor_profile = await doctor_profile_repository.get(r.doctor_id)
+            doctor_name = "Unknown Doctor"
+            specialization = "General Medicine"
+            if doctor_profile:
+                specialization = doctor_profile.specialization
+                doctor_user = await user_repository.get(doctor_profile.user_id)
+                if doctor_user:
+                    doctor_name = doctor_user.full_name
+
+            # Get appointment slot date & time
+            appointment = await appointment_repository.get(r.appointment_id)
+            appointment_date = "Unknown Date"
+            appointment_time = "Unknown Time"
+            if appointment:
+                appointment_date = appointment.slot_date
+                appointment_time = appointment.slot_time
+
+            # Check prescription status
+            prescription = await prescription_repository.get_by_consultation_id(r.id)
+            prescription_status = "No Prescription"
+            prescription_id = None
+            if prescription:
+                prescription_status = "Prescribed"
+                prescription_id = prescription.id
+
+            history.append({
+                "id": r.id,
+                "appointment_id": r.appointment_id,
+                "patient_id": r.patient_id,
+                "doctor_id": r.doctor_id,
+                "doctor_name": doctor_name,
+                "doctor_specialization": specialization,
+                "appointment_date": appointment_date,
+                "appointment_time": appointment_time,
+                "diagnosis": r.diagnosis,
+                "consultation_notes": r.consultation_notes,
+                "follow_up_required": r.follow_up_required,
+                "follow_up_date": r.follow_up_date,
+                "prescription_status": prescription_status,
+                "prescription_id": prescription_id,
+                "created_at": r.created_at,
+                "updated_at": r.updated_at,
+            })
+
+        return history

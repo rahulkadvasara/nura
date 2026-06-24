@@ -89,12 +89,35 @@ class TestPatientDashboardService:
         notif_repo = NotificationRepository(notif_col)
         insight_repo = HealthInsightRepository(insight_col)
 
+        from app.repositories.consultation_repository import ConsultationRepository
+        from app.repositories.prescription_repository import PrescriptionRepository
+        from app.repositories.doctor_repository import DoctorProfileRepository
+        from app.repositories.user_repository import UserRepository
+        
+        cons_col = MagicMock()
+        cons_col.find_one = AsyncMock(return_value=None)
+        cons_repo = ConsultationRepository(cons_col)
+        
+        pres_col = MagicMock()
+        pres_col.find_one = AsyncMock(return_value=None)
+        pres_repo = PrescriptionRepository(pres_col)
+        
+        prof_repo = AsyncMock()
+        prof_repo.get = AsyncMock(return_value=None)
+        
+        usr_repo = AsyncMock()
+        usr_repo.get = AsyncMock(return_value=None)
+
         service = PatientDashboardService(
             appointment_repository=appt_repo,
             reminder_repository=reminder_repo,
             report_repository=report_repo,
             notification_repository=notif_repo,
             health_insight_repository=insight_repo,
+            consultation_repository=cons_repo,
+            prescription_repository=pres_repo,
+            doctor_profile_repository=prof_repo,
+            user_repository=usr_repo,
         )
 
         result = await service.get_dashboard(patient_id)
@@ -132,12 +155,35 @@ class TestPatientDashboardService:
             ))
         ))
 
+        from app.repositories.consultation_repository import ConsultationRepository
+        from app.repositories.prescription_repository import PrescriptionRepository
+        from app.repositories.doctor_repository import DoctorProfileRepository
+        from app.repositories.user_repository import UserRepository
+        
+        cons_col = MagicMock()
+        cons_col.find_one = AsyncMock(return_value=None)
+        cons_repo = ConsultationRepository(cons_col)
+        
+        pres_col = MagicMock()
+        pres_col.find_one = AsyncMock(return_value=None)
+        pres_repo = PrescriptionRepository(pres_col)
+        
+        prof_repo = AsyncMock()
+        prof_repo.get = AsyncMock(return_value=None)
+        
+        usr_repo = AsyncMock()
+        usr_repo.get = AsyncMock(return_value=None)
+
         service = PatientDashboardService(
             appointment_repository=AppointmentRepository(col_zero),
             reminder_repository=ReminderRepository(col_zero),
             report_repository=ReportRepository(col_zero),
             notification_repository=NotificationRepository(col_zero),
             health_insight_repository=HealthInsightRepository(insight_col),
+            consultation_repository=cons_repo,
+            prescription_repository=pres_repo,
+            doctor_profile_repository=prof_repo,
+            user_repository=usr_repo,
         )
 
         result = await service.get_dashboard(patient_id)
@@ -181,11 +227,17 @@ class TestDoctorDashboardService:
         profile_repo.get_by_user_id.return_value = None
         doc_repo = AsyncMock()
 
+        from app.repositories.prescription_repository import PrescriptionRepository
+        pres_col = MagicMock()
+        pres_col.count_documents = AsyncMock(return_value=0)
+        pres_repo = PrescriptionRepository(pres_col)
+
         service = DoctorDashboardService(
             appointment_repository=AppointmentRepository(appt_col),
             doctor_wallet_repository=DoctorWalletRepository(wallet_col),
             doctor_profile_repository=profile_repo,
             doctor_document_repository=doc_repo,
+            prescription_repository=pres_repo,
         )
 
         result = await service.get_dashboard(doctor_id)
@@ -217,11 +269,17 @@ class TestDoctorDashboardService:
         profile_repo.get_by_user_id.return_value = None
         doc_repo = AsyncMock()
 
+        from app.repositories.prescription_repository import PrescriptionRepository
+        pres_col = MagicMock()
+        pres_col.count_documents = AsyncMock(return_value=0)
+        pres_repo = PrescriptionRepository(pres_col)
+
         service = DoctorDashboardService(
             appointment_repository=AppointmentRepository(appt_col),
             doctor_wallet_repository=DoctorWalletRepository(wallet_col),
             doctor_profile_repository=profile_repo,
             doctor_document_repository=doc_repo,
+            prescription_repository=pres_repo,
         )
 
         result = await service.get_dashboard(doctor_id)
@@ -252,11 +310,17 @@ class TestDoctorDashboardService:
         profile_repo.get_by_user_id.return_value = None
         doc_repo = AsyncMock()
         
+        from app.repositories.prescription_repository import PrescriptionRepository
+        pres_col = MagicMock()
+        pres_col.count_documents = AsyncMock(return_value=0)
+        pres_repo = PrescriptionRepository(pres_col)
+
         service = DoctorDashboardService(
             appointment_repository=AppointmentRepository(appt_col),
             doctor_wallet_repository=DoctorWalletRepository(wallet_col),
             doctor_profile_repository=profile_repo,
             doctor_document_repository=doc_repo,
+            prescription_repository=pres_repo,
         )
 
         result = await service.get_dashboard(doctor_id)

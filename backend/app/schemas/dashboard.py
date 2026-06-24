@@ -22,6 +22,27 @@ class RecentHealthInsight(BaseModel):
     created_at: datetime = Field(..., description="When the insight was generated")
 
 
+class PatientDashboardConsultation(BaseModel):
+    """Compact consultation summary for dashboard display"""
+    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+
+    id: str = Field(..., description="Consultation ID")
+    doctor_name: str = Field(..., description="Doctor's full name")
+    specialization: str = Field(..., description="Doctor's specialization")
+    date: datetime = Field(..., description="Consultation/appointment date")
+    diagnosis: str = Field(..., description="Diagnosis details")
+
+
+class PatientDashboardPrescription(BaseModel):
+    """Compact prescription summary for dashboard display"""
+    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+
+    id: str = Field(..., description="Prescription ID")
+    doctor_name: str = Field(..., description="Doctor's full name")
+    date: datetime = Field(..., description="Prescription date")
+    medications_count: int = Field(..., description="Number of medications in this prescription")
+
+
 # ---------------------------------------------------------------------------
 # Patient Dashboard
 # ---------------------------------------------------------------------------
@@ -49,6 +70,14 @@ class PatientDashboardResponse(BaseModel):
     recent_health_insights: List[RecentHealthInsight] = Field(
         default_factory=list,
         description="Most recent health insights (up to 5)",
+    )
+    recent_consultation: Optional[PatientDashboardConsultation] = Field(
+        default=None,
+        description="Most recent completed consultation details"
+    )
+    recent_prescription: Optional[PatientDashboardPrescription] = Field(
+        default=None,
+        description="Most recent prescription details"
     )
 
 
@@ -95,6 +124,10 @@ class DoctorDashboardResponse(BaseModel):
     document_status: str = Field(
         default="pending",
         description="Verification status of the doctor documents (pending/approved/rejected)",
+    )
+    prescriptions_written_count: int = Field(
+        default=0,
+        description="Total number of prescriptions written by this doctor"
     )
 
 

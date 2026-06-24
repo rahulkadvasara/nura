@@ -34,6 +34,7 @@ export function Sidebar() {
         { name: 'Dashboard', href: '/dashboard/doctor', icon: LayoutDashboard },
         { name: 'Appointments', href: '/dashboard/doctor/appointments', icon: Calendar },
         { name: 'Consultations', href: '/dashboard/doctor/consultations', icon: Stethoscope },
+        { name: 'Prescriptions', href: '/dashboard/doctor/prescriptions', icon: Pill },
         { name: 'Patients', href: '/dashboard/patients', icon: Users },
         { name: 'Availability', href: '/dashboard/availability', icon: Clock },
         { name: 'Earnings', href: '/dashboard/earnings', icon: IndianRupee },
@@ -56,6 +57,7 @@ export function Sidebar() {
     return [
       { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
       { name: 'Nura AI', href: '/dashboard/chat', icon: Sparkles },
+      { name: 'Medical History', href: '/dashboard/history', icon: Clock },
       { name: 'Reports', href: '/dashboard/records', icon: FileText },
       { name: 'Doctors', href: '/dashboard/doctors', icon: Stethoscope },
       { name: 'Appointments', href: '/dashboard/appointments', icon: Calendar },

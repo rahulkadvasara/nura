@@ -304,6 +304,7 @@ class TestPrescriptionService:
     @pytest.mark.asyncio
     async def test_create_prescription_success(self, sample_consultation, sample_prescription):
         pres_repo = AsyncMock()
+        pres_repo.get_by_consultation_id = AsyncMock(return_value=None)
         pres_repo.collection = MagicMock()
         pres_repo.collection.insert_one = AsyncMock(
             return_value=MagicMock(inserted_id=ObjectId("507f1f77bcf86cd799439070"))
@@ -339,16 +340,22 @@ class TestPrescriptionService:
                 duration="3 days",
             )
         ]
-        schema = PrescriptionCreateSchema(
-            consultation_id=sample_consultation.id,
-            patient_id=sample_consultation.patient_id,
-            doctor_id=sample_consultation.doctor_id,
+        from app.schemas.appointment import PrescriptionCreateRequestSchema
+        schema = PrescriptionCreateRequestSchema(
             medications=meds_schema,
             dosage_instructions="Take with food",
             notes="Avoid cold drinks",
         )
 
-        result = await service.create_prescription(schema)
+        result = await service.create_prescription(
+            consultation_id=sample_consultation.id,
+            doctor_profile_id=sample_consultation.doctor_id,
+            doctor_user_id="doc_user_123",
+            schema=schema,
+            notification_service=AsyncMock(),
+            audit_log_service=AsyncMock(),
+            user_repository=AsyncMock(),
+        )
         assert isinstance(result, PrescriptionInDB)
         assert result.id == "507f1f77bcf86cd799439070"
         cons_repo.get.assert_called_once_with(sample_consultation.id)
@@ -368,12 +375,18 @@ class TestPrescriptionService:
                 duration="3 days",
             )
         ]
-        schema = PrescriptionCreateSchema(
-            consultation_id="invalid_cons",
-            patient_id="patient_1",
-            doctor_id="doctor_1",
+        from app.schemas.appointment import PrescriptionCreateRequestSchema
+        schema = PrescriptionCreateRequestSchema(
             medications=meds_schema,
         )
 
         with pytest.raises(ValueError, match="Consultation.*does not exist"):
-            await service.create_prescription(schema)
+            await service.create_prescription(
+                consultation_id="invalid_cons",
+                doctor_profile_id="doctor_1",
+                doctor_user_id="doc_user_123",
+                schema=schema,
+                notification_service=AsyncMock(),
+                audit_log_service=AsyncMock(),
+                user_repository=AsyncMock(),
+            )

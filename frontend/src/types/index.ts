@@ -48,12 +48,29 @@ export interface RecentHealthInsight {
   created_at: string
 }
 
+export interface PatientDashboardConsultation {
+  id: string
+  doctor_name: string
+  specialization: string
+  date: string
+  diagnosis: string
+}
+
+export interface PatientDashboardPrescription {
+  id: string
+  doctor_name: string
+  date: string
+  medications_count: number
+}
+
 export interface PatientDashboardData {
   upcoming_appointments_count: number
   active_reminders_count: number
   reports_count: number
   unread_notifications_count: number
   recent_health_insights: RecentHealthInsight[]
+  recent_consultation?: PatientDashboardConsultation
+  recent_prescription?: PatientDashboardPrescription
 }
 
 export interface DoctorDashboardData {
@@ -66,6 +83,7 @@ export interface DoctorDashboardData {
   pending_balance: number
   profile_status: 'pending' | 'verified' | 'rejected'
   document_status: 'pending' | 'approved' | 'rejected'
+  prescriptions_written_count: number
 }
 
 export interface AdminDashboardData {
@@ -294,5 +312,72 @@ export interface DoctorConsultationItem {
   follow_up_required: boolean
   follow_up_date?: string
   created_at: string
+}
+
+// Prescription Types
+export interface Medication {
+  drug_name: string
+  dosage: string
+  frequency: string
+  duration: string
+  instructions?: string
+}
+
+export interface Prescription {
+  id: string
+  consultation_id: string
+  patient_id: string
+  doctor_id: string
+  medications: Medication[]
+  dosage_instructions?: string
+  notes?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface PrescriptionCreateRequest {
+  medications: Medication[]
+  dosage_instructions?: string
+  notes?: string
+}
+
+export interface PrescriptionUpdateRequest {
+  medications?: Medication[]
+  dosage_instructions?: string
+  notes?: string
+}
+
+export interface PatientConsultationItem {
+  id: string
+  appointment_id: string
+  patient_id: string
+  doctor_id: string
+  doctor_name: string
+  doctor_specialization: string
+  appointment_date: string
+  appointment_time: string
+  diagnosis: string
+  consultation_notes: string
+  follow_up_required: boolean
+  follow_up_date?: string
+  prescription_status: 'Prescribed' | 'No Prescription'
+  prescription_id?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface PatientPrescription {
+  id: string
+  consultation_id: string
+  patient_id: string
+  doctor_id: string
+  doctor_name: string
+  doctor_specialization: string
+  diagnosis: string
+  medications: Medication[]
+  dosage_instructions?: string
+  notes?: string
+  created_at: string
+  updated_at: string
 }
 

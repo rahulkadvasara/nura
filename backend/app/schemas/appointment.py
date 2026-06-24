@@ -175,6 +175,7 @@ class MedicationSchema(BaseModel):
     dosage: str = Field(..., min_length=1, max_length=100, description="Dosage (e.g. 500mg)")
     frequency: str = Field(..., min_length=1, max_length=100, description="Frequency (e.g. once daily)")
     duration: str = Field(..., min_length=1, max_length=100, description="Duration (e.g. 5 days)")
+    instructions: Optional[str] = Field(None, max_length=1000, description="Special instructions for this medication")
 
 
 class PrescriptionCreateSchema(BaseModel):
@@ -182,6 +183,13 @@ class PrescriptionCreateSchema(BaseModel):
     consultation_id: str = Field(..., description="Reference to the consultation ID")
     patient_id: str = Field(..., description="Reference to the patient user ID")
     doctor_id: str = Field(..., description="Reference to the doctor profile ID")
+    medications: List[MedicationSchema] = Field(..., min_items=1, description="List of prescribed medications")
+    dosage_instructions: Optional[str] = Field(None, max_length=2000, description="Additional dosage instructions")
+    notes: Optional[str] = Field(None, max_length=2000, description="General notes about the prescription")
+
+
+class PrescriptionCreateRequestSchema(BaseModel):
+    """Request schema for creating a new prescription from a route path"""
     medications: List[MedicationSchema] = Field(..., min_items=1, description="List of prescribed medications")
     dosage_instructions: Optional[str] = Field(None, max_length=2000, description="Additional dosage instructions")
     notes: Optional[str] = Field(None, max_length=2000, description="General notes about the prescription")
@@ -205,5 +213,45 @@ class PrescriptionResponse(BaseModel):
     medications: List[MedicationSchema] = Field(..., description="List of prescribed medications")
     dosage_instructions: Optional[str] = Field(None, description="Additional dosage instructions")
     notes: Optional[str] = Field(None, description="General notes about the prescription")
+    created_at: datetime = Field(..., description="Creation timestamp")
+    updated_at: datetime = Field(..., description="Last update timestamp")
+
+
+class PatientConsultationItemResponse(BaseModel):
+    """Response schema for a patient's consultation history item"""
+    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+
+    id: str = Field(..., description="Consultation ID")
+    appointment_id: str = Field(..., description="Appointment ID")
+    patient_id: str = Field(..., description="Patient User ID")
+    doctor_id: str = Field(..., description="Doctor Profile ID")
+    doctor_name: str = Field(..., description="Doctor's full name")
+    doctor_specialization: str = Field(..., description="Doctor's specialization")
+    appointment_date: str = Field(..., description="Appointment date (YYYY-MM-DD)")
+    appointment_time: str = Field(..., description="Appointment time (HH:MM)")
+    diagnosis: str = Field(..., description="Diagnosis")
+    consultation_notes: str = Field(..., description="Clinical notes")
+    follow_up_required: bool = Field(..., description="Whether follow-up is required")
+    follow_up_date: Optional[datetime] = Field(None, description="Follow-up date")
+    prescription_status: str = Field(..., description="Prescription status ('Prescribed' or 'No Prescription')")
+    prescription_id: Optional[str] = Field(None, description="ID of the associated prescription if any")
+    created_at: datetime = Field(..., description="Creation timestamp")
+    updated_at: datetime = Field(..., description="Last update timestamp")
+
+
+class PatientPrescriptionResponse(BaseModel):
+    """Response schema for a patient's prescription view"""
+    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+
+    id: str = Field(..., description="Prescription ID")
+    consultation_id: str = Field(..., description="Consultation ID")
+    patient_id: str = Field(..., description="Patient User ID")
+    doctor_id: str = Field(..., description="Doctor Profile ID")
+    doctor_name: str = Field(..., description="Doctor's full name")
+    doctor_specialization: str = Field(..., description="Doctor's specialization")
+    diagnosis: str = Field(..., description="Diagnosis from the consultation")
+    medications: List[MedicationSchema] = Field(..., description="List of prescribed medications")
+    dosage_instructions: Optional[str] = Field(None, description="Additional dosage instructions")
+    notes: Optional[str] = Field(None, description="General notes")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")

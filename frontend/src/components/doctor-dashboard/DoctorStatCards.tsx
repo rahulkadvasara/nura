@@ -1,7 +1,7 @@
 'use client'
 
 import { Card, CardContent } from '@/components/ui/card'
-import { Calendar, CalendarCheck, Users, Clock } from 'lucide-react'
+import { Calendar, CalendarCheck, Users, Clock, Pill } from 'lucide-react'
 import { DoctorDashboardData } from '@/types'
 
 interface DoctorStatCardsProps {
@@ -42,10 +42,18 @@ export function DoctorStatCards({ data }: DoctorStatCardsProps) {
       iconBg: 'bg-amber-50',
       iconColor: 'text-amber-600',
     },
+    {
+      label: 'Prescriptions Written',
+      value: data.prescriptions_written_count ?? 0,
+      subtitle: (data.prescriptions_written_count ?? 0) === 0 ? 'No prescriptions yet' : `${data.prescriptions_written_count} prescriptions issued`,
+      icon: Pill,
+      iconBg: 'bg-emerald-50',
+      iconColor: 'text-emerald-600',
+    },
   ]
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
       {stats.map((stat) => {
         const Icon = stat.icon
         return (

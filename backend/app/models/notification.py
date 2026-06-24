@@ -28,6 +28,7 @@ class NotificationType(str, Enum):
     APPOINTMENT_APPROVED = "appointment_approved"
     APPOINTMENT_REJECTED = "appointment_rejected"
     CONSULTATION_COMPLETED = "consultation_completed"
+    PRESCRIPTION_CREATED = "prescription_created"
 
 
 class NotificationPriority(str, Enum):

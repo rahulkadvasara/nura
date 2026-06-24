@@ -22,6 +22,7 @@ from app.repositories import (
     AppointmentRepository,
     NotificationRepository,
     ConsultationRepository,
+    PrescriptionRepository,
 )
 from app.services import (
     UserService,
@@ -34,6 +35,7 @@ from app.services import (
     AppointmentService,
     NotificationService,
     ConsultationService,
+    PrescriptionService,
 )
 
 
@@ -170,6 +172,20 @@ def get_consultation_service(
     return ConsultationService(consultation_repository, appointment_repository)
 
 
+def get_prescription_repository() -> PrescriptionRepository:
+    """Get PrescriptionRepository instance"""
+    database: AsyncIOMotorDatabase = get_database()
+    return PrescriptionRepository(database.prescriptions)
+
+
+def get_prescription_service(
+    prescription_repository: PrescriptionRepository = Depends(get_prescription_repository),
+    consultation_repository: ConsultationRepository = Depends(get_consultation_repository),
+) -> PrescriptionService:
+    """Get PrescriptionService instance"""
+    return PrescriptionService(prescription_repository, consultation_repository)
+
+
 def get_audit_log_repository():
     """Get AuditLogRepository instance"""
     from app.repositories.audit_log_repository import AuditLogRepository
@@ -252,6 +268,16 @@ def require_active_user(
     return current_user
 
 
+def require_exact_patient(current_user: UserInDB = Depends(get_current_user)) -> UserInDB:
+    """Enforce that the logged-in user has exactly the PATIENT role."""
+    if current_user.role != UserRole.PATIENT:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only patients are permitted to access this resource",
+        )
+    return current_user
+
+
 def require_role(required_role: UserRole):
     """Enforce specific user role (admin > doctor > patient)"""
     def dependency(
@@ -301,6 +327,10 @@ def get_patient_dashboard_service():
     from app.repositories.report_repository import ReportRepository
     from app.repositories.notification_repository import NotificationRepository
     from app.repositories.health_insight_repository import HealthInsightRepository
+    from app.repositories.consultation_repository import ConsultationRepository
+    from app.repositories.prescription_repository import PrescriptionRepository
+    from app.repositories.doctor_repository import DoctorProfileRepository
+    from app.repositories.user_repository import UserRepository
 
     database = get_database()
     return PatientDashboardService(
@@ -309,6 +339,10 @@ def get_patient_dashboard_service():
         report_repository=ReportRepository(database.reports),
         notification_repository=NotificationRepository(database.notifications),
         health_insight_repository=HealthInsightRepository(database.health_insights),
+        consultation_repository=ConsultationRepository(database.consultations),
+        prescription_repository=PrescriptionRepository(database.prescriptions),
+        doctor_profile_repository=DoctorProfileRepository(database.doctor_profiles),
+        user_repository=UserRepository(database.users),
     )
 
 
@@ -318,6 +352,7 @@ def get_doctor_dashboard_service():
     from app.repositories.appointment_repository import AppointmentRepository
     from app.repositories.doctor_wallet_repository import DoctorWalletRepository
     from app.repositories.doctor_repository import DoctorProfileRepository, DoctorDocumentRepository
+    from app.repositories.prescription_repository import PrescriptionRepository
 
     database = get_database()
     return DoctorDashboardService(
@@ -325,6 +360,7 @@ def get_doctor_dashboard_service():
         doctor_wallet_repository=DoctorWalletRepository(database.doctor_wallets),
         doctor_profile_repository=DoctorProfileRepository(database.doctor_profiles),
         doctor_document_repository=DoctorDocumentRepository(database.doctor_documents),
+        prescription_repository=PrescriptionRepository(database.prescriptions),
     )
 
 

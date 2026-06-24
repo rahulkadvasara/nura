@@ -1,14 +1,11 @@
-"""
-Nura - Doctor Dashboard Service
-Aggregates doctor-specific data for the dashboard API endpoint
-"""
-
 from datetime import date
+from typing import Any
 
 from app.schemas.dashboard import DoctorDashboardResponse
 from app.repositories.appointment_repository import AppointmentRepository
 from app.repositories.doctor_wallet_repository import DoctorWalletRepository
 from app.repositories.doctor_repository import DoctorProfileRepository, DoctorDocumentRepository
+from app.repositories.prescription_repository import PrescriptionRepository
 
 
 def _today_iso() -> str:
@@ -25,11 +22,13 @@ class DoctorDashboardService:
         doctor_wallet_repository: DoctorWalletRepository,
         doctor_profile_repository: DoctorProfileRepository,
         doctor_document_repository: DoctorDocumentRepository,
+        prescription_repository: PrescriptionRepository,
     ):
         self.appointment_repository = appointment_repository
         self.doctor_wallet_repository = doctor_wallet_repository
         self.doctor_profile_repository = doctor_profile_repository
         self.doctor_document_repository = doctor_document_repository
+        self.prescription_repository = prescription_repository
 
     async def get_dashboard(self, doctor_id: str) -> DoctorDashboardResponse:
         """Aggregate all doctor dashboard data for the given doctor_id."""
@@ -78,6 +77,7 @@ class DoctorDashboardService:
         # 6. Profile status and document status
         profile_status = "pending"
         document_status = "pending"
+        prescriptions_written_count = 0
         
         doctor_profile = await self.doctor_profile_repository.get_by_user_id(doctor_id)
         if doctor_profile:
@@ -93,6 +93,11 @@ class DoctorDashboardService:
                 else:
                     document_status = "pending"
 
+            # 7. Count prescriptions written matching the doctor profile ID
+            prescriptions_written_count = await self.prescription_repository.collection.count_documents(
+                {"doctor_id": doctor_profile.id}
+            )
+
         return DoctorDashboardResponse(
             todays_appointments_count=todays_appointments_count,
             upcoming_appointments_count=upcoming_appointments_count,
@@ -103,6 +108,7 @@ class DoctorDashboardService:
             pending_balance=pending_balance,
             profile_status=profile_status,
             document_status=document_status,
+            prescriptions_written_count=prescriptions_written_count,
         )
 
 

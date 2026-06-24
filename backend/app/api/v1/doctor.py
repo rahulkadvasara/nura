@@ -37,6 +37,9 @@ from app.schemas.appointment import (
     ConsultationCompleteSchema,
     ConsultationResponse,
     DoctorConsultationItemResponse,
+    PrescriptionCreateRequestSchema,
+    PrescriptionUpdateSchema,
+    PrescriptionResponse,
 )
 from app.core.dependencies import (
     require_active_user,
@@ -48,12 +51,14 @@ from app.core.dependencies import (
     get_notification_service,
     get_audit_log_service,
     get_consultation_service,
+    get_prescription_service,
 )
 from app.services.doctor_service import DoctorProfileService, DoctorDocumentService, DoctorAvailabilityService
 from app.services.appointment_service import AppointmentService
 from app.services.notification_service import NotificationService
 from app.services.audit_log_service import AuditLogService
 from app.services.consultation_service import ConsultationService
+from app.services.prescription_service import PrescriptionService
 
 logger = logging.getLogger(__name__)
 
@@ -814,5 +819,152 @@ async def get_consultation_details(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve consultation details",
+        ) from exc
+
+
+@router.post(
+    "/consultations/{consultation_id}/prescription",
+    response_model=SuccessResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create Prescription",
+    description="Create a new prescription for a completed consultation."
+)
+async def create_prescription(
+    consultation_id: str,
+    schema: PrescriptionCreateRequestSchema,
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    current_user: UserInDB = Depends(require_active_user),
+    prescription_service: PrescriptionService = Depends(get_prescription_service),
+    notification_service: NotificationService = Depends(get_notification_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> SuccessResponse:
+    try:
+        from app.core.dependencies import get_user_repository
+        user_repo = get_user_repository()
+        created = await prescription_service.create_prescription(
+            consultation_id=consultation_id,
+            doctor_profile_id=current_doctor.id,
+            doctor_user_id=current_user.id,
+            schema=schema,
+            notification_service=notification_service,
+            audit_log_service=audit_log_service,
+            user_repository=user_repo,
+        )
+        return SuccessResponse(
+            success=True,
+            message="Prescription created successfully",
+            data=prescription_service.to_response(created).model_dump(),
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Failed to create prescription")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create prescription",
+        ) from exc
+
+
+@router.put(
+    "/prescriptions/{prescription_id}",
+    response_model=SuccessResponse,
+    summary="Update Prescription",
+    description="Updates medications, instructions, or notes for a prescription if the consultation is completed."
+)
+async def update_prescription(
+    prescription_id: str,
+    schema: PrescriptionUpdateSchema,
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    current_user: UserInDB = Depends(require_active_user),
+    prescription_service: PrescriptionService = Depends(get_prescription_service),
+    appointment_service: AppointmentService = Depends(get_appointment_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> SuccessResponse:
+    try:
+        updated = await prescription_service.update_prescription(
+            prescription_id=prescription_id,
+            doctor_profile_id=current_doctor.id,
+            doctor_user_id=current_user.id,
+            schema=schema,
+            appointment_repository=appointment_service.appointment_repository,
+            audit_log_service=audit_log_service,
+        )
+        return SuccessResponse(
+            success=True,
+            message="Prescription updated successfully",
+            data=prescription_service.to_response(updated).model_dump(),
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Failed to update prescription")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update prescription",
+        ) from exc
+
+
+@router.get(
+    "/prescriptions",
+    response_model=SuccessResponse,
+    summary="Get Doctor's Prescriptions List",
+    description="Retrieves a list of prescriptions issued by the logged-in doctor."
+)
+async def get_doctor_prescriptions(
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    prescription_service: PrescriptionService = Depends(get_prescription_service),
+) -> SuccessResponse:
+    try:
+        prescriptions = await prescription_service.list_prescriptions_by_doctor(current_doctor.id)
+        data = [prescription_service.to_response(p).model_dump() for p in prescriptions]
+        return SuccessResponse(
+            success=True,
+            message="Prescriptions retrieved successfully",
+            data={"prescriptions": data},
+        )
+    except Exception as exc:
+        logger.exception("Failed to retrieve prescriptions list")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve prescriptions list",
+        ) from exc
+
+
+@router.get(
+    "/prescriptions/{prescription_id}",
+    response_model=SuccessResponse,
+    summary="Get Prescription Details",
+    description="Retrieves detailed information of a specific prescription record."
+)
+async def get_doctor_prescription_details(
+    prescription_id: str,
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    prescription_service: PrescriptionService = Depends(get_prescription_service),
+) -> SuccessResponse:
+    try:
+        prescription = await prescription_service.get_prescription_by_id(prescription_id)
+        if not prescription or prescription.doctor_id != current_doctor.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Prescription not found",
+            )
+        return SuccessResponse(
+            success=True,
+            message="Prescription details retrieved successfully",
+            data=prescription_service.to_response(prescription).model_dump(),
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to retrieve prescription details")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve prescription details",
         ) from exc
 
