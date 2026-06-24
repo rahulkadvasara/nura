@@ -389,4 +389,30 @@ def get_admin_dashboard_service():
         chat_session_repository=ChatSessionRepository(database.chat_sessions),
     )
 
+
+def get_admin_analytics_service():
+    """Get AdminAnalyticsService instance"""
+    from app.services.admin_analytics_service import AdminAnalyticsService
+    from app.repositories.user_repository import UserRepository
+    from app.repositories.doctor_repository import DoctorProfileRepository, DoctorAvailabilityRepository
+    from app.repositories.appointment_repository import AppointmentRepository
+    from app.repositories.payment_repository import PaymentRepository
+    from app.repositories.consultation_repository import ConsultationRepository
+    from app.repositories.report_repository import ReportRepository
+    from app.repositories.prescription_repository import PrescriptionRepository
+    from app.repositories.reminder_repository import ReminderRepository
+
+    database = get_database()
+    return AdminAnalyticsService(
+        user_repository=UserRepository(database.users),
+        doctor_profile_repository=DoctorProfileRepository(database.doctor_profiles),
+        doctor_availability_repository=DoctorAvailabilityRepository(database.doctor_availability),
+        appointment_repository=AppointmentRepository(database.appointments),
+        payment_repository=PaymentRepository(database.payments),
+        consultation_repository=ConsultationRepository(database.consultations),
+        report_repository=ReportRepository(database.reports),
+        prescription_repository=PrescriptionRepository(database.prescriptions),
+        reminder_repository=ReminderRepository(database.reminders),
+    )
+
 

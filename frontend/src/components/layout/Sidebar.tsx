@@ -20,6 +20,7 @@ import {
   Award,
   Shield,
   Lock,
+  BarChart3,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -48,10 +49,11 @@ export function Sidebar() {
     if (role === 'admin') {
       return [
         { name: 'Dashboard', href: '/dashboard/admin', icon: LayoutDashboard },
-        { name: 'Doctors', href: '/dashboard/admin/doctors', icon: Award },
-        { name: 'Users', href: '/dashboard/admin/users', icon: Users },
         { name: 'Administrators', href: '/dashboard/admin/admins', icon: Shield },
         { name: 'Security', href: '/dashboard/admin/security', icon: Lock },
+        { name: 'Users', href: '/dashboard/admin/users', icon: Users },
+        { name: 'Doctors', href: '/dashboard/admin/doctors', icon: Award },
+        { name: 'Analytics', href: '/dashboard/admin/analytics', icon: BarChart3 },
         { name: 'System Logs', href: '/dashboard/logs', icon: Activity },
         { name: 'Settings', href: '/dashboard/settings/profile', icon: Settings },
       ]

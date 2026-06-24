@@ -32,6 +32,7 @@ from app.core.dependencies import (
     get_refresh_token_repository,
     get_current_user,
     get_auth_service,
+    get_admin_analytics_service,
 )
 from app.services.user_service import UserService
 from app.services.doctor_service import DoctorProfileService, DoctorDocumentService
@@ -938,6 +939,30 @@ async def reactivate_doctor(
         success=True,
         message="Doctor practitioner reactivated successfully"
     )
+
+
+@router.get(
+    "/analytics",
+    response_model=SuccessResponse,
+    summary="Get Platform Analytics",
+    description="Retrieve platform-wide operational and financial analytics metrics."
+)
+async def get_platform_analytics(
+    analytics_service = Depends(get_admin_analytics_service)
+) -> SuccessResponse:
+    try:
+        data = await analytics_service.get_analytics()
+        return SuccessResponse(
+            success=True,
+            message="Platform analytics retrieved successfully",
+            data=data
+        )
+    except Exception as e:
+        logger.exception("Failed to retrieve platform analytics")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve platform analytics"
+        ) from e
 
 
 

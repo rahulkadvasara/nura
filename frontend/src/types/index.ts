@@ -430,5 +430,62 @@ export interface AdminSession {
   last_activity: string
 }
 
+export interface DailyGrowthItem {
+  date: string
+  count: number
+}
+
+export interface DailyRevenueItem {
+  date: string
+  amount: number
+}
+
+export interface AdminAnalyticsData {
+  users: {
+    total_users: number
+    active_users: number
+    inactive_users: number
+    patients_count: number
+    doctors_count: number
+    admins_count: number
+    users_last_7_days: DailyGrowthItem[]
+    users_last_30_days: DailyGrowthItem[]
+  }
+  doctors: {
+    total_doctors: number
+    verified_doctors: number
+    pending_doctors: number
+    rejected_doctors: number
+    suspended_doctors: number
+    doctors_with_availability: number
+    active_doctors: number
+  }
+  appointments: {
+    total_appointments: number
+    pending_appointments: number
+    approved_appointments: number
+    completed_appointments: number
+    cancelled_appointments: number
+    rejected_appointments: number
+    appointments_last_7_days: DailyGrowthItem[]
+    appointments_last_30_days: DailyGrowthItem[]
+  }
+  revenue: {
+    total_revenue: number
+    doctor_earnings: number
+    platform_revenue: number
+    revenue_last_7_days: DailyRevenueItem[]
+    revenue_last_30_days: DailyRevenueItem[]
+  }
+  healthcare: {
+    reports_uploaded: number
+    consultations_completed: number
+    prescriptions_created: number
+    reminders_created: number
+    reports_last_30_days: DailyGrowthItem[]
+    consultations_last_30_days: DailyGrowthItem[]
+  }
+}
+
 
 

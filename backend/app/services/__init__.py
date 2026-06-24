@@ -30,6 +30,7 @@ from app.services.patient_dashboard_service import PatientDashboardService
 from app.services.doctor_dashboard_service import DoctorDashboardService
 from app.services.admin_dashboard_service import AdminDashboardService
 from app.services.admin_bootstrap_service import AdminBootstrapService
+from app.services.admin_analytics_service import AdminAnalyticsService
 
 __all__ = [
     # Base service
@@ -76,4 +77,5 @@ __all__ = [
     "PatientDashboardService",
     "DoctorDashboardService",
     "AdminDashboardService",
+    "AdminAnalyticsService",
 ]
