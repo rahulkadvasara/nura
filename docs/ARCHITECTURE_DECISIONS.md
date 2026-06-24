@@ -57,3 +57,33 @@ Store structured report data in addition to summaries.
 
 Reason:
 Supports future analytics and trend analysis.
+
+---
+
+## ADR-007
+
+Decision:
+Use a single ADMIN role without a Super Admin role. All admins share identical permissions.
+
+Reason:
+Simplifies permission architecture and minimizes overhead for the initial administrative lifecycle while providing complete operational control.
+
+---
+
+## ADR-008
+
+Decision:
+Automatically bootstrap the first admin account using environment variables on system startup if no admin exists.
+
+Reason:
+Ensures the platform is immediately operational on fresh deployments and provides a secure, configuration-driven seeding mechanism.
+
+---
+
+## ADR-009
+
+Decision:
+Enforce backend rules preventing the disabling or deletion of the last remaining administrator account.
+
+Reason:
+Guarantees administrative access is never permanently lost and prevents accidental lockout situations.

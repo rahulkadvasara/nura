@@ -415,6 +415,24 @@ cancelled
 
 ---
 
+## audit_logs
+
+```json
+{
+  "_id": "ObjectId",
+  "admin_id": "ObjectId",
+  "action": "string",
+  "target_id": "ObjectId",
+  "target_type": "string",
+  "details": {},
+  "ip_address": "string",
+  "user_agent": "string",
+  "created_at": "datetime"
+}
+```
+
+---
+
 # 4. Qdrant Collections
 
 ## patient_reports
@@ -565,6 +583,29 @@ GET    /chat/session/{id}
 
 ---
 
+## Admin APIs
+
+```text
+POST   /admin/accounts
+GET    /admin/accounts
+GET    /admin/accounts/{id}
+POST   /admin/accounts/{id}/disable
+POST   /admin/accounts/{id}/enable
+GET    /admin/users
+GET    /admin/users/{id}
+POST   /admin/users/{id}/suspend
+POST   /admin/users/{id}/activate
+GET    /admin/doctors
+POST   /admin/doctors/{id}/approve
+POST   /admin/doctors/{id}/reject
+POST   /admin/doctors/{id}/suspend
+POST   /admin/doctors/{id}/reactivate
+GET    /admin/analytics
+GET    /admin/audit-logs
+```
+
+---
+
 # 6. Service Layer Responsibilities
 
 | Service             | Responsibility      |
@@ -578,6 +619,7 @@ GET    /chat/session/{id}
 | ReminderService     | Reminder Processing |
 | ChatService         | AI Chat             |
 | NotificationService | Notifications       |
+| AdminService        | Platform Operations |
 
 ---
 

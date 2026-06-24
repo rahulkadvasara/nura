@@ -686,34 +686,285 @@ PUT /notifications/preferences
 
 # 12. Admin APIs
 
-## Dashboard
+## Create Admin Account
 
 ```http
-GET /admin/dashboard
+POST /admin/accounts
+```
+
+### Request
+
+```json
+{
+  "full_name": "Admin Name",
+  "email": "admin2@example.com",
+  "password": "Password123!"
+}
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "message": "Admin account created successfully",
+  "data": {
+    "id": "admin_id",
+    "email": "admin2@example.com",
+    "full_name": "Admin Name",
+    "role": "admin",
+    "is_active": true
+  }
+}
 ```
 
 ---
 
-## Users
+## List Admin Accounts
+
+```http
+GET /admin/accounts
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "admin_id",
+      "email": "admin@example.com",
+      "full_name": "Admin Name",
+      "role": "admin",
+      "is_active": true,
+      "created_at": "2026-06-24T12:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## View Admin Account
+
+```http
+GET /admin/accounts/{admin_id}
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "admin_id",
+    "email": "admin@example.com",
+    "full_name": "Admin Name",
+    "role": "admin",
+    "is_active": true,
+    "created_at": "2026-06-24T12:00:00Z"
+  }
+}
+```
+
+---
+
+## Disable Admin Account
+
+```http
+POST /admin/accounts/{admin_id}/disable
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "message": "Admin account disabled successfully"
+}
+```
+
+---
+
+## Enable Admin Account
+
+```http
+POST /admin/accounts/{admin_id}/enable
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "message": "Admin account enabled successfully"
+}
+```
+
+---
+
+## List Users
 
 ```http
 GET /admin/users
 ```
 
+### Query Parameters
+
+```text
+query (search full_name or email)
+status (active|suspended)
+page
+limit
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "user_id",
+      "email": "user@example.com",
+      "full_name": "Patient Name",
+      "role": "patient",
+      "is_active": true,
+      "created_at": "2026-06-24T12:00:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 1,
+    "pages": 1
+  }
+}
+```
+
 ---
 
-## Doctors
+## View User Details
+
+```http
+GET /admin/users/{user_id}
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "user_id",
+    "email": "user@example.com",
+    "full_name": "Patient Name",
+    "role": "patient",
+    "is_active": true,
+    "created_at": "2026-06-24T12:00:00Z"
+  }
+}
+```
+
+---
+
+## Suspend User
+
+```http
+POST /admin/users/{user_id}/suspend
+```
+
+### Request
+
+```json
+{
+  "reason": "Violation of terms"
+}
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "message": "User account suspended successfully"
+}
+```
+
+---
+
+## Activate User
+
+```http
+POST /admin/users/{user_id}/activate
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "message": "User account activated successfully"
+}
+```
+
+---
+
+## List Doctors
 
 ```http
 GET /admin/doctors
 ```
 
+### Query Parameters
+
+```text
+status (pending|approved|rejected|suspended)
+page
+limit
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "doctor_id",
+      "user_id": "user_id",
+      "email": "doctor@example.com",
+      "full_name": "Doctor Name",
+      "specialization": "Cardiology",
+      "verification_status": "pending",
+      "created_at": "2026-06-24T12:00:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 1,
+    "pages": 1
+  }
+}
+```
+
 ---
 
-## Verify Doctor
+## Approve Doctor
 
 ```http
 POST /admin/doctors/{doctor_id}/approve
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "message": "Doctor verification approved successfully"
+}
 ```
 
 ---
@@ -724,12 +975,172 @@ POST /admin/doctors/{doctor_id}/approve
 POST /admin/doctors/{doctor_id}/reject
 ```
 
+### Request
+
+```json
+{
+  "reason": "Invalid medical license details"
+}
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "message": "Doctor verification rejected successfully"
+}
+```
+
+---
+
+## Suspend Doctor
+
+```http
+POST /admin/doctors/{doctor_id}/suspend
+```
+
+### Request
+
+```json
+{
+  "reason": "Patient complaints"
+}
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "message": "Doctor profile suspended successfully"
+}
+```
+
+---
+
+## Reactivate Doctor
+
+```http
+POST /admin/doctors/{doctor_id}/reactivate
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "message": "Doctor profile reactivated successfully"
+}
+```
+
+---
+
+## Platform Analytics
+
+```http
+GET /admin/analytics
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "user_metrics": {
+      "total_users": 1000,
+      "active_users": 850,
+      "growth_trends": [
+        {
+          "date": "2026-06",
+          "count": 1000
+        }
+      ]
+    },
+    "doctor_metrics": {
+      "total_doctors": 150,
+      "verification_metrics": {
+        "pending": 10,
+        "approved": 130,
+        "rejected": 5,
+        "suspended": 5
+      },
+      "activity_metrics": {
+        "active_slots": 500,
+        "booked_slots": 350
+      }
+    },
+    "appointment_metrics": {
+      "pending": 20,
+      "approved": 50,
+      "completed": 400,
+      "cancelled": 30
+    },
+    "revenue_metrics": {
+      "doctor_earnings": 170000,
+      "platform_revenue": 30000,
+      "revenue_trends": [
+        {
+          "date": "2026-06",
+          "earnings": 170000,
+          "platform": 30000
+        }
+      ]
+    },
+    "healthcare_metrics": {
+      "reports_analyzed": 450,
+      "consultations_completed": 400,
+      "prescriptions_generated": 380
+    }
+  }
+}
+```
+
 ---
 
 ## Audit Logs
 
 ```http
 GET /admin/audit-logs
+```
+
+### Query Parameters
+
+```text
+admin_id
+action
+page
+limit
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "log_id",
+      "admin_id": "admin_id",
+      "admin_name": "Admin Name",
+      "action": "suspend_user",
+      "target_id": "user_id",
+      "target_type": "user",
+      "details": {
+        "reason": "Terms violation"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-06-24T12:05:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 1,
+    "pages": 1
+  }
+}
 ```
 
 ---

@@ -31,6 +31,8 @@ Core CRUD Features
  ↓
 Appointments
  ↓
+Administration & Platform Operations
+ ↓
 Payments
  ↓
 AI Infrastructure
@@ -59,6 +61,7 @@ Production Deployment
 | Phase 4  | Dashboard System                          | 1-2 Days |
 | Phase 5  | Doctor Management System                  | 2 Days   |
 | Phase 6  | Appointment Management                    | 2 Days   |
+| Phase 6.5| Administration & Platform Operations      | 3 Days   |
 | Phase 7  | Payment System                            | 1 Day    |
 | Phase 8  | AI Infrastructure                         | 2 Days   |
 | Phase 9  | Retrieval-Augmented Generation            | 2 Days   |
@@ -70,7 +73,7 @@ Production Deployment
 Estimated MVP:
 
 ```text
-22 - 27 Days
+25 - 30 Days
 ```
 
 ---
@@ -327,6 +330,224 @@ Consultation
 Patients can book appointments
 Doctors can approve appointments
 ```
+
+---
+
+# PHASE 6.5
+
+# Administration & Platform Operations
+
+## Objective
+
+Create a production-ready administrative system.
+
+All admins share the same permissions.
+No Super Admin role.
+Use a single ADMIN role.
+
+---
+
+## Sprint 1: Admin Bootstrap
+
+### Features
+
+* Initial Admin creation
+* Environment bootstrap
+* Startup initialization
+* Admin login verification
+
+### Environment Variables
+
+```env
+ADMIN_EMAIL=
+ADMIN_PASSWORD=
+ADMIN_NAME=
+```
+
+### Requirements
+
+On application startup:
+* If no admin exists: Create first admin automatically.
+* If admin already exists: Skip creation.
+
+Admin uses existing authentication system:
+* Login
+* Google Login
+* Forgot Password
+* Reset Password
+* Refresh Tokens
+* Session Management
+
+### Deliverables
+
+* Bootstrap service
+* Startup initialization
+* Seed mechanism
+* Tests
+
+### Exit Criteria
+
+```text
+Fresh deployment automatically creates first Admin.
+```
+
+---
+
+## Sprint 2: Admin Management
+
+### Features
+
+* Create Admin
+* List Admins
+* View Admin
+* Disable Admin
+* Enable Admin
+
+### Rules
+
+* Any active admin can create another admin.
+* Any active admin can disable another admin.
+* Any active admin can re-enable another admin.
+* Last remaining admin cannot be disabled.
+* Last remaining admin cannot be deleted.
+
+### Deliverables
+
+* Admin APIs
+* Admin management UI
+* Tests
+
+### Exit Criteria
+
+```text
+Admins can manage administrator accounts.
+```
+
+---
+
+## Sprint 3: Admin Security & Recovery
+
+### Features
+
+* Admin Forgot Password
+* Admin Reset Password
+* Admin Session Management
+* Admin Security Events
+* Audit Logs
+
+### Requirements
+
+* Reuse existing authentication system (no separate admin auth implementation).
+* All administrative actions create audit logs.
+
+### Deliverables
+
+* Security integrations
+* Audit tracking
+* Tests
+
+### Exit Criteria
+
+```text
+Admins can securely recover access.
+```
+
+---
+
+## Sprint 4: User & Doctor Operations
+
+### Features
+
+User Management:
+* List Users
+* Search Users
+* View User
+* Suspend User
+* Activate User
+
+Doctor Management:
+* Pending Doctors
+* Approved Doctors
+* Rejected Doctors
+* Suspended Doctors
+
+Actions:
+* Approve Doctor
+* Reject Doctor
+* Suspend Doctor
+* Reactivate Doctor
+
+### Deliverables
+
+* Operations dashboard
+* Management APIs
+* Search & Filters
+* Tests
+
+### Exit Criteria
+
+```text
+Admins can operate platform users and doctors.
+```
+
+---
+
+## Sprint 5: Platform Analytics
+
+### Features
+
+User Metrics:
+* Total Users
+* Active Users
+* Growth Trends
+
+Doctor Metrics:
+* Total Doctors
+* Verification Metrics
+* Activity Metrics
+
+Appointment Metrics:
+* Pending
+* Approved
+* Completed
+* Cancelled
+
+Revenue Metrics:
+* Doctor Earnings
+* Platform Revenue
+* Revenue Trends
+
+Healthcare Metrics:
+* Reports
+* Consultations
+* Prescriptions
+
+### Deliverables
+
+* Analytics APIs
+* Analytics Dashboard
+* Charts
+* Tests
+
+### Exit Criteria
+
+```text
+Admins can monitor platform health.
+```
+
+---
+
+## Acceptance Criteria
+
+1. First admin is automatically created on fresh deployment.
+2. Admin can login through normal login flow.
+3. Admin can create additional admins.
+4. Admins can use Forgot Password.
+5. Last remaining admin cannot be disabled.
+6. Last remaining admin cannot be deleted.
+7. All admin actions create audit logs.
+8. Doctor verification workflow continues to work.
+9. Payment System can depend on this administration layer.
 
 ---
 
@@ -705,9 +926,12 @@ Razorpay
 
 ## Admin
 
-* Doctor Verification
-* Analytics
-* User Management
+* Initial Admin Bootstrap
+* Admin Lifecycle Management (Create, List, Disable, Enable Admins)
+* User Management (List, Search, Suspend, Activate Users)
+* Doctor Management & Verification (Pending, Approve, Reject, Suspend, Reactivate Doctors)
+* Platform Analytics (User, Doctor, Appointment, Revenue, and Healthcare metrics)
+* Audit Logging of all Administrative Actions
 
 ## AI
 
@@ -753,4 +977,5 @@ Nura is considered MVP complete when:
 * Reminders are managed
 * AI chatbot uses RAG and patient context
 * Multi-agent architecture functions correctly
+* Administrative operations and bootstrap function correctly
 * Application is deployed and accessible

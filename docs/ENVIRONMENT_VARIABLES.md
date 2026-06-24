@@ -434,6 +434,44 @@ RAZORPAY_KEY_SECRET=xxxxxxxx
 
 ---
 
+# 13.5 Admin Bootstrap
+
+## ADMIN_EMAIL
+
+Default initial admin email.
+
+Example:
+
+```env
+ADMIN_EMAIL=admin@nura.app
+```
+
+---
+
+## ADMIN_PASSWORD
+
+Default initial admin password.
+
+Example:
+
+```env
+ADMIN_PASSWORD=SecurePassword123!
+```
+
+---
+
+## ADMIN_NAME
+
+Default initial admin full name.
+
+Example:
+
+```env
+ADMIN_NAME=Platform Administrator
+```
+
+---
+
 # 14. Frontend Environment Variables
 
 ## NEXT_PUBLIC_API_URL
@@ -567,6 +605,10 @@ SUPABASE_BUCKET
 BACKEND_CORS_ORIGINS
 
 EMBEDDING_MODEL
+
+ADMIN_EMAIL
+ADMIN_PASSWORD
+ADMIN_NAME
 ```
 
 ---
