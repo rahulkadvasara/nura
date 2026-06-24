@@ -25,4 +25,30 @@ export const adminDoctorService = {
     })
     return response.data
   },
+  getDoctors: async (
+    specialization?: string,
+    verificationStatus?: string,
+    status?: string
+  ): Promise<ApiResponse<AdminDoctorListResponse[]>> => {
+    const params: any = {}
+    if (specialization) params.specialization = specialization
+    if (verificationStatus) params.verification_status = verificationStatus
+    if (status) params.status = status
+
+    const response = await apiClient.get<ApiResponse<{ doctors: AdminDoctorListResponse[] }>>('/admin/doctors', { params })
+    return {
+      success: response.data.success,
+      message: response.data.message,
+      data: response.data.data?.doctors || [],
+      errors: response.data.errors
+    }
+  },
+  suspendDoctor: async (profileId: string): Promise<ApiResponse<null>> => {
+    const response = await apiClient.put<ApiResponse<null>>(`/admin/doctors/${profileId}/suspend`)
+    return response.data
+  },
+  reactivateDoctor: async (profileId: string): Promise<ApiResponse<null>> => {
+    const response = await apiClient.put<ApiResponse<null>>(`/admin/doctors/${profileId}/reactivate`)
+    return response.data
+  },
 }

@@ -5,7 +5,7 @@ Endpoints for platform administrators to review and verify doctor onboarding app
 
 import logging
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 
 from app.models.user import UserInDB, UserRole, UserResponse
@@ -31,11 +31,15 @@ from app.core.dependencies import (
     get_audit_log_service,
     get_refresh_token_repository,
     get_current_user,
+    get_auth_service,
 )
 from app.services.user_service import UserService
 from app.services.doctor_service import DoctorProfileService, DoctorDocumentService
 from app.services.audit_log_service import AuditLogService
+from app.services.auth_service import AuthService
 from app.repositories.refresh_token_repository import RefreshTokenRepository
+from app.models.user import UserUpdate
+
 
 
 
@@ -201,7 +205,7 @@ async def approve_doctor_application(
     # 4. Create audit log
     audit_schema = AuditLogCreateSchema(
         user_id=current_user.id,
-        action="doctor_approved",
+        action="DOCTOR_APPROVED",
         resource_type="doctor_profile",
         resource_id=doctor_profile_id,
         old_value={"profile_status": profile.profile_status.value},
@@ -250,7 +254,7 @@ async def reject_doctor_application(
     # 3. Create audit log
     audit_schema = AuditLogCreateSchema(
         user_id=current_user.id,
-        action="doctor_rejected",
+        action="DOCTOR_REJECTED",
         resource_type="doctor_profile",
         resource_id=doctor_profile_id,
         old_value={"profile_status": profile.profile_status.value},
@@ -601,5 +605,339 @@ async def revoke_security_session(
         success=True,
         message="Session revoked successfully"
     )
+
+
+@router.get(
+    "/users",
+    response_model=SuccessResponse,
+    summary="List and Query Users",
+    description="Retrieve a list of platform users with search and role/active status filters."
+)
+async def list_users(
+    search: Optional[str] = None,
+    role: Optional[UserRole] = None,
+    is_active: Optional[bool] = None,
+    limit: int = 100,
+    skip: int = 0,
+    user_service: UserService = Depends(get_user_service),
+) -> SuccessResponse:
+    users = await user_service.list_users(
+        search=search,
+        role=role,
+        is_active=is_active,
+        limit=limit,
+        skip=skip
+    )
+    return SuccessResponse(
+        success=True,
+        message="Users retrieved successfully",
+        data={"users": [user_service.to_response(u).model_dump() for u in users]}
+    )
+
+
+@router.get(
+    "/users/{user_id}",
+    response_model=SuccessResponse,
+    summary="Get User Profile",
+    description="Retrieve profile details for a specific user account."
+)
+async def get_user_details(
+    user_id: str,
+    user_service: UserService = Depends(get_user_service),
+) -> SuccessResponse:
+    user = await user_service.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    return SuccessResponse(
+        success=True,
+        message="User profile retrieved successfully",
+        data=user_service.to_response(user).model_dump()
+    )
+
+
+@router.put(
+    "/users/{user_id}/activate",
+    response_model=SuccessResponse,
+    summary="Activate User Account",
+    description="Re-enable a suspended user account."
+)
+async def activate_user(
+    user_id: str,
+    request: Request,
+    current_user: UserInDB = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> SuccessResponse:
+    user = await user_service.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    if user.is_active:
+        return SuccessResponse(
+            success=True,
+            message="User account is already active"
+        )
+        
+    await user_service.update_user(user_id, UserUpdate(is_active=True))
+    
+    # Audit Log
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    await audit_log_service.create_log(AuditLogCreateSchema(
+        user_id=current_user.id,
+        action="USER_ACTIVATED",
+        resource_type="user",
+        resource_id=user_id,
+        old_value={"is_active": False},
+        new_value={"is_active": True},
+        ip_address=ip_address,
+        user_agent=user_agent
+    ))
+    
+    return SuccessResponse(
+        success=True,
+        message="User account activated successfully"
+    )
+
+
+@router.put(
+    "/users/{user_id}/suspend",
+    response_model=SuccessResponse,
+    summary="Suspend User Account",
+    description="Deactivate a user account and terminate all active sessions."
+)
+async def suspend_user(
+    user_id: str,
+    request: Request,
+    current_user: UserInDB = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service),
+    auth_service: AuthService = Depends(get_auth_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> SuccessResponse:
+    user = await user_service.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    if not user.is_active:
+        return SuccessResponse(
+            success=True,
+            message="User account is already suspended"
+        )
+        
+    # Enforce lockout protection for admin self-suspension
+    if user.role == UserRole.ADMIN:
+        active_admins = await user_service.count_active_admins()
+        if active_admins <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot suspend the last active administrator. At least one active administrator must remain."
+            )
+            
+    await user_service.update_user(user_id, UserUpdate(is_active=False))
+    
+    # Revoke sessions
+    await auth_service.logout_all(user_id)
+    
+    # Audit Log
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    await audit_log_service.create_log(AuditLogCreateSchema(
+        user_id=current_user.id,
+        action="USER_SUSPENDED",
+        resource_type="user",
+        resource_id=user_id,
+        old_value={"is_active": True},
+        new_value={"is_active": False},
+        ip_address=ip_address,
+        user_agent=user_agent
+    ))
+    
+    return SuccessResponse(
+        success=True,
+        message="User account suspended successfully"
+    )
+
+
+@router.get(
+    "/doctors",
+    response_model=SuccessResponse,
+    summary="List Doctors",
+    description="Retrieve a list of platform doctors with filters."
+)
+async def list_doctors(
+    status: Optional[str] = None,
+    specialization: Optional[str] = None,
+    verification_status: Optional[DoctorProfileStatus] = None,
+    limit: int = 100,
+    skip: int = 0,
+    user_service: UserService = Depends(get_user_service),
+    doctor_profile_service: DoctorProfileService = Depends(get_doctor_profile_service),
+) -> SuccessResponse:
+    # 1. Fetch profiles matching filters
+    profile_query = {}
+    if verification_status:
+        profile_query["profile_status"] = verification_status.value if hasattr(verification_status, "value") else verification_status
+    if specialization:
+        profile_query["specialization"] = {"$regex": specialization, "$options": "i"}
+    
+    # Filter by user status if provided
+    if status:
+        user_filter = {"role": UserRole.DOCTOR.value}
+        if status == "active":
+            user_filter["is_active"] = True
+        elif status in ("suspended", "inactive"):
+            user_filter["is_active"] = False
+        
+        matching_users = await user_service.user_repository.get_many(user_filter, limit=10000)
+        user_ids = [u.id for u in matching_users]
+        profile_query["user_id"] = {"$in": user_ids}
+        
+    profiles = await doctor_profile_service.profile_repository.get_many(profile_query, limit=limit, skip=skip)
+    
+    # 2. Join user info
+    doctor_list = []
+    for p in profiles:
+         user = await user_service.get_user_by_id(p.user_id)
+         if not user:
+             continue
+         doctor_list.append(
+             AdminDoctorListResponse(
+                 id=p.id,
+                 user_id=p.user_id,
+                 full_name=user.full_name,
+                 email=user.email,
+                 specialization=p.specialization,
+                 experience_years=p.experience_years,
+                 consultation_fee=p.consultation_fee,
+                 hospital=p.hospital,
+                 license_number=p.license_number,
+                 education=p.education,
+                 profile_status=p.profile_status,
+                 created_at=p.created_at,
+                 is_active=user.is_active
+             )
+         )
+         
+    return SuccessResponse(
+        success=True,
+        message="Doctors retrieved successfully",
+        data={"doctors": [doc.model_dump() for doc in doctor_list]}
+    )
+
+
+@router.put(
+    "/doctors/{doctor_profile_id}/suspend",
+    response_model=SuccessResponse,
+    summary="Suspend Doctor",
+    description="Suspend a doctor profile, deactivating their user account and terminating their active sessions."
+)
+async def suspend_doctor(
+    doctor_profile_id: str,
+    request: Request,
+    current_user: UserInDB = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service),
+    doctor_profile_service: DoctorProfileService = Depends(get_doctor_profile_service),
+    auth_service: AuthService = Depends(get_auth_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> SuccessResponse:
+    profile = await doctor_profile_service.get_profile_by_id(doctor_profile_id)
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Doctor profile not found"
+        )
+    if profile.profile_status == DoctorProfileStatus.SUSPENDED:
+        return SuccessResponse(
+            success=True,
+            message="Doctor profile is already suspended"
+        )
+        
+    # Update doctor profile status
+    await doctor_profile_service.profile_repository.update_status(doctor_profile_id, DoctorProfileStatus.SUSPENDED)
+    
+    # Deactivate associated user account
+    await user_service.update_user(profile.user_id, UserUpdate(is_active=False))
+    
+    # Revoke sessions
+    await auth_service.logout_all(profile.user_id)
+    
+    # Audit Log
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    await audit_log_service.create_log(AuditLogCreateSchema(
+        user_id=current_user.id,
+        action="DOCTOR_SUSPENDED",
+        resource_type="doctor_profile",
+        resource_id=doctor_profile_id,
+        old_value={"profile_status": profile.profile_status.value},
+        new_value={"profile_status": DoctorProfileStatus.SUSPENDED.value, "is_active": False},
+        ip_address=ip_address,
+        user_agent=user_agent
+    ))
+    
+    return SuccessResponse(
+        success=True,
+        message="Doctor practitioner suspended successfully"
+    )
+
+
+@router.put(
+    "/doctors/{doctor_profile_id}/reactivate",
+    response_model=SuccessResponse,
+    summary="Reactivate Doctor",
+    description="Restore access for a suspended doctor profile."
+)
+async def reactivate_doctor(
+    doctor_profile_id: str,
+    request: Request,
+    current_user: UserInDB = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service),
+    doctor_profile_service: DoctorProfileService = Depends(get_doctor_profile_service),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> SuccessResponse:
+    profile = await doctor_profile_service.get_profile_by_id(doctor_profile_id)
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Doctor profile not found"
+        )
+    if profile.profile_status == DoctorProfileStatus.VERIFIED:
+        return SuccessResponse(
+            success=True,
+            message="Doctor profile is already active/verified"
+        )
+        
+    # Update doctor profile status to verified
+    await doctor_profile_service.profile_repository.update_status(doctor_profile_id, DoctorProfileStatus.VERIFIED)
+    
+    # Reactivate associated user account
+    await user_service.update_user(profile.user_id, UserUpdate(is_active=True))
+    
+    # Audit Log
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    await audit_log_service.create_log(AuditLogCreateSchema(
+        user_id=current_user.id,
+        action="DOCTOR_REACTIVATED",
+        resource_type="doctor_profile",
+        resource_id=doctor_profile_id,
+        old_value={"profile_status": profile.profile_status.value},
+        new_value={"profile_status": DoctorProfileStatus.VERIFIED.value, "is_active": True},
+        ip_address=ip_address,
+        user_agent=user_agent
+    ))
+    
+    return SuccessResponse(
+        success=True,
+        message="Doctor practitioner reactivated successfully"
+    )
+
 
 

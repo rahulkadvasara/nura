@@ -61,8 +61,13 @@ def patient_user():
 def mocks():
     user_svc = AsyncMock()
     audit_svc = AsyncMock()
-    auth_svc = MagicMock()
+    auth_svc = AsyncMock()
     token_repo = AsyncMock()
+
+    # Configure synchronous methods
+    user_svc.verify_password = MagicMock()
+    auth_svc.hash_token = MagicMock()
+    auth_svc.create_access_token = MagicMock()
 
     # Mock require_role logic
     def mock_require_role(user, required_role):
@@ -84,6 +89,7 @@ def mocks():
     auth_svc.user_service = user_svc
 
     return user_svc, audit_svc, auth_svc, token_repo
+
 
 
 def test_security_endpoints_non_admin_forbidden(client, mocks, patient_user):
@@ -211,6 +217,7 @@ def test_admin_reset_password_logs_audit_event(client, mocks, admin_user):
     # Mock verify OTP flow
     otp_svc = AsyncMock()
     latest_otp_doc = {
+        "_id": "507f1f77bcf86cd799439012",
         "email": admin_user.email,
         "otp": "123456",
         "purpose": "password_reset",

@@ -318,3 +318,29 @@ class UserService(BaseService[UserInDB, UserCreate, UserUpdate]):
             raise RuntimeError("Admin User was inserted but could not be retrieved")
         return UserInDB.from_mongo(created_doc), temp_password
 
+    async def list_users(
+        self,
+        search: Optional[str] = None,
+        role: Optional[UserRole] = None,
+        is_active: Optional[bool] = None,
+        limit: int = 100,
+        skip: int = 0
+    ) -> list[UserInDB]:
+        """List and query users with search and filtering options."""
+        query = {}
+        if role:
+            query["role"] = role.value if hasattr(role, "value") else role
+        if is_active is not None:
+            query["is_active"] = is_active
+        if search:
+            search_regex = {"$regex": search, "$options": "i"}
+            query["$or"] = [
+                {"full_name": search_regex},
+                {"email": search_regex}
+            ]
+        
+        cursor = self.user_repository.collection.find(query).sort("created_at", -1).skip(skip).limit(limit)
+        docs = await cursor.to_list(length=limit)
+        return [UserInDB.from_mongo(doc) for doc in docs]
+
+

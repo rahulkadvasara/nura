@@ -45,8 +45,7 @@ export function useApproveDoctor() {
       throw new Error(response.message || 'Failed to approve doctor')
     },
     onSuccess: (_, profileId) => {
-      // Invalidate pending queue and dashboard cache
-      queryClient.invalidateQueries({ queryKey: ['admin', 'doctors', 'pending'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'doctors'] })
       queryClient.invalidateQueries({ queryKey: ['admin', 'doctors', 'detail', profileId] })
       queryClient.invalidateQueries({ queryKey: ['dashboard', 'admin'] })
     },
@@ -65,9 +64,61 @@ export function useRejectDoctor() {
       throw new Error(response.message || 'Failed to reject doctor')
     },
     onSuccess: (_, variables) => {
-      // Invalidate pending queue and dashboard cache
-      queryClient.invalidateQueries({ queryKey: ['admin', 'doctors', 'pending'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'doctors'] })
       queryClient.invalidateQueries({ queryKey: ['admin', 'doctors', 'detail', variables.profileId] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'admin'] })
+    },
+  })
+}
+
+export function useAdminDoctors(verificationStatus: string) {
+  return useQuery<AdminDoctorListResponse[]>({
+    queryKey: ['admin', 'doctors', 'list', verificationStatus],
+    queryFn: async () => {
+      const response = await adminDoctorService.getDoctors(undefined, verificationStatus)
+      if (response.success && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to fetch doctors list')
+    },
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
+  })
+}
+
+export function useSuspendDoctor() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (profileId: string) => {
+      const response = await adminDoctorService.suspendDoctor(profileId)
+      if (response.success) {
+        return response
+      }
+      throw new Error(response.message || 'Failed to suspend doctor')
+    },
+    onSuccess: (_, profileId) => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'doctors'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'doctors', 'detail', profileId] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'admin'] })
+    },
+  })
+}
+
+export function useReactivateDoctor() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (profileId: string) => {
+      const response = await adminDoctorService.reactivateDoctor(profileId)
+      if (response.success) {
+        return response
+      }
+      throw new Error(response.message || 'Failed to reactivate doctor')
+    },
+    onSuccess: (_, profileId) => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'doctors'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'doctors', 'detail', profileId] })
       queryClient.invalidateQueries({ queryKey: ['dashboard', 'admin'] })
     },
   })

@@ -18,10 +18,14 @@ from app.core.dependencies import (
     get_patient_dashboard_service,
     get_doctor_dashboard_service,
     get_admin_dashboard_service,
+    get_doctor_profile_service,
 )
 from app.services.patient_dashboard_service import PatientDashboardService
 from app.services.doctor_dashboard_service import DoctorDashboardService
 from app.services.admin_dashboard_service import AdminDashboardService
+from app.services.doctor_service import DoctorProfileService
+from app.models.doctor import DoctorProfileStatus
+
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +77,7 @@ async def patient_dashboard(
 async def doctor_dashboard(
     current_user: UserInDB = Depends(require_role(UserRole.DOCTOR)),
     dashboard_service: DoctorDashboardService = Depends(get_doctor_dashboard_service),
+    doctor_profile_service: DoctorProfileService = Depends(get_doctor_profile_service),
 ) -> SuccessResponse:
     """
     Retrieve doctor dashboard data.
@@ -85,6 +90,14 @@ async def doctor_dashboard(
     - wallet_balance
     - total_earnings
     """
+    # Enforce suspended doctor block
+    profile = await doctor_profile_service.get_profile_by_user_id(current_user.id)
+    if profile and profile.profile_status == DoctorProfileStatus.SUSPENDED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Doctor profile is suspended"
+        )
+
     try:
         summary = await dashboard_service.get_dashboard(current_user.id)
     except Exception as exc:
@@ -93,6 +106,7 @@ async def doctor_dashboard(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve doctor dashboard",
         ) from exc
+
 
     return SuccessResponse(
         success=True,

@@ -240,6 +240,8 @@ class AdminDoctorListResponse(BaseModel):
     education: Optional[str] = Field(None, description="Education details")
     profile_status: DoctorProfileStatus = Field(..., description="Verification status")
     created_at: datetime = Field(..., description="Submission date")
+    is_active: Optional[bool] = Field(None, description="User account active status")
+
 
 
 class DoctorVerificationResponse(BaseModel):

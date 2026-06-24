@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { ShieldCheck, ShieldAlert, Clock, CheckCircle2, AlertCircle, XCircle } from 'lucide-react'
 
 interface VerificationStatusCardProps {
-  profileStatus: 'pending' | 'verified' | 'rejected'
+  profileStatus: 'pending' | 'verified' | 'rejected' | 'suspended'
   documentStatus: 'pending' | 'approved' | 'rejected'
 }
 
@@ -27,6 +27,13 @@ export function VerificationStatusCard({ profileStatus, documentStatus }: Verifi
           icon: XCircle,
           iconColor: 'text-red-500',
         }
+      case 'suspended':
+        return {
+          label: 'Suspended',
+          className: 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-50',
+          icon: XCircle,
+          iconColor: 'text-rose-500',
+        }
       case 'pending':
       default:
         return {
@@ -43,7 +50,7 @@ export function VerificationStatusCard({ profileStatus, documentStatus }: Verifi
 
   // Overall status summary
   const isFullyVerified = (profileStatus === 'verified') && (documentStatus === 'approved')
-  const isRejected = (profileStatus === 'rejected') || (documentStatus === 'rejected')
+  const isRejected = (profileStatus === 'rejected') || (documentStatus === 'rejected') || (profileStatus === 'suspended')
 
   return (
     <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">

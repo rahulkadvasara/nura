@@ -23,6 +23,8 @@ class DoctorProfileStatus(str, Enum):
     PENDING = "pending"
     VERIFIED = "verified"
     REJECTED = "rejected"
+    SUSPENDED = "suspended"
+
 
 
 class DocumentType(str, Enum):

@@ -82,7 +82,7 @@ export interface DoctorDashboardData {
   wallet_balance: number
   total_earnings: number
   pending_balance: number
-  profile_status: 'pending' | 'verified' | 'rejected'
+  profile_status: 'pending' | 'verified' | 'rejected' | 'suspended'
   document_status: 'pending' | 'approved' | 'rejected'
   prescriptions_written_count: number
 }
@@ -153,7 +153,7 @@ export interface DoctorProfile {
   languages: string[]
   hospital?: string
   license_number?: string
-  profile_status: 'pending' | 'verified' | 'rejected'
+  profile_status: 'pending' | 'verified' | 'rejected' | 'suspended'
   rejection_reason?: string
   average_rating: number
   total_reviews: number
@@ -163,7 +163,7 @@ export interface DoctorProfile {
 
 export interface DoctorApplicationData {
   application_status: string
-  profile_status: 'pending' | 'verified' | 'rejected'
+  profile_status: 'pending' | 'verified' | 'rejected' | 'suspended'
   profile: DoctorProfile
   documents: DoctorDocument[]
 }
@@ -179,8 +179,9 @@ export interface AdminDoctorListResponse {
   hospital?: string
   license_number?: string
   education?: string
-  profile_status: 'pending' | 'verified' | 'rejected'
+  profile_status: 'pending' | 'verified' | 'rejected' | 'suspended'
   created_at: string
+  is_active?: boolean
 }
 
 export interface DoctorVerificationResponse {
