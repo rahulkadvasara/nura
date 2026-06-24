@@ -11,7 +11,8 @@ from app.schemas.auth import (
     RefreshTokenRequest,
     TokenUser,
     SuccessResponse,
-    ErrorResponse
+    ErrorResponse,
+    ChangePasswordRequest
 )
 
 from app.schemas.doctor import (
@@ -125,6 +126,8 @@ __all__ = [
     "TokenUser",
     "SuccessResponse",
     "ErrorResponse",
+    "ChangePasswordRequest",
+
 
     # Doctor profile schemas
     "DoctorProfileCreateSchema",

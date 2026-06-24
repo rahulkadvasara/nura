@@ -543,7 +543,7 @@ function AdminManagementContent() {
               Close Details
             </Button>
           </DialogFooter>
-        </Dialog>
+        </DialogContent>
       </Dialog>
 
       {/* Create Administrator Modal */}
@@ -686,7 +686,7 @@ function AdminManagementContent() {
               Yes, Confirm
             </Button>
           </DialogFooter>
-        </Dialog>
+        </DialogContent>
       </Dialog>
     </div>
   )

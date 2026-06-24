@@ -5,6 +5,7 @@ import {
   AdminCreateRequest,
   AdminCreateResponse,
   AdminDetailResponse,
+  AdminSession,
 } from '@/types'
 
 export const adminManagementService = {
@@ -37,4 +38,20 @@ export const adminManagementService = {
     const response = await apiClient.put<ApiResponse<null>>(`/admin/admins/${adminId}/disable`)
     return response.data
   },
+
+  listSessions: async (): Promise<ApiResponse<AdminSession[]>> => {
+    const response = await apiClient.get<ApiResponse<{ sessions: AdminSession[] }>>('/admin/security/sessions')
+    return {
+      success: response.data.success,
+      message: response.data.message,
+      data: response.data.data?.sessions || [],
+      errors: response.data.errors,
+    }
+  },
+
+  revokeSession: async (sessionId: string): Promise<ApiResponse<null>> => {
+    const response = await apiClient.post<ApiResponse<null>>(`/admin/security/sessions/${sessionId}/revoke`)
+    return response.data
+  },
 }
+

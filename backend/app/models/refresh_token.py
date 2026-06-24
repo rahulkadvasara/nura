@@ -18,6 +18,8 @@ class RefreshTokenBase(BaseModel):
     token_hash: str = Field(..., description="Hashed refresh token")
     expires_at: datetime = Field(..., description="Token expiration timestamp")
     revoked: bool = Field(default=False, description="Token revocation status")
+    last_activity: datetime = Field(default_factory=utc_now, description="Last activity timestamp")
+
 
 
 class RefreshTokenCreate(RefreshTokenBase):
@@ -50,3 +52,5 @@ class RefreshTokenResponse(BaseModel):
     expires_at: datetime = Field(..., description="Token expiration timestamp")
     revoked: bool = Field(..., description="Token revocation status")
     created_at: datetime = Field(..., description="Creation timestamp")
+    last_activity: datetime = Field(..., description="Last activity timestamp")
+

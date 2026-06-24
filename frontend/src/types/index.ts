@@ -29,6 +29,7 @@ export interface User {
   is_active: boolean
   created_at: string
   updated_at: string
+  last_login_at?: string
 }
 
 // Health Types
@@ -419,5 +420,14 @@ export interface AdminDetailResponse {
   }
   audit_summary: AuditLog[]
 }
+
+export interface AdminSession {
+  id: string
+  created_at: string
+  expires_at: string
+  revoked: boolean
+  last_activity: string
+}
+
 
 

@@ -29,10 +29,14 @@ from app.core.dependencies import (
     get_doctor_profile_service,
     get_doctor_document_service,
     get_audit_log_service,
+    get_refresh_token_repository,
+    get_current_user,
 )
 from app.services.user_service import UserService
 from app.services.doctor_service import DoctorProfileService, DoctorDocumentService
 from app.services.audit_log_service import AuditLogService
+from app.repositories.refresh_token_repository import RefreshTokenRepository
+
 
 
 logger = logging.getLogger(__name__)
@@ -503,4 +507,99 @@ async def disable_admin(
         success=True,
         message="Administrator account disabled successfully"
     )
+
+
+@router.get(
+    "/security/sessions",
+    response_model=SuccessResponse,
+    summary="Get Administrative Sessions",
+    description="Retrieve all sessions (active, expired, and revoked) for the current administrator."
+)
+async def get_security_sessions(
+    current_user: UserInDB = Depends(get_current_user),
+    token_repo: RefreshTokenRepository = Depends(get_refresh_token_repository),
+) -> SuccessResponse:
+    # Only current admin can view their own sessions
+    sessions = await token_repo.get_all_by_user(current_user.id)
+    
+    formatted_sessions = []
+    for s in sessions:
+        formatted_sessions.append({
+            "id": s.id,
+            "created_at": s.created_at.isoformat() if hasattr(s.created_at, "isoformat") else s.created_at,
+            "expires_at": s.expires_at.isoformat() if hasattr(s.expires_at, "isoformat") else s.expires_at,
+            "revoked": s.revoked,
+            "last_activity": s.last_activity.isoformat() if hasattr(s.last_activity, "isoformat") else s.last_activity
+        })
+        
+    return SuccessResponse(
+        success=True,
+        message="Sessions retrieved successfully",
+        data={"sessions": formatted_sessions}
+    )
+
+
+@router.post(
+    "/security/sessions/{session_id}/revoke",
+    response_model=SuccessResponse,
+    summary="Revoke Administrative Session",
+    description="Revoke a specific administrative session by its ID."
+)
+async def revoke_security_session(
+    session_id: str,
+    request: Request,
+    current_user: UserInDB = Depends(get_current_user),
+    token_repo: RefreshTokenRepository = Depends(get_refresh_token_repository),
+    audit_log_service: AuditLogService = Depends(get_audit_log_service),
+) -> SuccessResponse:
+    session = await token_repo.get(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found"
+        )
+        
+    # Check ownership: admin can revoke any of their own sessions
+    if session.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Cannot revoke other users' sessions"
+        )
+        
+    # Cannot revoke already revoked session
+    if session.revoked:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Session is already revoked"
+        )
+        
+    # Revoke session
+    revoked = await token_repo.revoke_token(session_id)
+    if not revoked:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to revoke session"
+        )
+        
+    # Log ADMIN_SESSION_REVOKED audit event
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    
+    audit_schema = AuditLogCreateSchema(
+        user_id=current_user.id,
+        action="ADMIN_SESSION_REVOKED",
+        resource_type="session",
+        resource_id=session_id,
+        old_value={"revoked": False},
+        new_value={"revoked": True},
+        ip_address=ip_address,
+        user_agent=user_agent
+    )
+    await audit_log_service.create_log(audit_schema)
+    
+    return SuccessResponse(
+        success=True,
+        message="Session revoked successfully"
+    )
+
 

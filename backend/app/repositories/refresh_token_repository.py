@@ -67,3 +67,18 @@ class RefreshTokenRepository(BaseRepository[RefreshTokenInDB, RefreshTokenCreate
             {"expires_at": {"$lt": datetime.now(timezone.utc)}}
         )
         return result.deleted_count
+
+    async def get_all_by_user(self, user_id: str, limit: int = 100) -> List[RefreshTokenInDB]:
+        """Fetch all refresh token sessions (active, revoked, expired) for a user, sorted newest first"""
+        cursor = self.collection.find({"user_id": user_id}).sort("created_at", -1).limit(limit)
+        docs = await cursor.to_list(length=limit)
+        return [_to_model(self.model_class, doc) for doc in docs]
+
+    async def update_last_activity(self, token_id: str) -> Optional[RefreshTokenInDB]:
+        """Update the last activity timestamp for a single token."""
+        result = await self.collection.update_one(
+            {"_id": ObjectId(token_id)},
+            {"$set": {"last_activity": datetime.now(timezone.utc)}},
+        )
+        return await self.get(token_id)
+

@@ -3,8 +3,24 @@ Nura - Qdrant Vector Database Connection Manager
 """
 
 from typing import Optional
-from qdrant_client import QdrantClient
-from qdrant_client.http import models as qdrant_models
+try:
+    from qdrant_client import QdrantClient
+    from qdrant_client.http import models as qdrant_models
+except ImportError:  # pragma: no cover
+    # Provide minimal stub classes to allow imports without the actual package
+    class QdrantClient:  # type: ignore
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError("Qdrant client is not installed. Install 'qdrant-client' to use this feature.")
+
+    class _DummyModels:
+        class VectorParams:
+            def __init__(self, *args, **kwargs):
+                pass
+
+        class Distance:
+            COSINE = "COSINE"
+
+    qdrant_models = _DummyModels
 import logging
 
 from app.core.config import settings

@@ -4,16 +4,35 @@ Authentication endpoints for user registration and OTP verification
 """
 
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import ValidationError
+from datetime import datetime, timezone
 
 from app.core.config import settings
-from app.core.dependencies import get_user_service, get_otp_service, get_email_service, get_auth_service, require_active_user
+from app.core.dependencies import (
+    get_user_service,
+    get_otp_service,
+    get_email_service,
+    get_auth_service,
+    require_active_user,
+    get_audit_log_service,
+)
 from app.models import UserCreate, UserRole, AuthProvider, OTPPurpose, UserInDB, OTPVerificationInDB
-from app.schemas.auth import SuccessResponse, OTPVerify, UserLogin, RefreshTokenRequest, ForgotPasswordRequest, ResetPasswordRequest, GoogleLoginRequest
+from app.schemas.auth import (
+    SuccessResponse,
+    OTPVerify,
+    UserLogin,
+    RefreshTokenRequest,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+    GoogleLoginRequest,
+    ChangePasswordRequest,
+)
+from app.schemas.observability import AuditLogCreateSchema
 from app.services import UserService, OTPService, EmailService, AuthService
 
 logger = logging.getLogger(__name__)
+
 
 router = APIRouter()
 
@@ -135,8 +154,10 @@ async def verify_otp(
 @router.post("/login", response_model=SuccessResponse)
 async def login(
     login_in: UserLogin,
+    request: Request,
     user_service: UserService = Depends(get_user_service),
     auth_service: AuthService = Depends(get_auth_service),
+    audit_log_service = Depends(get_audit_log_service),
 ):
     """
     Authenticate a user, issue access and refresh tokens
@@ -183,6 +204,20 @@ async def login(
     # Store refresh token in MongoDB
     await auth_service.refresh_token_repository.create_token(refresh_token_create)
 
+    # Log ADMIN_LOGIN audit event
+    if user.role == UserRole.ADMIN:
+        ip_address = request.client.host if request.client else None
+        user_agent = request.headers.get("user-agent")
+        await audit_log_service.create_log(AuditLogCreateSchema(
+            user_id=user.id,
+            action="ADMIN_LOGIN",
+            resource_type="admin",
+            resource_id=user.id,
+            ip_address=ip_address,
+            user_agent=user_agent
+        ))
+
+
     return SuccessResponse(
         success=True,
         message="Login successful",
@@ -200,7 +235,9 @@ async def login(
 @router.post("/refresh", response_model=SuccessResponse)
 async def refresh(
     refresh_in: RefreshTokenRequest,
+    request: Request,
     auth_service: AuthService = Depends(get_auth_service),
+    audit_log_service = Depends(get_audit_log_service),
 ):
     """
     Refresh JWT access token using opaque refresh token
@@ -243,6 +280,20 @@ async def refresh(
             detail="User account is inactive",
         )
 
+    # If user is admin, update last activity and log event
+    if user.role == UserRole.ADMIN:
+        await auth_service.refresh_token_repository.update_last_activity(record.id)
+        ip_address = request.client.host if request.client else None
+        user_agent = request.headers.get("user-agent")
+        await audit_log_service.create_log(AuditLogCreateSchema(
+            user_id=user.id,
+            action="ADMIN_TOKEN_REFRESH",
+            resource_type="admin",
+            resource_id=user.id,
+            ip_address=ip_address,
+            user_agent=user_agent
+        ))
+
     # Generate new access token ONLY (no rotation)
     new_access = auth_service.create_access_token(user)
 
@@ -255,15 +306,35 @@ async def refresh(
     )
 
 
+
 @router.post("/logout", response_model=SuccessResponse)
 async def logout(
     refresh_in: RefreshTokenRequest,
+    request: Request,
     auth_service: AuthService = Depends(get_auth_service),
+    audit_log_service = Depends(get_audit_log_service),
 ):
     """
     Logout user by revoking their refresh token
     """
     token_hash = auth_service.hash_token(refresh_in.refresh_token)
+    
+    # Retrieve user before revoking token
+    record = await auth_service.refresh_token_repository.get_by_token_hash(token_hash)
+    if record:
+        user = await auth_service.user_service.get_user_by_id(record.user_id)
+        if user and user.role == UserRole.ADMIN:
+            ip_address = request.client.host if request.client else None
+            user_agent = request.headers.get("user-agent")
+            await audit_log_service.create_log(AuditLogCreateSchema(
+                user_id=user.id,
+                action="ADMIN_LOGOUT",
+                resource_type="admin",
+                resource_id=user.id,
+                ip_address=ip_address,
+                user_agent=user_agent
+            ))
+
     revoked = await auth_service.refresh_token_repository.revoke_by_hash(token_hash)
     if not revoked:
         raise HTTPException(
@@ -273,6 +344,7 @@ async def logout(
 
     return SuccessResponse(
         success=True,
+
         message="Logged out successfully",
     )
 
@@ -296,9 +368,11 @@ async def get_me(
 @router.post("/forgot-password", response_model=SuccessResponse)
 async def forgot_password(
     forgot_in: ForgotPasswordRequest,
+    request: Request,
     user_service: UserService = Depends(get_user_service),
     otp_service: OTPService = Depends(get_otp_service),
     email_service: EmailService = Depends(get_email_service),
+    audit_log_service = Depends(get_audit_log_service),
 ):
     """
     Initiate password recovery by sending an OTP to the user's email (enumeration prevention)
@@ -328,6 +402,19 @@ async def forgot_password(
             message=success_message,
         )
 
+    # Log ADMIN_PASSWORD_RESET_REQUEST audit event
+    if user.role == UserRole.ADMIN:
+        ip_address = request.client.host if request.client else None
+        user_agent = request.headers.get("user-agent")
+        await audit_log_service.create_log(AuditLogCreateSchema(
+            user_id=user.id,
+            action="ADMIN_PASSWORD_RESET_REQUEST",
+            resource_type="admin",
+            resource_id=user.id,
+            ip_address=ip_address,
+            user_agent=user_agent
+        ))
+
     # Send password reset email
     email_sent = await email_service.send_password_reset_email(email, otp)
     if not email_sent:
@@ -339,12 +426,15 @@ async def forgot_password(
     )
 
 
+
 @router.post("/reset-password", response_model=SuccessResponse)
 async def reset_password(
     reset_in: ResetPasswordRequest,
+    request: Request,
     user_service: UserService = Depends(get_user_service),
     otp_service: OTPService = Depends(get_otp_service),
     auth_service: AuthService = Depends(get_auth_service),
+    audit_log_service = Depends(get_audit_log_service),
 ):
     """
     Reset user password using verification OTP
@@ -415,6 +505,20 @@ async def reset_password(
 
     # Revoke all active refresh tokens belonging to the user (forces logout on all devices)
     await auth_service.logout_all(user.id)
+
+    # Log ADMIN_PASSWORD_RESET_SUCCESS audit event
+    if user.role == UserRole.ADMIN:
+        ip_address = request.client.host if request.client else None
+        user_agent = request.headers.get("user-agent")
+        await audit_log_service.create_log(AuditLogCreateSchema(
+            user_id=user.id,
+            action="ADMIN_PASSWORD_RESET_SUCCESS",
+            resource_type="admin",
+            resource_id=user.id,
+            ip_address=ip_address,
+            user_agent=user_agent
+        ))
+
 
     return SuccessResponse(
         success=True,
@@ -515,4 +619,43 @@ async def google_login(
             }
         }
     )
+
+
+@router.post("/change-password", response_model=SuccessResponse)
+async def change_password(
+    body: ChangePasswordRequest,
+    request: Request,
+    current_user: UserInDB = Depends(require_active_user),
+    user_service: UserService = Depends(get_user_service),
+    audit_log_service = Depends(get_audit_log_service),
+):
+    """
+    Change user password for logged-in users
+    """
+    success = await user_service.change_password(
+        current_user.id, body.old_password, body.new_password
+    )
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect old password"
+        )
+    
+    if current_user.role == UserRole.ADMIN:
+        ip_address = request.client.host if request.client else None
+        user_agent = request.headers.get("user-agent")
+        await audit_log_service.create_log(AuditLogCreateSchema(
+            user_id=current_user.id,
+            action="ADMIN_PASSWORD_CHANGED",
+            resource_type="admin",
+            resource_id=current_user.id,
+            ip_address=ip_address,
+            user_agent=user_agent
+        ))
+        
+    return SuccessResponse(
+        success=True,
+        message="Password changed successfully"
+    )
+
 
