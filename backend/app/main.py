@@ -26,10 +26,21 @@ async def lifespan(app: FastAPI):
     await connect_to_mongodb()
     await connect_to_qdrant()
 
-    # Initialize collections and indexes (idempotent)
+    # Initialize collections and indexes (idempotent) and run admin bootstrap
     try:
         db = get_database()
         await setup_database(db)
+
+        # Admin bootstrap logic
+        from app.repositories import UserRepository, AuditLogRepository
+        from app.services import UserService, AdminBootstrapService
+        
+        user_repo = UserRepository(db.users)
+        user_service = UserService(user_repo)
+        audit_repo = AuditLogRepository(db.audit_logs)
+        
+        bootstrap_service = AdminBootstrapService(user_service, audit_repo)
+        await bootstrap_service.bootstrap_admin()
     except RuntimeError:
         # MongoDB not connected (e.g. dev without DB) — skip index setup
         pass

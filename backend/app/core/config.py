@@ -75,6 +75,11 @@ class Settings:
         
         # Upload Limits
         self.MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "20"))
+
+        # Admin Bootstrap Configuration
+        self.ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "")
+        self.ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+        self.ADMIN_NAME = os.getenv("ADMIN_NAME", "")
     
     def _load_env_file(self):
         """Load .env file if it exists"""
