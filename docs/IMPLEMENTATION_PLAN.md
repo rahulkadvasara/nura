@@ -964,26 +964,75 @@ Implement RAG.
 
 ```text
 patient_reports
-chat_memory
 medical_knowledge
 drug_knowledge
+chat_memory
+doctor_knowledge
 ```
 
 ---
 
-## Workflow
+## RAG Workflow
 
 ```text
-Query
+User Query
+ ↓
+Intent Detection
+ ↓
+Patient Context Builder
  ↓
 Embedding
  ↓
-Vector Search
+Multi-Collection Retrieval
  ↓
-Context Assembly
+Context Ranking
  ↓
 Prompt Construction
+ ↓
+Groq LLM
+ ↓
+Response
 ```
+
+---
+
+## Multi-Collection Retrieval
+
+Retrieval occurs from multiple collections depending on detected intent.
+
+Examples:
+* Medical Question → `medical_knowledge`
+* Report Question → `patient_reports`
+* Drug Question → `drug_knowledge`
+* Doctor Search → `doctor_knowledge`
+* Conversation Recall → `chat_memory`
+* Patient Summary → `patient_memory` (MongoDB)
+
+The Retrieval Agent decides which collections to query.
+
+---
+
+## Memory Update Pipeline
+
+Whenever an important healthcare event occurs:
+
+```text
+Event
+ ↓
+Extract structured data
+ ↓
+Generate summary
+ ↓
+Update patient_memory (MongoDB)
+ ↓
+Chunk relevant content
+ ↓
+Generate embeddings
+ ↓
+Update Qdrant
+```
+
+The system keeps MongoDB summaries synchronized with vector knowledge.
 
 ---
 

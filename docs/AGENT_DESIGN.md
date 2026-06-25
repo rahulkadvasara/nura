@@ -146,13 +146,14 @@ Qdrant:
 patient_reports
 chat_memory
 medical_knowledge
-drug_interactions
+drug_knowledge
 doctor_knowledge
 ```
 
 MongoDB:
 
 ```text
+patient_memory
 appointments
 consultations
 prescriptions
@@ -186,13 +187,17 @@ It performs aggregation only.
 
 ### Sources
 
-```text
-Reports
-Appointments
-Prescriptions
-Reminders
-Chat History
-```
+Priority order:
+
+1. patient_memory
+2. Recent consultations
+3. Recent prescriptions
+4. Relevant reports
+5. Relevant semantic memories
+6. User profile
+7. Current conversation
+
+The builder should intelligently trim context to remain within token limits.
 
 ---
 
@@ -407,7 +412,7 @@ High
 
 ```text
 Drug Interaction Dataset
-Qdrant Drug Interactions Collection
+Qdrant Drug Knowledge Collection
 ```
 
 ---
@@ -525,6 +530,10 @@ Doctor Availability
 ## Purpose
 
 Maintain long-term conversation memory.
+Raw conversations remain in MongoDB. Qdrant stores only condensed semantic memories.
+
+Strategy:
+MongoDB -> Conversation Summarizer -> Semantic Memory -> chat_memory (Qdrant)
 
 ---
 

@@ -87,3 +87,13 @@ Enforce backend rules preventing the disabling or deletion of the last remaining
 
 Reason:
 Guarantees administrative access is never permanently lost and prevents accidental lockout situations.
+
+---
+
+## ADR-010
+
+Decision:
+Use `patient_memory` MongoDB collection as the primary source of truth for longitudinal patient context. Qdrant stores only condensed semantic memories and domain knowledge.
+
+Reason:
+Ensures transactional integrity, provides low-latency reads for Doctor Dashboards without invoking the LLM, and creates a clean separation of operational records from vector embeddings.

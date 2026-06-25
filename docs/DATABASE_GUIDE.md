@@ -40,12 +40,11 @@ Agent Logs
 Stores:
 
 ```text
-Embeddings
-Medical Knowledge
-Report Chunks
-Chat Memory
-Drug Knowledge
-Doctor Knowledge
+patient_reports
+medical_knowledge
+drug_knowledge
+chat_memory
+doctor_knowledge
 ```
 
 ---
@@ -246,6 +245,30 @@ failed
 
 ---
 
+## patient_memory
+
+AI-generated longitudinal patient summary. Continuously updated on important events.
+
+```json
+{
+  "_id": "ObjectId",
+  "patient_id": "ObjectId",
+  "ai_summary": "string",
+  "chronic_conditions": [],
+  "allergies": [],
+  "medications": [],
+  "surgeries": [],
+  "diagnoses": [],
+  "health_risks": [],
+  "recent_findings": [],
+  "lifestyle_notes": "string",
+  "timeline": [],
+  "last_updated": "datetime"
+}
+```
+
+---
+
 ## health_insights
 
 AI-generated insights.
@@ -417,7 +440,7 @@ Educational Content
 
 ---
 
-## drug_interactions
+## drug_knowledge
 
 Stores:
 
@@ -572,6 +595,7 @@ Retain:
 | Data Type         | Source  |
 | ----------------- | ------- |
 | User Data         | MongoDB |
+| Operational Data  | MongoDB |
 | Reports Metadata  | MongoDB |
 | Report Embeddings | Qdrant  |
 | Chat History      | MongoDB |
@@ -579,6 +603,8 @@ Retain:
 | Medical Knowledge | Qdrant  |
 | Drug Knowledge    | Qdrant  |
 | Doctor Profiles   | MongoDB |
+| Doctor Knowledge  | Qdrant  |
+| Patient Context   | MongoDB (patient_memory) |
 | Appointments      | MongoDB |
 | Payments          | MongoDB |
 

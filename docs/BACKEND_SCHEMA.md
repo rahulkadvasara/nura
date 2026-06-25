@@ -253,6 +253,28 @@ cancelled
 
 ---
 
+## patient_memory
+
+```json
+{
+  "_id": "ObjectId",
+  "patient_id": "ObjectId",
+  "ai_summary": "string",
+  "chronic_conditions": [],
+  "allergies": [],
+  "medications": [],
+  "surgeries": [],
+  "diagnoses": [],
+  "health_risks": [],
+  "recent_findings": [],
+  "lifestyle_notes": "string",
+  "timeline": [],
+  "last_updated": "datetime"
+}
+```
+
+---
+
 ## reminders
 
 ```json
@@ -462,7 +484,7 @@ Stores:
 
 ---
 
-## drug_interaction
+## drug_knowledge
 
 Stores:
 
@@ -471,11 +493,13 @@ Stores:
 
 ---
 
-## Doctor_knowledge
+## doctor_knowledge
 
 Stores:
 
-* Doctor knowledge
+* Doctor metadata
+* Specialization knowledge
+* Doctor recommendation data
 
 ---
 

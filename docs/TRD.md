@@ -164,10 +164,11 @@ Response
 
 ### Qdrant
 
-* Patient Reports
-* Chat Memory
-* Medical Knowledge
-* Drug Knowledge
+* patient_reports
+* medical_knowledge
+* drug_knowledge
+* chat_memory
+* doctor_knowledge
 
 ### MongoDB
 
@@ -185,13 +186,15 @@ Response
 ```text
 User Query
  ↓
-Embedding Generation
+Intent Detection
  ↓
-Qdrant Search
+Patient Context Builder
  ↓
-Top-K Retrieval
+Embedding
  ↓
-Context Assembly
+Multi-Collection Retrieval
+ ↓
+Context Ranking
  ↓
 Prompt Construction
  ↓
@@ -342,9 +345,38 @@ Qdrant Collections:
 | Collection        |
 | ----------------- |
 | patient_reports   |
-| chat_memory       |
 | medical_knowledge |
 | drug_knowledge    |
+| chat_memory       |
+| doctor_knowledge  |
+
+---
+
+# 15. AI Responsibilities
+
+| Component | Responsibilities |
+| --------- | ---------------- |
+| MongoDB   | Transactional data, operational records, patient_memory |
+| Qdrant    | Semantic retrieval, embeddings, similarity search |
+| Groq      | Reasoning, summarization, response generation |
+| LangGraph | Orchestration, routing, workflows |
+
+---
+
+# 16. Doctor Dashboard Pattern
+
+Doctor dashboards should never invoke the LLM dynamically.
+
+```text
+Doctor opens patient
+ ↓
+Read patient_memory (MongoDB)
+ ↓
+Display summary
+ ↓
+Fetch supporting MongoDB records
+```
+This provides low latency and predictable behavior.
 
 ---
 
@@ -436,7 +468,7 @@ Metrics:
 
 ---
 
-# 20. Future Enhancements
+# 21. Future Enhancements
 
 * Voice Assistant
 * Wearable Integration
@@ -444,3 +476,17 @@ Metrics:
 * Insurance Integration
 * Mobile Apps
 * Predictive Health Analytics
+
+---
+
+# 22. Future Agent Compatibility
+
+This architecture is designed to natively support new agents without requiring architectural changes:
+
+* Symptom Agent
+* Report Analysis Agent
+* Drug Interaction Agent
+* Doctor Recommendation Agent
+* Reminder Agent
+* Appointment Agent
+* Memory Agent
