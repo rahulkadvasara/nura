@@ -260,6 +260,8 @@ export interface PatientAppointmentHistoryItem {
   appointment_date: string
   appointment_time: string
   status: 'pending' | 'approved' | 'in_progress' | 'rejected' | 'cancelled' | 'completed'
+  payment_status: 'pending' | 'held' | 'approved' | 'completed' | 'refunded' | 'failed' | 'created'
+  consultation_fee: number
   reason?: string
   rejection_reason?: string
   created_at: string

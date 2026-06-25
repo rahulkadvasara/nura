@@ -227,6 +227,8 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
                 "appointment_date": appt.slot_date,
                 "appointment_time": appt.slot_time,
                 "status": appt.status.value if hasattr(appt.status, "value") else appt.status,
+                "payment_status": appt.payment_status.value if hasattr(appt.payment_status, "value") else appt.payment_status,
+                "consultation_fee": appt.consultation_fee,
                 "reason": appt.reason or appt.notes or "General Consultation",
                 "rejection_reason": appt.rejection_reason,
                 "created_at": appt.created_at

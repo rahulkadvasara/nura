@@ -47,3 +47,6 @@ flake8==6.1.0
 
 # Google Authentication
 google-auth==2.55.0
+
+# Razorpay Integration
+razorpay==1.4.2

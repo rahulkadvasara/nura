@@ -23,6 +23,7 @@ from app.repositories import (
     NotificationRepository,
     ConsultationRepository,
     PrescriptionRepository,
+    PaymentRepository,
 )
 from app.services import (
     UserService,
@@ -36,6 +37,8 @@ from app.services import (
     NotificationService,
     ConsultationService,
     PrescriptionService,
+    PaymentService,
+    PaymentGatewayService,
 )
 
 
@@ -199,6 +202,30 @@ def get_audit_log_service():
     audit_log_repository = get_audit_log_repository()
     user_repository = get_user_repository()
     return AuditLogService(audit_log_repository, user_repository)
+
+
+def get_payment_repository() -> PaymentRepository:
+    """Get PaymentRepository instance"""
+    database = get_database()
+    return PaymentRepository(database.payments)
+
+
+def get_payment_service(
+    payment_repository: PaymentRepository = Depends(get_payment_repository),
+    appointment_repository: AppointmentRepository = Depends(get_appointment_repository),
+    user_repository: UserRepository = Depends(get_user_repository),
+) -> PaymentService:
+    """Get PaymentService instance"""
+    return PaymentService(payment_repository, appointment_repository, user_repository)
+
+
+def get_payment_gateway_service(
+    payment_repository: PaymentRepository = Depends(get_payment_repository),
+    appointment_repository: AppointmentRepository = Depends(get_appointment_repository),
+    audit_log_service = Depends(get_audit_log_service),
+) -> PaymentGatewayService:
+    """Get PaymentGatewayService instance"""
+    return PaymentGatewayService(payment_repository, appointment_repository, audit_log_service)
 
 
 reusable_oauth2 = HTTPBearer()

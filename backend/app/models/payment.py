@@ -20,6 +20,7 @@ def utc_now() -> datetime:
 
 class PaymentStatus(str, Enum):
     """Payment states for escrow and lifecycle management"""
+    CREATED = "created"
     PENDING = "pending"
     HELD = "held"
     APPROVED = "approved"
