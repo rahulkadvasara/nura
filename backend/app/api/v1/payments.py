@@ -100,6 +100,7 @@ async def verify_payment(
     current_user: UserInDB = Depends(require_exact_patient),
     payment_gateway_service: PaymentGatewayService = Depends(get_payment_gateway_service),
     appointment_service: AppointmentService = Depends(get_appointment_service),
+    payment_service: PaymentService = Depends(get_payment_service),
 ) -> SuccessResponse:
     try:
         payment, appointment, wallet_summary, revenue_split = await payment_gateway_service.verify_payment(
@@ -108,7 +109,7 @@ async def verify_payment(
         )
         
         response_data = {
-            "payment": payment_gateway_service.payment_repository.to_response(payment).model_dump(),
+            "payment": payment_service.to_response(payment).model_dump(),
             "appointment": appointment_service.to_response(appointment).model_dump(),
             "wallet_update_summary": wallet_summary,
             "revenue_split_summary": revenue_split,
