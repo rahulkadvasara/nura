@@ -474,5 +474,31 @@ def get_agent_log_service():
     return AgentLogService(agent_log_repository)
 
 
+def get_system_monitor_service():
+    """Get SystemMonitorService instance"""
+    from app.services.system_monitor_service import SystemMonitorService
+    from app.repositories.reminder_repository import ReminderRepository
+    database = get_database()
+    return SystemMonitorService(
+        reminder_repository=ReminderRepository(database.reminders)
+    )
+
+
+def get_maintenance_service():
+    """Get MaintenanceService instance"""
+    from app.services.maintenance_service import MaintenanceService
+    from app.repositories.refresh_token_repository import RefreshTokenRepository
+    from app.repositories.otp_repository import OTPRepository
+    from app.repositories.notification_repository import NotificationRepository
+    from app.repositories.audit_log_repository import AuditLogRepository
+    database = get_database()
+    return MaintenanceService(
+        refresh_token_repository=RefreshTokenRepository(database.refresh_tokens),
+        otp_repository=OTPRepository(database.otp_verifications),
+        notification_repository=NotificationRepository(database.notifications),
+        audit_log_repository=AuditLogRepository(database.audit_logs),
+    )
+
+
 
 

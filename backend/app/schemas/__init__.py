@@ -125,6 +125,15 @@ from app.schemas.doctor_patient import (
     DoctorPatientDetailResponse,
 )
 
+from app.schemas.system import (
+    ServiceHealth,
+    PlatformHealthResponse,
+    SystemInfoResponse,
+    BackgroundJobItem,
+    BackgroundJobResponse,
+    MaintenanceResponse,
+)
+
 
 __all__ = [
     # Authentication schemas
@@ -238,4 +247,10 @@ __all__ = [
     "DoctorPatientSummary",
     "DoctorPatientListResponse",
     "DoctorPatientDetailResponse",
+    "ServiceHealth",
+    "PlatformHealthResponse",
+    "SystemInfoResponse",
+    "BackgroundJobItem",
+    "BackgroundJobResponse",
+    "MaintenanceResponse",
 ]

@@ -650,6 +650,52 @@ export interface DoctorTransactionsResponse {
 }
 
 
+// System Monitoring & Maintenance Types
+export type ServiceHealthStatus = 'healthy' | 'degraded' | 'offline';
 
+export interface ServiceHealth {
+  name: string;
+  status: ServiceHealthStatus;
+  latency_ms: number;
+  message: string;
+  last_checked: string;
+}
 
+export interface PlatformHealthResponse {
+  services: ServiceHealth[];
+}
+
+export interface SystemInfoResponse {
+  version: string;
+  environment: string;
+  startup_time: string;
+  uptime_seconds: number;
+}
+
+export interface BackgroundJobItem {
+  status: string;
+  running: number;
+  completed: number;
+  failed: number;
+  queued: number;
+  last_execution: string | null;
+  next_execution: string | null;
+}
+
+export interface BackgroundJobResponse {
+  reminder_jobs: BackgroundJobItem;
+  notification_jobs: BackgroundJobItem;
+  ai_jobs: BackgroundJobItem;
+  failed_jobs: BackgroundJobItem;
+}
+
+export interface MaintenanceActionResponse {
+  success: boolean;
+  message: string;
+  details: {
+    deleted_count?: number;
+    archived_count?: number;
+    [key: string]: any;
+  };
+}
 

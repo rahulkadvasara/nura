@@ -34,12 +34,16 @@ from app.core.dependencies import (
     get_current_user,
     get_auth_service,
     get_admin_analytics_service,
+    get_system_monitor_service,
+    get_maintenance_service,
 )
 from app.services.user_service import UserService
 from app.services.doctor_service import DoctorProfileService, DoctorDocumentService
 from app.services.audit_log_service import AuditLogService
 from app.services.agent_log_service import AgentLogService
 from app.services.auth_service import AuthService
+from app.services.system_monitor_service import SystemMonitorService
+from app.services.maintenance_service import MaintenanceService
 from app.repositories.refresh_token_repository import RefreshTokenRepository
 from app.models.user import UserUpdate
 
@@ -1142,6 +1146,244 @@ async def get_authentication_logs(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve authentication logs"
+        ) from e
+
+
+# ---------------------------------------------------------------------------
+# Platform Health & Maintenance Endpoints
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/system/health",
+    response_model=SuccessResponse,
+    summary="Get System Health status",
+    dependencies=[Depends(require_role(UserRole.ADMIN))]
+)
+async def get_system_health(
+    monitor_service: SystemMonitorService = Depends(get_system_monitor_service)
+) -> SuccessResponse:
+    try:
+        health_data = await monitor_service.check_health()
+        return SuccessResponse(
+            success=True,
+            message="System health check completed successfully",
+            data={"services": [sh.model_dump() for sh in health_data]}
+        )
+    except Exception as e:
+        logger.exception("Failed to retrieve system health")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve system health"
+        ) from e
+
+
+@router.get(
+    "/system/jobs",
+    response_model=SuccessResponse,
+    summary="Get Background Jobs status",
+    dependencies=[Depends(require_role(UserRole.ADMIN))]
+)
+async def get_system_jobs(
+    monitor_service: SystemMonitorService = Depends(get_system_monitor_service)
+) -> SuccessResponse:
+    try:
+        jobs_data = await monitor_service.get_background_jobs()
+        return SuccessResponse(
+            success=True,
+            message="Background jobs retrieved successfully",
+            data=jobs_data.model_dump()
+        )
+    except Exception as e:
+        logger.exception("Failed to retrieve background jobs status")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve background jobs status"
+        ) from e
+
+
+@router.get(
+    "/system/info",
+    response_model=SuccessResponse,
+    summary="Get System Information details",
+    dependencies=[Depends(require_role(UserRole.ADMIN))]
+)
+async def get_system_info(
+    monitor_service: SystemMonitorService = Depends(get_system_monitor_service)
+) -> SuccessResponse:
+    try:
+        info_data = monitor_service.get_system_info()
+        return SuccessResponse(
+            success=True,
+            message="System information retrieved successfully",
+            data=info_data.model_dump()
+        )
+    except Exception as e:
+        logger.exception("Failed to retrieve system info")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve system info"
+        ) from e
+
+
+@router.post(
+    "/system/maintenance/clear-sessions",
+    response_model=SuccessResponse,
+    summary="Clear Expired Sessions"
+)
+async def clear_expired_sessions(
+    request: Request,
+    maintenance_service: MaintenanceService = Depends(get_maintenance_service),
+    audit_service: AuditLogService = Depends(get_audit_log_service),
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN))
+) -> SuccessResponse:
+    try:
+        deleted_count = await maintenance_service.clear_expired_sessions()
+        
+        # Log audit trail
+        audit_schema = AuditLogCreateSchema(
+            user_id=current_user.id,
+            action="ADMIN_MAINTENANCE_CLEAR_SESSIONS",
+            resource_type="system",
+            resource_id=None,
+            old_value=None,
+            new_value={"deleted_count": deleted_count},
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent")
+        )
+        await audit_service.create_log(audit_schema)
+        
+        return SuccessResponse(
+            success=True,
+            message=f"Expired sessions cleared successfully. Purged {deleted_count} tokens.",
+            data={"deleted_count": deleted_count}
+        )
+    except Exception as e:
+        logger.exception("Failed to clear expired sessions")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to clear expired sessions"
+        ) from e
+
+
+@router.post(
+    "/system/maintenance/clear-otps",
+    response_model=SuccessResponse,
+    summary="Clear Expired OTPs"
+)
+async def clear_expired_otps(
+    request: Request,
+    maintenance_service: MaintenanceService = Depends(get_maintenance_service),
+    audit_service: AuditLogService = Depends(get_audit_log_service),
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN))
+) -> SuccessResponse:
+    try:
+        deleted_count = await maintenance_service.clear_expired_otps()
+        
+        # Log audit trail
+        audit_schema = AuditLogCreateSchema(
+            user_id=current_user.id,
+            action="ADMIN_MAINTENANCE_CLEAR_OTPS",
+            resource_type="system",
+            resource_id=None,
+            old_value=None,
+            new_value={"deleted_count": deleted_count},
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent")
+        )
+        await audit_service.create_log(audit_schema)
+        
+        return SuccessResponse(
+            success=True,
+            message=f"Expired OTPs cleared successfully. Purged {deleted_count} records.",
+            data={"deleted_count": deleted_count}
+        )
+    except Exception as e:
+        logger.exception("Failed to clear expired OTPs")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to clear expired OTPs"
+        ) from e
+
+
+@router.post(
+    "/system/maintenance/archive-notifications",
+    response_model=SuccessResponse,
+    summary="Archive Old Notifications"
+)
+async def archive_notifications(
+    request: Request,
+    retention_days: int = 30,
+    maintenance_service: MaintenanceService = Depends(get_maintenance_service),
+    audit_service: AuditLogService = Depends(get_audit_log_service),
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN))
+) -> SuccessResponse:
+    try:
+        archived_count = await maintenance_service.archive_notifications(retention_days=retention_days)
+        
+        # Log audit trail
+        audit_schema = AuditLogCreateSchema(
+            user_id=current_user.id,
+            action="ADMIN_MAINTENANCE_ARCHIVE_NOTIFICATIONS",
+            resource_type="system",
+            resource_id=None,
+            old_value=None,
+            new_value={"archived_count": archived_count, "retention_days": retention_days},
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent")
+        )
+        await audit_service.create_log(audit_schema)
+        
+        return SuccessResponse(
+            success=True,
+            message=f"Notifications archived successfully. Moved {archived_count} records to backups.",
+            data={"archived_count": archived_count}
+        )
+    except Exception as e:
+        logger.exception("Failed to archive notifications")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to archive notifications"
+        ) from e
+
+
+@router.post(
+    "/system/maintenance/archive-audit-logs",
+    response_model=SuccessResponse,
+    summary="Archive Old Audit Logs"
+)
+async def archive_audit_logs(
+    request: Request,
+    retention_days: int = 90,
+    maintenance_service: MaintenanceService = Depends(get_maintenance_service),
+    audit_service: AuditLogService = Depends(get_audit_log_service),
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN))
+) -> SuccessResponse:
+    try:
+        archived_count = await maintenance_service.archive_audit_logs(retention_days=retention_days)
+        
+        # Log audit trail
+        audit_schema = AuditLogCreateSchema(
+            user_id=current_user.id,
+            action="ADMIN_MAINTENANCE_ARCHIVE_AUDIT_LOGS",
+            resource_type="system",
+            resource_id=None,
+            old_value=None,
+            new_value={"archived_count": archived_count, "retention_days": retention_days},
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent")
+        )
+        await audit_service.create_log(audit_schema)
+        
+        return SuccessResponse(
+            success=True,
+            message=f"Audit logs archived successfully. Moved {archived_count} records to backups.",
+            data={"archived_count": archived_count}
+        )
+    except Exception as e:
+        logger.exception("Failed to archive audit logs")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to archive audit logs"
         ) from e
 
 

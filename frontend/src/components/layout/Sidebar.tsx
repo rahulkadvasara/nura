@@ -21,6 +21,7 @@ import {
   Shield,
   Lock,
   BarChart3,
+  Cpu,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -55,6 +56,7 @@ export function Sidebar() {
         { name: 'Doctors', href: '/dashboard/admin/doctors', icon: Award },
         { name: 'Analytics', href: '/dashboard/admin/analytics', icon: BarChart3 },
         { name: 'System Logs', href: '/dashboard/admin/logs', icon: Activity },
+        { name: 'System Health', href: '/dashboard/admin/system', icon: Cpu },
         { name: 'Settings', href: '/dashboard/settings/profile', icon: Settings },
       ]
     }
