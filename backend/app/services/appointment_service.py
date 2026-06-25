@@ -116,7 +116,7 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
         current_time_str = ist_now.strftime("%H:%M")
         
         is_future_date = slot.date > current_date_str
-        is_future_time = slot.date == current_date_str and slot.start_time >= current_time_str
+        is_future_time = slot.date == current_date_str and slot.end_time >= current_time_str
         if not (is_future_date or is_future_time):
             raise ValueError("Cannot book an expired slot in the past")
 

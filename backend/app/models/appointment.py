@@ -39,6 +39,7 @@ class PaymentStatus(str, Enum):
     COMPLETED = "completed"
     REFUNDED = "refunded"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 # ---------------------------------------------------------------------------

@@ -36,7 +36,43 @@ export function useVerifyPayment() {
       queryClient.invalidateQueries({ queryKey: ['doctor', 'earnings'] })
       queryClient.invalidateQueries({ queryKey: ['doctor', 'wallet'] })
       queryClient.invalidateQueries({ queryKey: ['doctor', 'transactions'] })
+      queryClient.invalidateQueries({ queryKey: ['patient', 'payment-history'] })
     },
   })
 }
+
+export function useFailPayment() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ paymentId, errorDetails }: { paymentId: string; errorDetails?: any }) => {
+      const response = await paymentService.failPayment(paymentId, errorDetails)
+      if (response.success && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to record payment failure')
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appointments'] })
+      queryClient.invalidateQueries({ queryKey: ['patient', 'payment-history'] })
+    },
+  })
+}
+
+export function useCancelPayment() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (paymentId: string) => {
+      const response = await paymentService.cancelPayment(paymentId)
+      if (response.success && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to record payment cancellation')
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appointments'] })
+      queryClient.invalidateQueries({ queryKey: ['patient', 'payment-history'] })
+    },
+  })
+}
+
 

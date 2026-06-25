@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { useAppointments, useCancelAppointment } from '@/hooks/use-appointments'
 import { toast } from 'sonner'
-import { useCreatePaymentOrder, useVerifyPayment } from '@/hooks/use-payment'
+import { useCreatePaymentOrder, useVerifyPayment, useFailPayment, useCancelPayment } from '@/hooks/use-payment'
 import { useAuthStore } from '@/stores/auth'
 import {
   Dialog,
@@ -53,6 +53,8 @@ function AppointmentsContent() {
 
   const { mutateAsync: createPaymentOrder } = useCreatePaymentOrder()
   const { mutateAsync: verifyPayment } = useVerifyPayment()
+  const { mutateAsync: failPayment } = useFailPayment()
+  const { mutateAsync: cancelPayment } = useCancelPayment()
   const { user } = useAuthStore()
   
   const [payingId, setPayingId] = useState<string | null>(null)
@@ -118,15 +120,31 @@ function AppointmentsContent() {
           color: '#0d9488',
         },
         modal: {
-          ondismiss: () => {
-            toast.error('Payment checkout closed.')
+          ondismiss: async () => {
+            try {
+              await cancelPayment(res.payment_id)
+              toast.error('Payment checkout closed. Order cancelled.')
+              refetch()
+            } catch (err) {
+              console.error('Cancel payment error:', err)
+            }
           }
         }
       }
 
       const rzp = new (window as any).Razorpay(options)
-      rzp.on('payment.failed', function (response: any) {
-        toast.error(`Checkout payment failed: ${response.error.description || 'Gateway error'}`)
+      rzp.on('payment.failed', async function (response: any) {
+        console.error('Razorpay payment failed callback:', response)
+        try {
+          await failPayment({
+            paymentId: res.payment_id,
+            errorDetails: response.error,
+          })
+          toast.error(`Checkout payment failed: ${response.error.description || 'Gateway error'}`)
+          refetch()
+        } catch (err) {
+          console.error('Fail payment error:', err)
+        }
       })
       rzp.open()
 
@@ -329,6 +347,20 @@ function AppointmentsContent() {
                         </div>
                       </div>
                     )}
+
+                    {!isPaid(appt) && appt.payment_status && (
+                      <div className="flex flex-col gap-0.5 ml-1">
+                        {appt.payment_status === 'failed' && (
+                          <Badge className="bg-rose-50 text-rose-700 border-rose-200">Failed</Badge>
+                        )}
+                        {appt.payment_status === 'cancelled' && (
+                          <Badge className="bg-slate-50 text-slate-600 border-slate-200">Cancelled</Badge>
+                        )}
+                        {appt.payment_status === 'created' && (
+                          <Badge className="bg-amber-50 text-amber-700 border-amber-200">Created</Badge>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {appt.razorpay_payment_id && isPaid(appt) && (
@@ -363,10 +395,10 @@ function AppointmentsContent() {
                       variant="default"
                       size="sm"
                       onClick={() => handlePayNow(appt)}
-                      disabled={payingId === appt.id}
+                      disabled={payingId !== null}
                       className="bg-teal-600 hover:bg-teal-700 text-white text-xs shrink-0 flex items-center gap-1 h-9 px-3 rounded-lg font-semibold shadow-sm"
                     >
-                      {payingId === appt.id ? 'Initializing...' : 'Pay Now'}
+                      {payingId === appt.id ? 'Initializing...' : (appt.payment_status === 'failed' || appt.payment_status === 'cancelled' ? 'Retry Payment' : 'Pay Now')}
                     </Button>
                   )}
 

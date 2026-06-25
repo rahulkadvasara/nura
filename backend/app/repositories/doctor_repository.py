@@ -215,7 +215,7 @@ class DoctorAvailabilityRepository(
 
     async def get_active_by_doctor_id(self, doctor_id: str) -> List[DoctorAvailabilityInDB]:
         """Return only active availability records for a given doctor."""
-        return await self.get_many({"doctor_id": doctor_id, "active": True})
+        return await self.get_many({"doctor_id": doctor_id, "active": {"$ne": False}})
 
     async def get_by_doctor_and_day(
         self,

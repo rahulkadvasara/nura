@@ -190,17 +190,10 @@ class DoctorProfileService(BaseService[DoctorProfileInDB, DoctorProfileCreate, D
         schema: DoctorProfileUpdateSchema,
     ) -> Optional[DoctorProfileInDB]:
         """Update non-status fields of a doctor profile."""
-        update = DoctorProfileUpdate(
-            specialization=schema.specialization,
-            qualifications=None,
-            experience_years=schema.experience_years,
-            consultation_fee=schema.consultation_fee,
-            bio=schema.bio,
-            languages=schema.languages,
-            hospital=schema.hospital,
-            license_number=schema.license_number,
-            education=schema.education,
-        )
+        update_data = schema.model_dump(exclude_unset=True)
+        update_data = {k: v for k, v in update_data.items() if v is not None}
+        update_data.pop("qualifications", None)
+        update = DoctorProfileUpdate(**update_data)
         return await self.profile_repository.update(profile_id, update)
 
     async def update_doctor_profile_management(
@@ -209,13 +202,9 @@ class DoctorProfileService(BaseService[DoctorProfileInDB, DoctorProfileCreate, D
         schema: DoctorProfileManagementUpdateSchema,
     ) -> Optional[DoctorProfileInDB]:
         """Update only the allowed practitioner self-managed fields of a doctor profile."""
-        update = DoctorProfileUpdate(
-            experience_years=schema.experience_years,
-            consultation_fee=schema.consultation_fee,
-            bio=schema.bio,
-            languages=schema.languages,
-            education=schema.education,
-        )
+        update_data = schema.model_dump(exclude_unset=True)
+        update_data = {k: v for k, v in update_data.items() if v is not None}
+        update = DoctorProfileUpdate(**update_data)
         return await self.profile_repository.update(profile_id, update)
 
     async def verify_profile(self, profile_id: str) -> Optional[DoctorProfileInDB]:
@@ -418,10 +407,9 @@ class DoctorDocumentService(BaseService[DoctorDocumentInDB, DoctorDocumentCreate
         schema: DoctorDocumentUpdateSchema,
     ) -> Optional[DoctorDocumentInDB]:
         """Update a document's metadata (does not change verification status)."""
-        update = DoctorDocumentUpdate(
-            document_type=schema.document_type,
-            document_url=schema.document_url,
-        )
+        update_data = schema.model_dump(exclude_unset=True)
+        update_data = {k: v for k, v in update_data.items() if v is not None}
+        update = DoctorDocumentUpdate(**update_data)
         return await self.document_repository.update(document_id, update)
 
     async def approve_document(
@@ -636,15 +624,9 @@ class DoctorAvailabilityService(
         if schema.date is not None or schema.start_time is not None or schema.end_time is not None:
             await self._check_overlaps(existing.doctor_id, date_str, start, end, exclude_id=availability_id)
 
-        update = DoctorAvailabilityUpdate(
-            date=schema.date,
-            day_of_week=schema.day_of_week,
-            start_time=schema.start_time,
-            end_time=schema.end_time,
-            slot_duration=schema.slot_duration,
-            is_available=schema.is_available,
-            active=schema.active,
-        )
+        update_data = schema.model_dump(exclude_unset=True)
+        update_data = {k: v for k, v in update_data.items() if v is not None}
+        update = DoctorAvailabilityUpdate(**update_data)
         return await self.availability_repository.update(availability_id, update)
 
     async def deactivate_availability(self, availability_id: str) -> Optional[DoctorAvailabilityInDB]:

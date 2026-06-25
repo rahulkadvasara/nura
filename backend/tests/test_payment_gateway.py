@@ -195,7 +195,8 @@ class TestPaymentGatewayService:
         assert payment.razorpay_order_id == "order_test_123"
         assert payment.doctor_id == sample_doctor_profile.user_id
         
-        app_repo.get.assert_called_once_with(sample_appointment.id)
+        assert app_repo.get.call_count == 2
+        app_repo.get.assert_any_call(sample_appointment.id)
         doc_profile_repo.get.assert_called_once_with(sample_appointment.doctor_id)
         audit_service.create_log.assert_called_once()
 
@@ -236,6 +237,7 @@ class TestPaymentGatewayService:
         pay_repo = AsyncMock()
         pay_repo.get_by_filter = AsyncMock(return_value=sample_payment)
         pay_repo.update = AsyncMock(return_value=success_payment)
+        pay_repo.get_many = AsyncMock(return_value=[])
 
         app_repo = AsyncMock()
         app_repo.get = AsyncMock(return_value=sample_appointment)
@@ -312,6 +314,7 @@ class TestPaymentGatewayService:
     ):
         pay_repo = AsyncMock()
         pay_repo.get_by_filter = AsyncMock(return_value=sample_payment)
+        pay_repo.get_many = AsyncMock(return_value=[])
         
         service = PaymentGatewayService(
             payment_repository=pay_repo,
@@ -351,6 +354,7 @@ class TestPaymentGatewayService:
         pay_repo = AsyncMock()
         pay_repo.get_by_filter = AsyncMock(return_value=sample_payment)
         pay_repo.update = AsyncMock()
+        pay_repo.get_many = AsyncMock(return_value=[])
 
         app_repo = AsyncMock()
         app_repo.get = AsyncMock(return_value=sample_appointment)
@@ -389,3 +393,188 @@ class TestPaymentGatewayService:
         assert not app_repo.update.called
         assert not audit_service.create_log.called
         assert not notif_service.create_notification.called
+
+    @pytest.mark.asyncio
+    async def test_fail_payment_success(self, sample_patient_user, sample_payment, sample_appointment):
+        pay_repo = AsyncMock()
+        pay_repo.get = AsyncMock(return_value=sample_payment)
+        
+        failed_payment = sample_payment.model_copy(update={"payment_status": PaymentStatus.FAILED})
+        pay_repo.update = AsyncMock(return_value=failed_payment)
+
+        app_repo = AsyncMock()
+        app_repo.update = AsyncMock()
+
+        audit_service = AsyncMock()
+
+        service = PaymentGatewayService(
+            payment_repository=pay_repo,
+            appointment_repository=app_repo,
+            doctor_profile_repository=AsyncMock(),
+            doctor_wallet_repository=AsyncMock(),
+            notification_service=AsyncMock(),
+            user_repository=AsyncMock(),
+            audit_log_service=audit_service,
+        )
+
+        result = await service.fail_payment(
+            payment_id=sample_payment.id,
+            current_user_id=sample_patient_user.id,
+            error_details={"code": "BAD_REQUEST", "description": "Closed by user"}
+        )
+
+        assert result.payment_status == PaymentStatus.FAILED
+        pay_repo.update.assert_called_once()
+        app_repo.update.assert_called_once()
+        
+        # Verify PAYMENT_FAILED audit logged
+        audit_service.create_log.assert_called_once()
+        assert audit_service.create_log.call_args[0][0].action == "PAYMENT_FAILED"
+
+    @pytest.mark.asyncio
+    async def test_cancel_payment_success(self, sample_patient_user, sample_payment, sample_appointment):
+        pay_repo = AsyncMock()
+        pay_repo.get = AsyncMock(return_value=sample_payment)
+        
+        cancelled_payment = sample_payment.model_copy(update={"payment_status": PaymentStatus.CANCELLED})
+        pay_repo.update = AsyncMock(return_value=cancelled_payment)
+
+        app_repo = AsyncMock()
+        app_repo.update = AsyncMock()
+
+        audit_service = AsyncMock()
+
+        service = PaymentGatewayService(
+            payment_repository=pay_repo,
+            appointment_repository=app_repo,
+            doctor_profile_repository=AsyncMock(),
+            doctor_wallet_repository=AsyncMock(),
+            notification_service=AsyncMock(),
+            user_repository=AsyncMock(),
+            audit_log_service=audit_service,
+        )
+
+        result = await service.cancel_payment(
+            payment_id=sample_payment.id,
+            current_user_id=sample_patient_user.id
+        )
+
+        assert result.payment_status == PaymentStatus.CANCELLED
+        pay_repo.update.assert_called_once()
+        app_repo.update.assert_called_once()
+        
+        # Verify PAYMENT_CANCELLED audit logged
+        audit_service.create_log.assert_called_once()
+        assert audit_service.create_log.call_args[0][0].action == "PAYMENT_CANCELLED"
+
+    @pytest.mark.asyncio
+    @patch("razorpay.Client")
+    async def test_create_payment_order_retry(
+        self, mock_razorpay_client, sample_patient_user, sample_doctor_profile, sample_appointment, sample_payment
+    ):
+        # Existing failed payment
+        sample_payment.payment_status = PaymentStatus.FAILED
+        
+        pay_repo = AsyncMock()
+        async def mock_get_many(q):
+            in_list = q.get("payment_status", {}).get("$in", [])
+            if PaymentStatus.SUCCESS in in_list or PaymentStatus.CREATED in in_list:
+                return []
+            if PaymentStatus.FAILED in in_list:
+                return [sample_payment]
+            return []
+        pay_repo.get_many = AsyncMock(side_effect=mock_get_many)
+        pay_repo.collection = MagicMock()
+        pay_repo.collection.insert_one = AsyncMock(
+            return_value=MagicMock(inserted_id=ObjectId("507f1f77bcf86cd799439080"))
+        )
+        pay_repo.collection.find_one = AsyncMock(return_value={
+            "_id": ObjectId("507f1f77bcf86cd799439080"),
+            "appointment_id": sample_appointment.id,
+            "patient_id": sample_patient_user.id,
+            "doctor_id": sample_doctor_profile.user_id,
+            "amount": 500.0,
+            "platform_fee": 75.0,
+            "doctor_amount": 425.0,
+            "currency": "INR",
+            "payment_method": "razorpay",
+            "payment_status": "created",
+            "razorpay_order_id": "order_test_retry_123",
+            "escrow_held": False,
+            "created_at": utc_now(),
+            "updated_at": utc_now(),
+        })
+
+        app_repo = AsyncMock()
+        app_repo.get = AsyncMock(return_value=sample_appointment)
+        app_repo.update = AsyncMock()
+
+        doc_profile_repo = AsyncMock()
+        doc_profile_repo.get = AsyncMock(return_value=sample_doctor_profile)
+
+        audit_service = AsyncMock()
+
+        service = PaymentGatewayService(
+            payment_repository=pay_repo,
+            appointment_repository=app_repo,
+            doctor_profile_repository=doc_profile_repo,
+            doctor_wallet_repository=AsyncMock(),
+            notification_service=AsyncMock(),
+            user_repository=AsyncMock(),
+            audit_log_service=audit_service,
+        )
+
+        service.razorpay_client.order.create = MagicMock(return_value={"id": "order_test_retry_123"})
+
+        payment, appt = await service.create_payment_order(
+            appointment_id=sample_appointment.id,
+            current_user_id=sample_patient_user.id,
+        )
+
+        assert payment.razorpay_order_id == "order_test_retry_123"
+        # Verify PAYMENT_RETRY_CREATED audit was logged
+        audit_service.create_log.assert_called_once()
+        assert audit_service.create_log.call_args[0][0].action == "PAYMENT_RETRY_CREATED"
+
+    @pytest.mark.asyncio
+    @patch("razorpay.Client")
+    async def test_create_payment_order_idempotent_duplicate(
+        self, mock_razorpay_client, sample_patient_user, sample_appointment, sample_payment
+    ):
+        # Existing created order
+        sample_payment.payment_status = PaymentStatus.CREATED
+        
+        pay_repo = AsyncMock()
+        async def mock_get_many(q):
+            in_list = q.get("payment_status", {}).get("$in", [])
+            if PaymentStatus.SUCCESS in in_list:
+                return []
+            if PaymentStatus.CREATED in in_list:
+                return [sample_payment]
+            return []
+        pay_repo.get_many = AsyncMock(side_effect=mock_get_many)
+
+        app_repo = AsyncMock()
+        app_repo.get = AsyncMock(return_value=sample_appointment)
+
+        service = PaymentGatewayService(
+            payment_repository=pay_repo,
+            appointment_repository=app_repo,
+            doctor_profile_repository=AsyncMock(),
+            doctor_wallet_repository=AsyncMock(),
+            notification_service=AsyncMock(),
+            user_repository=AsyncMock(),
+            audit_log_service=AsyncMock(),
+        )
+
+        # Call create order and verify it returns existing instead of throwing an error
+        payment, appt = await service.create_payment_order(
+            appointment_id=sample_appointment.id,
+            current_user_id=sample_patient_user.id
+        )
+
+        assert payment.id == sample_payment.id
+        assert payment.payment_status == PaymentStatus.CREATED
+        # Ensure Razorpay client create was NOT called
+        assert not mock_razorpay_client.return_value.order.create.called
+

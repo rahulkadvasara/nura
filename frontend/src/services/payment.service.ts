@@ -2,6 +2,7 @@ import apiClient from '@/lib/axios'
 import { ApiResponse, Appointment } from '@/types'
 
 export interface PaymentOrderResponse {
+  payment_id: string
   razorpay_order_id: string
   amount: number
   currency: string
@@ -55,6 +56,18 @@ export const paymentService = {
 
   verifyPayment: async (payload: PaymentVerifyRequest): Promise<ApiResponse<PaymentVerifyResponse>> => {
     const response = await apiClient.post<ApiResponse<PaymentVerifyResponse>>('/payments/verify', payload)
+    return response.data
+  },
+
+  failPayment: async (paymentId: string, errorDetails?: any): Promise<ApiResponse<any>> => {
+    const response = await apiClient.post<ApiResponse<any>>(`/payments/${paymentId}/fail`, {
+      error_details: errorDetails,
+    })
+    return response.data
+  },
+
+  cancelPayment: async (paymentId: string): Promise<ApiResponse<any>> => {
+    const response = await apiClient.post<ApiResponse<any>>(`/payments/${paymentId}/cancel`)
     return response.data
   },
 }

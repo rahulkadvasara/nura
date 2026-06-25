@@ -137,7 +137,7 @@ async def get_doctor_availability(
 
             # Expiration date/time checks
             is_future_date = slot.date > current_date_str
-            is_future_time = slot.date == current_date_str and slot.start_time >= current_time_str
+            is_future_time = slot.date == current_date_str and slot.end_time >= current_time_str
 
             if is_future_date or is_future_time:
                 future_available_slots.append(availability_service.to_response(slot))

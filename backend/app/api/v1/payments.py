@@ -51,6 +51,7 @@ async def create_payment_order(
         )
         
         response_data = {
+            "payment_id": payment.id,
             "razorpay_order_id": payment.razorpay_order_id,
             "amount": payment.amount,
             "currency": payment.currency,
@@ -133,6 +134,92 @@ async def verify_payment(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to verify payment",
+        ) from exc
+
+
+class PaymentFailureRequest(BaseModel):
+    error_details: Optional[dict] = Field(default=None, description="Optional payment gateway error payload details")
+
+
+@router.post(
+    "/{payment_id}/fail",
+    response_model=SuccessResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Record Payment Failure",
+    description="Marks a payment record as failed due to gateway error.",
+)
+async def fail_payment(
+    payment_id: str,
+    payload: PaymentFailureRequest,
+    current_user: UserInDB = Depends(require_exact_patient),
+    payment_gateway_service: PaymentGatewayService = Depends(get_payment_gateway_service),
+) -> SuccessResponse:
+    try:
+        payment = await payment_gateway_service.fail_payment(
+            payment_id=payment_id,
+            current_user_id=current_user.id,
+            error_details=payload.error_details,
+        )
+        return SuccessResponse(
+            success=True,
+            message="Payment failure recorded successfully",
+            data={"payment_id": payment.id, "payment_status": payment.payment_status},
+        )
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Failed to record payment failure")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to record payment failure",
+        ) from exc
+
+
+@router.post(
+    "/{payment_id}/cancel",
+    response_model=SuccessResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Record Payment Cancellation",
+    description="Marks a payment record as cancelled due to user dismissal.",
+)
+async def cancel_payment(
+    payment_id: str,
+    current_user: UserInDB = Depends(require_exact_patient),
+    payment_gateway_service: PaymentGatewayService = Depends(get_payment_gateway_service),
+) -> SuccessResponse:
+    try:
+        payment = await payment_gateway_service.cancel_payment(
+            payment_id=payment_id,
+            current_user_id=current_user.id,
+        )
+        return SuccessResponse(
+            success=True,
+            message="Payment cancellation recorded successfully",
+            data={"payment_id": payment.id, "payment_status": payment.payment_status},
+        )
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Failed to record payment cancellation")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to record payment cancellation",
         ) from exc
 
 

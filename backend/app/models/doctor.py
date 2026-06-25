@@ -124,6 +124,10 @@ class DoctorProfileInDB(DoctorProfileBase):
         # Normalise ObjectId references stored as bson.ObjectId
         if "user_id" in doc and not isinstance(doc["user_id"], str):
             doc["user_id"] = str(doc["user_id"])
+        if doc.get("qualifications") is None:
+            doc["qualifications"] = []
+        if doc.get("languages") is None:
+            doc["languages"] = []
         return cls(**doc)
 
 
@@ -243,4 +247,8 @@ class DoctorAvailabilityInDB(DoctorAvailabilityBase):
             doc["id"] = str(doc.pop("_id"))
         if "doctor_id" in doc and not isinstance(doc["doctor_id"], str):
             doc["doctor_id"] = str(doc["doctor_id"])
+        if doc.get("active") is None:
+            doc["active"] = True
+        if doc.get("is_available") is None:
+            doc["is_available"] = True
         return cls(**doc)

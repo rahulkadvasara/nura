@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from typing import Optional, Tuple, Any, Dict
 
 import razorpay
+from bson import ObjectId
 
 from app.core.config import settings
 from app.models.payment import (
@@ -90,19 +91,30 @@ class PaymentGatewayService(BaseService[PaymentInDB, PaymentCreate, Any]):
             else:
                 raise ValueError("Appointment is not approved for payment")
 
-        # 4. Check if already paid
-        if appointment.payment_status in (AppPaymentStatus.COMPLETED, AppPaymentStatus.APPROVED, AppPaymentStatus.PAID):
+        # 4. Check if already paid (Raise ValueError if any successful payment exists)
+        successful_payments = await self.payment_repository.get_many({
+            "appointment_id": appointment_id,
+            "payment_status": {"$in": [PaymentStatus.SUCCESS, PaymentStatus.APPROVED, PaymentStatus.COMPLETED]}
+        })
+        if successful_payments or appointment.payment_status in (AppPaymentStatus.COMPLETED, AppPaymentStatus.APPROVED, AppPaymentStatus.PAID):
             raise ValueError("Appointment has already been paid")
 
-        # 5. Prevent duplicate pending payment orders
+        # 5. Prevent duplicate pending payment orders (Return existing active order for browser refresh/double-click)
         existing_orders = await self.payment_repository.get_many({
             "appointment_id": appointment_id,
             "payment_status": {"$in": [PaymentStatus.CREATED, PaymentStatus.PENDING]}
         })
         if existing_orders:
-            raise ValueError("A pending payment order already exists for this appointment")
+            return existing_orders[0], appointment
 
-        # 6. Amount validation
+        # 6. Check if this is a retry (has historical failed or cancelled payments)
+        prior_payments = await self.payment_repository.get_many({
+            "appointment_id": appointment_id,
+            "payment_status": {"$in": [PaymentStatus.FAILED, PaymentStatus.CANCELLED]}
+        })
+        is_retry = len(prior_payments) > 0
+
+        # 7. Amount validation
         amount = appointment.consultation_fee
         if amount <= 0:
             raise ValueError("Invalid appointment consultation fee amount")
@@ -113,8 +125,7 @@ class PaymentGatewayService(BaseService[PaymentInDB, PaymentCreate, Any]):
             raise ValueError("Doctor profile associated with appointment not found")
         doctor_user_id = doctor_profile.user_id
 
-        # 7. Create Razorpay Order (async thread)
-        # Note: Razorpay amount is in paise (1 INR = 100 paise)
+        # 8. Create Razorpay Order (async thread)
         amount_in_paise = int(round(amount * 100))
         
         order_data = {
@@ -141,7 +152,7 @@ class PaymentGatewayService(BaseService[PaymentInDB, PaymentCreate, Any]):
         if not razorpay_order_id:
             raise RuntimeError("Failed to retrieve Razorpay Order ID from gateway response")
 
-        # 8. Store the Payment Order with status = CREATED
+        # 9. Store the Payment Order with status = CREATED
         doctor_amount, platform_fee = PaymentService.calculate_revenue_split(amount)
         now = utc_now()
         
@@ -171,11 +182,18 @@ class PaymentGatewayService(BaseService[PaymentInDB, PaymentCreate, Any]):
 
         payment_record = PaymentInDB.from_mongo(created_payment)
 
-        # 9. Audit Event: PAYMENT_ORDER_CREATED
+        # 10. Update Appointment's payment status to CREATED
+        from app.schemas.appointment import AppointmentUpdateSchema
+        app_update = AppointmentUpdateSchema(payment_status=AppPaymentStatus.CREATED)
+        await self.appointment_repository.update(appointment.id, app_update)
+        appointment = await self.appointment_repository.get(appointment_id)
+
+        # 11. Audit Event: PAYMENT_ORDER_CREATED or PAYMENT_RETRY_CREATED
+        action_name = "PAYMENT_RETRY_CREATED" if is_retry else "PAYMENT_ORDER_CREATED"
         try:
             audit_schema = AuditLogCreateSchema(
                 user_id=current_user_id,
-                action="PAYMENT_ORDER_CREATED",
+                action=action_name,
                 resource_type="payments",
                 resource_id=payment_record.id,
                 old_value=None,
@@ -187,7 +205,7 @@ class PaymentGatewayService(BaseService[PaymentInDB, PaymentCreate, Any]):
             )
             await self.audit_log_service.create_log(audit_schema)
         except Exception:
-            logger.exception("Failed to write audit log for payment order creation")
+            logger.exception(f"Failed to write audit log for {action_name}")
 
         return payment_record, appointment
 
@@ -215,7 +233,7 @@ class PaymentGatewayService(BaseService[PaymentInDB, PaymentCreate, Any]):
         if payment_record.patient_id != current_user_id:
             raise PermissionError("Unauthorized patient access to payment verification")
 
-        # 3. Idempotency Check: if already verified, return successful response immediately
+        # 3. Prevent duplicate success: if already verified successfully, return response immediately
         if payment_record.payment_status == PaymentStatus.SUCCESS:
             appointment = await self.appointment_repository.get(payment_record.appointment_id)
             wallet = await self.doctor_wallet_repository.get_by_doctor_id(payment_record.doctor_id)
@@ -237,6 +255,15 @@ class PaymentGatewayService(BaseService[PaymentInDB, PaymentCreate, Any]):
             
             return payment_record, appointment, wallet_summary, revenue_split
 
+        # Check if there is another successful payment for this appointment (Duplicate verify prevention)
+        other_success = await self.payment_repository.get_many({
+            "appointment_id": payment_record.appointment_id,
+            "payment_status": {"$in": [PaymentStatus.SUCCESS, PaymentStatus.APPROVED, PaymentStatus.COMPLETED]},
+            "_id": {"$ne": ObjectId(payment_record.id) if isinstance(payment_record.id, str) else payment_record.id}
+        })
+        if other_success:
+            raise ValueError("Appointment has already been paid under a different order")
+
         # 4. Verify Signature
         params_dict = {
             'razorpay_order_id': razorpay_order_id,
@@ -250,6 +277,28 @@ class PaymentGatewayService(BaseService[PaymentInDB, PaymentCreate, Any]):
                 params_dict
             )
         except Exception as exc:
+            # Transition payment record to FAILED
+            await self.payment_repository.update(payment_record.id, PaymentUpdate(payment_status=PaymentStatus.FAILED))
+            
+            # Transition appointment payment status to FAILED
+            from app.schemas.appointment import AppointmentUpdateSchema
+            app_update = AppointmentUpdateSchema(payment_status=AppPaymentStatus.FAILED)
+            await self.appointment_repository.update(payment_record.appointment_id, app_update)
+            
+            # Audit log: PAYMENT_FAILED
+            try:
+                audit_schema = AuditLogCreateSchema(
+                    user_id=current_user_id,
+                    action="PAYMENT_FAILED",
+                    resource_type="payments",
+                    resource_id=payment_record.id,
+                    old_value={"payment_status": "created"},
+                    new_value={"payment_status": "failed", "error": str(exc)}
+                )
+                await self.audit_log_service.create_log(audit_schema)
+            except Exception:
+                logger.exception("Failed to write PAYMENT_FAILED audit log")
+                
             raise ValueError(f"Invalid payment signature: {str(exc)}")
 
         # 5. Fetch and validate appointment
@@ -260,6 +309,13 @@ class PaymentGatewayService(BaseService[PaymentInDB, PaymentCreate, Any]):
         # 6. Reject if cancelled
         if appointment.status == AppointmentStatus.CANCELLED:
             raise ValueError("Cannot verify payment for a cancelled appointment")
+
+        # Check if there were any previous failures/cancellations for this appointment (to log retry success)
+        prior_failures = await self.payment_repository.get_many({
+            "appointment_id": payment_record.appointment_id,
+            "payment_status": {"$in": [PaymentStatus.FAILED, PaymentStatus.CANCELLED]}
+        })
+        is_retry_success = len(prior_failures) > 0
 
         # 7. Update payment status to SUCCESS
         now = utc_now()
@@ -275,7 +331,6 @@ class PaymentGatewayService(BaseService[PaymentInDB, PaymentCreate, Any]):
 
         # 8. Update appointment payment_status = PAID
         from app.schemas.appointment import AppointmentUpdateSchema
-        from app.models.appointment import PaymentStatus as AppPaymentStatus
         app_update = AppointmentUpdateSchema(payment_status=AppPaymentStatus.PAID)
         await self.appointment_repository.update(appointment.id, app_update)
         appointment = await self.appointment_repository.get(payment_record.appointment_id)
@@ -335,11 +390,12 @@ class PaymentGatewayService(BaseService[PaymentInDB, PaymentCreate, Any]):
         }
 
         # 10. Audit Logs
-        # PAYMENT_VERIFIED
+        # PAYMENT_VERIFIED or PAYMENT_RETRY_SUCCESS
+        success_action = "PAYMENT_RETRY_SUCCESS" if is_retry_success else "PAYMENT_VERIFIED"
         try:
             audit_schema = AuditLogCreateSchema(
                 user_id=current_user_id,
-                action="PAYMENT_VERIFIED",
+                action=success_action,
                 resource_type="payments",
                 resource_id=payment_record.id,
                 old_value={"payment_status": "created"},
@@ -347,7 +403,7 @@ class PaymentGatewayService(BaseService[PaymentInDB, PaymentCreate, Any]):
             )
             await self.audit_log_service.create_log(audit_schema)
         except Exception:
-            logger.exception("Failed to write PAYMENT_VERIFIED audit log")
+            logger.exception(f"Failed to write {success_action} audit log")
 
         # WALLET_UPDATED
         try:
@@ -427,3 +483,101 @@ class PaymentGatewayService(BaseService[PaymentInDB, PaymentCreate, Any]):
             logger.exception("Failed to send doctor payment received notification")
 
         return updated_payment, appointment, wallet_summary, revenue_split
+
+    async def fail_payment(
+        self,
+        payment_id: str,
+        current_user_id: str,
+        error_details: Optional[dict] = None,
+    ) -> PaymentInDB:
+        """
+        Marks a payment record as failed (e.g. checkout reported error).
+        """
+        payment = await self.payment_repository.get(payment_id)
+        if not payment:
+            raise ValueError("Payment record not found")
+            
+        if payment.patient_id != current_user_id:
+            raise PermissionError("Unauthorized patient access to payment record")
+            
+        if payment.payment_status in (PaymentStatus.SUCCESS, PaymentStatus.APPROVED, PaymentStatus.COMPLETED):
+            raise ValueError("Cannot fail a payment that is already successful")
+            
+        now = utc_now()
+        payment_update = PaymentUpdate(
+            payment_status=PaymentStatus.FAILED,
+            gateway_response=error_details,
+            verified_at=now,
+        )
+        updated_payment = await self.payment_repository.update(payment_id, payment_update)
+        if not updated_payment:
+            raise RuntimeError("Failed to update payment status")
+            
+        # Update appointment payment status
+        from app.schemas.appointment import AppointmentUpdateSchema
+        app_update = AppointmentUpdateSchema(payment_status=AppPaymentStatus.FAILED)
+        await self.appointment_repository.update(payment.appointment_id, app_update)
+        
+        # Audit Log: PAYMENT_FAILED
+        try:
+            audit_schema = AuditLogCreateSchema(
+                user_id=current_user_id,
+                action="PAYMENT_FAILED",
+                resource_type="payments",
+                resource_id=payment_id,
+                old_value={"payment_status": payment.payment_status.value if hasattr(payment.payment_status, "value") else payment.payment_status},
+                new_value={"payment_status": "failed", "error_details": error_details}
+            )
+            await self.audit_log_service.create_log(audit_schema)
+        except Exception:
+            logger.exception("Failed to write audit log for payment failure")
+            
+        return updated_payment
+
+    async def cancel_payment(
+        self,
+        payment_id: str,
+        current_user_id: str,
+    ) -> PaymentInDB:
+        """
+        Marks a payment record as cancelled (e.g. user dismissed checkout modal).
+        """
+        payment = await self.payment_repository.get(payment_id)
+        if not payment:
+            raise ValueError("Payment record not found")
+            
+        if payment.patient_id != current_user_id:
+            raise PermissionError("Unauthorized patient access to payment record")
+            
+        if payment.payment_status in (PaymentStatus.SUCCESS, PaymentStatus.APPROVED, PaymentStatus.COMPLETED):
+            raise ValueError("Cannot cancel a payment that is already successful")
+            
+        now = utc_now()
+        payment_update = PaymentUpdate(
+            payment_status=PaymentStatus.CANCELLED,
+            verified_at=now,
+        )
+        updated_payment = await self.payment_repository.update(payment_id, payment_update)
+        if not updated_payment:
+            raise RuntimeError("Failed to update payment status")
+            
+        # Update appointment payment status
+        from app.schemas.appointment import AppointmentUpdateSchema
+        app_update = AppointmentUpdateSchema(payment_status=AppPaymentStatus.CANCELLED)
+        await self.appointment_repository.update(payment.appointment_id, app_update)
+        
+        # Audit Log: PAYMENT_CANCELLED
+        try:
+            audit_schema = AuditLogCreateSchema(
+                user_id=current_user_id,
+                action="PAYMENT_CANCELLED",
+                resource_type="payments",
+                resource_id=payment_id,
+                old_value={"payment_status": payment.payment_status.value if hasattr(payment.payment_status, "value") else payment.payment_status},
+                new_value={"payment_status": "cancelled"}
+            )
+            await self.audit_log_service.create_log(audit_schema)
+        except Exception:
+            logger.exception("Failed to write audit log for payment cancellation")
+            
+        return updated_payment
