@@ -24,6 +24,7 @@ from app.repositories import (
     ConsultationRepository,
     PrescriptionRepository,
     PaymentRepository,
+    DoctorWalletRepository,
 )
 from app.services import (
     UserService,
@@ -210,6 +211,12 @@ def get_payment_repository() -> PaymentRepository:
     return PaymentRepository(database.payments)
 
 
+def get_doctor_wallet_repository() -> DoctorWalletRepository:
+    """Get DoctorWalletRepository instance"""
+    database = get_database()
+    return DoctorWalletRepository(database.doctor_wallets)
+
+
 def get_payment_service(
     payment_repository: PaymentRepository = Depends(get_payment_repository),
     appointment_repository: AppointmentRepository = Depends(get_appointment_repository),
@@ -222,10 +229,22 @@ def get_payment_service(
 def get_payment_gateway_service(
     payment_repository: PaymentRepository = Depends(get_payment_repository),
     appointment_repository: AppointmentRepository = Depends(get_appointment_repository),
+    doctor_profile_repository: DoctorProfileRepository = Depends(get_doctor_profile_repository),
+    doctor_wallet_repository: DoctorWalletRepository = Depends(get_doctor_wallet_repository),
+    notification_service: NotificationService = Depends(get_notification_service),
+    user_repository: UserRepository = Depends(get_user_repository),
     audit_log_service = Depends(get_audit_log_service),
 ) -> PaymentGatewayService:
     """Get PaymentGatewayService instance"""
-    return PaymentGatewayService(payment_repository, appointment_repository, audit_log_service)
+    return PaymentGatewayService(
+        payment_repository=payment_repository,
+        appointment_repository=appointment_repository,
+        doctor_profile_repository=doctor_profile_repository,
+        doctor_wallet_repository=doctor_wallet_repository,
+        notification_service=notification_service,
+        user_repository=user_repository,
+        audit_log_service=audit_log_service,
+    )
 
 
 reusable_oauth2 = HTTPBearer()

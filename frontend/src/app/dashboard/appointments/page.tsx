@@ -8,10 +8,28 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { useAppointments, useCancelAppointment } from '@/hooks/use-appointments'
 import { toast } from 'sonner'
-import { useCreatePaymentOrder } from '@/hooks/use-payment'
+import { useCreatePaymentOrder, useVerifyPayment } from '@/hooks/use-payment'
 import { useAuthStore } from '@/stores/auth'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
 
 type TabType = 'approved' | 'pending' | 'cancelled'
+
+interface ReceiptInfo {
+  transactionId: string
+  doctorShare: number
+  platformFee: number
+  totalAmount: number
+  doctorName: string
+  date: string
+  time: string
+}
 
 const loadRazorpayScript = () => {
   return new Promise((resolve) => {
@@ -34,8 +52,11 @@ function AppointmentsContent() {
   const [selectedCancelId, setSelectedCancelId] = useState<string | null>(null)
 
   const { mutateAsync: createPaymentOrder } = useCreatePaymentOrder()
+  const { mutateAsync: verifyPayment } = useVerifyPayment()
   const { user } = useAuthStore()
+  
   const [payingId, setPayingId] = useState<string | null>(null)
+  const [receiptDetails, setReceiptDetails] = useState<ReceiptInfo | null>(null)
 
   const handlePayNow = async (appt: any) => {
     try {
@@ -55,20 +76,38 @@ function AppointmentsContent() {
         name: 'Nura Healthcare',
         description: `Consultation fee for Dr. ${appt.doctor_name}`,
         order_id: res.razorpay_order_id,
-        handler: function (response: any) {
+        handler: async function (response: any) {
           console.log('Razorpay callback payload captured:', response)
-          toast.success('Payment completed successfully!')
           
-          alert(
-            `Payment Checkout Success!\n\n` +
-            `Captured Callback Payload:\n` +
-            `- Payment ID: ${response.razorpay_payment_id}\n` +
-            `- Order ID: ${response.razorpay_order_id}\n` +
-            `- Signature: ${response.razorpay_signature}\n\n` +
-            `(Note: Verification will be completed in Sprint 2)`
-          )
-          
-          refetch()
+          const verifyPromise = verifyPayment({
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_signature: response.razorpay_signature,
+          })
+
+          toast.promise(verifyPromise, {
+            loading: 'Verifying payment details securely...',
+            success: (data) => {
+              // Set receipt details from response
+              if (data && data.revenue_split_summary) {
+                setReceiptDetails({
+                  transactionId: response.razorpay_payment_id,
+                  doctorShare: data.revenue_split_summary.doctor_share,
+                  platformFee: data.revenue_split_summary.platform_share,
+                  totalAmount: data.revenue_split_summary.amount,
+                  doctorName: appt.doctor_name,
+                  date: appt.appointment_date,
+                  time: appt.appointment_time,
+                })
+              }
+              refetch()
+              return 'Payment verified and appointment confirmed!'
+            },
+            error: (err) => {
+              console.error('Verification failed:', err)
+              return err.message || 'Payment verification failed. Please contact support.'
+            }
+          })
         },
         prefill: {
           name: user?.full_name || '',
@@ -87,7 +126,7 @@ function AppointmentsContent() {
 
       const rzp = new (window as any).Razorpay(options)
       rzp.on('payment.failed', function (response: any) {
-        toast.error(`Checkout payment failed: ${response.error.description}`)
+        toast.error(`Checkout payment failed: ${response.error.description || 'Gateway error'}`)
       })
       rzp.open()
 
@@ -97,6 +136,22 @@ function AppointmentsContent() {
     } finally {
       setPayingId(null)
     }
+  }
+
+  const handleViewReceipt = (appt: any) => {
+    const totalAmount = appt.consultation_fee || 0
+    const doctorShare = totalAmount * 0.85
+    const platformFee = totalAmount * 0.15
+
+    setReceiptDetails({
+      transactionId: appt.razorpay_payment_id || 'N/A',
+      doctorShare,
+      platformFee,
+      totalAmount,
+      doctorName: appt.doctor_name,
+      date: appt.appointment_date,
+      time: appt.appointment_time,
+    })
   }
 
   const handleCancel = async (id: string) => {
@@ -150,6 +205,10 @@ function AppointmentsContent() {
       default:
         return <Badge>{status}</Badge>
     }
+  }
+
+  const isPaid = (appt: any) => {
+    return appt.payment_status === 'paid' || appt.payment_status === 'success' || appt.payment_status === 'completed'
   }
 
   return (
@@ -257,10 +316,26 @@ function AppointmentsContent() {
                       <span>{appt.appointment_time}</span>
                     </div>
                     {getStatusBadge(appt.status)}
-                    {appt.payment_status && appt.payment_status !== 'pending' && (
-                      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">Paid</Badge>
+                    
+                    {isPaid(appt) && (
+                      <div className="flex flex-col gap-0.5 ml-1">
+                        <div className="flex items-center gap-1.5">
+                          <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">Paid</Badge>
+                          {appt.verified_at && (
+                            <span className="text-[10px] text-slate-400">
+                              on {new Date(appt.verified_at).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     )}
                   </div>
+
+                  {appt.razorpay_payment_id && isPaid(appt) && (
+                    <div className="text-[10px] font-mono text-slate-500 bg-slate-50 border border-slate-100 rounded px-1.5 py-0.5 w-fit">
+                      Txn ID: {appt.razorpay_payment_id}
+                    </div>
+                  )}
 
                   {appt.reason && (
                     <p className="text-xs text-slate-600 bg-slate-50 border border-slate-100 rounded px-2.5 py-1.5 leading-relaxed max-w-2xl">
@@ -269,35 +344,150 @@ function AppointmentsContent() {
                   )}
                 </div>
 
-                {appt.status === 'pending' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleCancel(appt.id)}
-                    disabled={isCancelling && selectedCancelId === appt.id}
-                    className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 text-xs shrink-0 flex items-center gap-1 h-9 px-3 rounded-lg"
-                  >
-                    <XCircle className="h-3.5 w-3.5" />
-                    {isCancelling && selectedCancelId === appt.id ? 'Cancelling...' : 'Cancel Request'}
-                  </Button>
-                )}
+                <div className="flex gap-2 shrink-0">
+                  {appt.status === 'pending' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleCancel(appt.id)}
+                      disabled={isCancelling && selectedCancelId === appt.id}
+                      className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 text-xs shrink-0 flex items-center gap-1 h-9 px-3 rounded-lg"
+                    >
+                      <XCircle className="h-3.5 w-3.5" />
+                      {isCancelling && selectedCancelId === appt.id ? 'Cancelling...' : 'Cancel Request'}
+                    </Button>
+                  )}
 
-                {appt.status === 'approved' && appt.payment_status === 'pending' && (
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => handlePayNow(appt)}
-                    disabled={payingId === appt.id}
-                    className="bg-teal-600 hover:bg-teal-700 text-white text-xs shrink-0 flex items-center gap-1 h-9 px-3 rounded-lg font-semibold"
-                  >
-                    {payingId === appt.id ? 'Initializing...' : 'Pay Now'}
-                  </Button>
-                )}
+                  {appt.status === 'approved' && !isPaid(appt) && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => handlePayNow(appt)}
+                      disabled={payingId === appt.id}
+                      className="bg-teal-600 hover:bg-teal-700 text-white text-xs shrink-0 flex items-center gap-1 h-9 px-3 rounded-lg font-semibold shadow-sm"
+                    >
+                      {payingId === appt.id ? 'Initializing...' : 'Pay Now'}
+                    </Button>
+                  )}
+
+                  {isPaid(appt) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleViewReceipt(appt)}
+                      className="border-teal-200 text-teal-600 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-300 text-xs shrink-0 flex items-center gap-1.5 h-9 px-3 rounded-lg font-semibold"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      View Receipt
+                    </Button>
+                  )}
+                </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      {/* Receipt Modal */}
+      <Dialog open={!!receiptDetails} onOpenChange={(open) => !open && setReceiptDetails(null)}>
+        <DialogContent className="max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl p-6">
+          <DialogHeader className="text-center flex flex-col items-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 mb-2">
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <DialogTitle className="text-xl font-extrabold text-slate-900 tracking-tight">Payment Receipt</DialogTitle>
+            <DialogDescription className="text-slate-500 text-xs">
+              Your payment was verified successfully and split securely.
+            </DialogDescription>
+          </DialogHeader>
+
+          {receiptDetails && (
+            <div className="mt-4 space-y-4">
+              {/* Receipt metadata box */}
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-3">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-400 font-medium">Transaction ID</span>
+                  <span className="font-mono text-slate-800 font-semibold select-all bg-white border border-slate-100 px-2 py-0.5 rounded">
+                    {receiptDetails.transactionId}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-400 font-medium">Doctor</span>
+                  <span className="text-slate-800 font-semibold">
+                    {receiptDetails.doctorName.toLowerCase().startsWith('dr.') ? receiptDetails.doctorName : `Dr. ${receiptDetails.doctorName}`}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-400 font-medium">Date & Time</span>
+                  <span className="text-slate-800 font-semibold">
+                    {receiptDetails.date} at {receiptDetails.time}
+                  </span>
+                </div>
+              </div>
+
+              {/* Price Breakdown splits */}
+              <div className="space-y-2 px-1">
+                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Revenue Breakdown</h4>
+                
+                <div className="flex justify-between items-center text-sm py-1">
+                  <span className="text-slate-600 font-medium">Consultation Fee</span>
+                  <span className="text-slate-900 font-semibold">INR {receiptDetails.totalAmount.toFixed(2)}</span>
+                </div>
+
+                <div className="flex justify-between items-center text-xs text-slate-500 py-0.5 border-t border-slate-100/50 pt-2">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-teal-500"></span>
+                    Doctor Share (85%)
+                  </span>
+                  <span className="font-medium text-slate-700">INR {receiptDetails.doctorShare.toFixed(2)}</span>
+                </div>
+
+                <div className="flex justify-between items-center text-xs text-slate-500 py-0.5">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
+                    Platform Fee (15%)
+                  </span>
+                  <span className="font-medium text-slate-700">INR {receiptDetails.platformFee.toFixed(2)}</span>
+                </div>
+              </div>
+
+              {/* Receipt tear cut look line */}
+              <div className="relative flex py-2 items-center">
+                <div className="flex-grow border-t border-dashed border-slate-200"></div>
+              </div>
+
+              {/* Grand Total */}
+              <div className="flex justify-between items-center bg-teal-50 border border-teal-100/30 rounded-xl px-4 py-3">
+                <span className="text-sm font-bold text-teal-900">Total Paid</span>
+                <span className="text-base font-extrabold text-teal-700">INR {receiptDetails.totalAmount.toFixed(2)}</span>
+              </div>
+
+              {/* Razorpay Safe badge */}
+              <div className="flex items-center justify-center gap-1 text-[10px] text-slate-400 font-semibold pt-1">
+                <svg className="h-3.5 w-3.5 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+                Verified secure payment by Razorpay
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="mt-6">
+            <Button
+              onClick={() => setReceiptDetails(null)}
+              className="w-full bg-teal-600 hover:bg-teal-700 text-white rounded-xl py-2 font-bold text-xs shadow"
+            >
+              Close Receipt
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

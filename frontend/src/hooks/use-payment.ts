@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { paymentService } from '@/services/payment.service'
+import { paymentService, PaymentVerifyRequest } from '@/services/payment.service'
 
 export function useCreatePaymentOrder() {
   const queryClient = useQueryClient()
@@ -17,3 +17,26 @@ export function useCreatePaymentOrder() {
     },
   })
 }
+
+export function useVerifyPayment() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (payload: PaymentVerifyRequest) => {
+      const response = await paymentService.verifyPayment(payload)
+      if (response.success && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to verify payment')
+    },
+    onSuccess: () => {
+      // Invalidate relevant queries
+      queryClient.invalidateQueries({ queryKey: ['appointments'] })
+      queryClient.invalidateQueries({ queryKey: ['patient', 'dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['doctor', 'dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['doctor', 'earnings'] })
+      queryClient.invalidateQueries({ queryKey: ['doctor', 'wallet'] })
+      queryClient.invalidateQueries({ queryKey: ['doctor', 'transactions'] })
+    },
+  })
+}
+

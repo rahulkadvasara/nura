@@ -21,6 +21,7 @@ def utc_now() -> datetime:
 class PaymentStatus(str, Enum):
     """Payment states for escrow and lifecycle management"""
     CREATED = "created"
+    SUCCESS = "success"
     PENDING = "pending"
     HELD = "held"
     APPROVED = "approved"
@@ -59,6 +60,9 @@ class PaymentBase(BaseModel):
 
     # Future Payment Preparation (Task 8 Design Fields)
     razorpay_order_id: Optional[str] = Field(None, description="Proactive preparation for Razorpay Order ID link")
+    razorpay_payment_id: Optional[str] = Field(None, description="Razorpay payment ID")
+    verified_at: Optional[datetime] = Field(None, description="Payment verification timestamp")
+    gateway_response: Optional[Dict[str, Any]] = Field(None, description="Gateway raw callback response JSON")
     escrow_released_at: Optional[datetime] = Field(None, description="Proactive preparation for escrow lifecycle release")
     escrow_released_by: Optional[str] = Field(None, description="Proactive preparation for escrow lifecycle authority")
     refunded_at: Optional[datetime] = Field(None, description="Proactive preparation for refund logs")
@@ -77,6 +81,9 @@ class PaymentUpdate(BaseModel):
     transaction_reference: Optional[str] = None
     escrow_held: Optional[bool] = None
     razorpay_order_id: Optional[str] = None
+    razorpay_payment_id: Optional[str] = None
+    verified_at: Optional[datetime] = None
+    gateway_response: Optional[Dict[str, Any]] = None
     escrow_released_at: Optional[datetime] = None
     escrow_released_by: Optional[str] = None
     refunded_at: Optional[datetime] = None

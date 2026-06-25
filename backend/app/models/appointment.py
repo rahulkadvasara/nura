@@ -31,6 +31,8 @@ class AppointmentStatus(str, Enum):
 class PaymentStatus(str, Enum):
     """Payment status for an appointment"""
     CREATED = "created"
+    SUCCESS = "success"
+    PAID = "paid"
     PENDING = "pending"
     HELD = "held"
     APPROVED = "approved"

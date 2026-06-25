@@ -75,3 +75,58 @@ async def create_payment_order(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create payment order",
         ) from exc
+
+
+class PaymentVerifyRequest(BaseModel):
+    razorpay_payment_id: str = Field(..., description="The payment ID returned by Razorpay Checkout")
+    razorpay_order_id: str = Field(..., description="The order ID returned by Razorpay Checkout")
+    razorpay_signature: str = Field(..., description="The signature returned by Razorpay Checkout")
+
+
+@router.post(
+    "/verify",
+    response_model=SuccessResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Verify Razorpay Payment Signature",
+    description="Verifies a Razorpay payment signature, updates payment/appointment status, splits revenue, updates wallet, and notifies users.",
+)
+async def verify_payment(
+    payload: PaymentVerifyRequest,
+    current_user: UserInDB = Depends(require_exact_patient),
+    payment_gateway_service: PaymentGatewayService = Depends(get_payment_gateway_service),
+    appointment_service: AppointmentService = Depends(get_appointment_service),
+) -> SuccessResponse:
+    try:
+        payment, appointment, wallet_summary, revenue_split = await payment_gateway_service.verify_payment(
+            payload=payload.model_dump(),
+            current_user_id=current_user.id,
+        )
+        
+        response_data = {
+            "payment": payment_gateway_service.payment_repository.to_response(payment).model_dump(),
+            "appointment": appointment_service.to_response(appointment).model_dump(),
+            "wallet_update_summary": wallet_summary,
+            "revenue_split_summary": revenue_split,
+        }
+        
+        return SuccessResponse(
+            success=True,
+            message="Payment verified successfully",
+            data=response_data,
+        )
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Failed to verify payment")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to verify payment",
+        ) from exc

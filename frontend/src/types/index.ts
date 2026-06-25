@@ -242,7 +242,9 @@ export interface Appointment {
   duration_minutes: number
   consultation_fee: number
   status: 'pending' | 'approved' | 'in_progress' | 'rejected' | 'cancelled' | 'completed'
-  payment_status: 'pending' | 'held' | 'approved' | 'completed' | 'refunded' | 'failed'
+  payment_status: 'pending' | 'held' | 'approved' | 'completed' | 'refunded' | 'failed' | 'created' | 'success' | 'paid'
+  razorpay_payment_id?: string
+  verified_at?: string
   reason?: string
   notes?: string
   rejection_reason?: string
@@ -260,7 +262,9 @@ export interface PatientAppointmentHistoryItem {
   appointment_date: string
   appointment_time: string
   status: 'pending' | 'approved' | 'in_progress' | 'rejected' | 'cancelled' | 'completed'
-  payment_status: 'pending' | 'held' | 'approved' | 'completed' | 'refunded' | 'failed' | 'created'
+  payment_status: 'pending' | 'held' | 'approved' | 'completed' | 'refunded' | 'failed' | 'created' | 'success' | 'paid'
+  razorpay_payment_id?: string
+  verified_at?: string
   consultation_fee: number
   reason?: string
   rejection_reason?: string

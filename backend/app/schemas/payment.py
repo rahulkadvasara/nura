@@ -39,6 +39,9 @@ class PaymentUpdateSchema(BaseModel):
     transaction_reference: Optional[str] = None
     escrow_held: Optional[bool] = None
     razorpay_order_id: Optional[str] = None
+    razorpay_payment_id: Optional[str] = None
+    verified_at: Optional[datetime] = None
+    gateway_response: Optional[Dict[str, Any]] = None
     escrow_released_at: Optional[datetime] = None
     escrow_released_by: Optional[str] = None
     refunded_at: Optional[datetime] = None
@@ -65,6 +68,9 @@ class PaymentResponse(BaseModel):
 
     # Future Payment Preparation (Task 8 Design Fields)
     razorpay_order_id: Optional[str] = Field(None)
+    razorpay_payment_id: Optional[str] = Field(None)
+    verified_at: Optional[datetime] = Field(None)
+    gateway_response: Optional[Dict[str, Any]] = Field(None)
     escrow_released_at: Optional[datetime] = Field(None)
     escrow_released_by: Optional[str] = Field(None)
     refunded_at: Optional[datetime] = Field(None)
