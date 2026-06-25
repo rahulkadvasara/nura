@@ -165,10 +165,12 @@ class DoctorTransactionItem(BaseModel):
     appointment_id: str = Field(..., description="Reference to appointment ID")
     patient_id: str = Field(..., description="Patient user ID")
     patient_name: str = Field(..., description="Patient full name")
+    consultation_id: Optional[str] = Field(None, description="Associated consultation ID")
     consultation_fee: float = Field(..., description="Total amount paid")
     doctor_share: float = Field(..., description="Doctor's 85% share amount")
     platform_share: float = Field(..., description="Platform's 15% fee amount")
     status: str = Field(..., description="Payment/ Escrow clearance status")
+    payment_date: Optional[datetime] = Field(None, description="Verification or creation date of payment")
     created_at: datetime = Field(..., description="Transaction timestamp")
 
 
@@ -176,4 +178,81 @@ class DoctorTransactionsResponse(BaseModel):
     """Paginated list of transactions logs"""
     transactions: List[DoctorTransactionItem] = Field(..., description="Transactions list page")
     total: int = Field(..., description="Total transaction records matching filters")
+
+
+# ---------------------------------------------------------------------------
+# Patient Payment History & Admin Reporting Schemas (Sprint 3)
+# ---------------------------------------------------------------------------
+
+class PatientPaymentHistoryItemSchema(BaseModel):
+    """Detailed listing representation of a single payment for a patient's view"""
+    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+
+    payment_id: str = Field(..., description="Payment ID")
+    appointment: Dict[str, Any] = Field(..., description="Detailed appointment details")
+    doctor: Dict[str, Any] = Field(..., description="Doctor profile and name details")
+    amount: float = Field(..., description="Consolidated fee amount paid")
+    status: str = Field(..., description="Payment status")
+    created_date: datetime = Field(..., description="Creation date of transaction")
+    paid_date: Optional[datetime] = Field(None, description="Verified payment date")
+    receipt_information: Optional[Dict[str, Any]] = Field(None, description="Split and payment metadata details")
+
+
+class PatientPaymentHistoryResponse(BaseModel):
+    """Paginated response of patient payments history list"""
+    payments: List[PatientPaymentHistoryItemSchema] = Field(..., description="Itemized payment list")
+    total: int = Field(..., description="Total records matching filters")
+
+
+class AdminPaymentListItemSchema(BaseModel):
+    """Item representation for administrator's global transaction audit list"""
+    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+
+    payment_id: str = Field(..., description="Payment record database ID")
+    appointment_id: str = Field(..., description="Reference to appointment ID")
+    patient: Dict[str, Any] = Field(..., description="Patient user basic profile summary")
+    doctor: Dict[str, Any] = Field(..., description="Doctor user and profile summary")
+    amount: float = Field(..., description="Total consultation fee amount")
+    doctor_share: float = Field(..., description="Doctor split earnings")
+    platform_share: float = Field(..., description="Platform split commission fee")
+    payment_status: str = Field(..., description="Transaction status")
+    created_at: datetime = Field(..., description="Creation date timestamp")
+    verified_at: Optional[datetime] = Field(None, description="Verified date timestamp")
+
+
+class AdminPaymentListResponse(BaseModel):
+    """Response containing paginated list of administrator payments dashboard"""
+    payments: List[AdminPaymentListItemSchema] = Field(..., description="Admin payment transaction items")
+    total: int = Field(..., description="Total records matching filters")
+
+
+class MonthlyRevenueItem(BaseModel):
+    """Aggregated monthly revenues"""
+    month: str = Field(..., description="Month in YYYY-MM format")
+    amount: float = Field(..., description="Total revenue amount")
+    doctor_share: float = Field(..., description="Aggregate doctor share amount")
+    platform_share: float = Field(..., description="Aggregate platform fee amount")
+
+
+class DailyRevenueItem(BaseModel):
+    """Aggregated daily revenues"""
+    date: str = Field(..., description="Date in YYYY-MM-DD format")
+    amount: float = Field(..., description="Total revenue amount")
+    doctor_share: float = Field(..., description="Aggregate doctor share amount")
+    platform_share: float = Field(..., description="Aggregate platform fee amount")
+
+
+class AdminRevenueSummaryResponse(BaseModel):
+    """Platform-wide operational financial analytics report for administrators"""
+    total_revenue: float = Field(..., description="Sum of successful payment amounts")
+    doctor_payouts: float = Field(..., description="Sum of successful doctor splits")
+    platform_earnings: float = Field(..., description="Sum of successful platform commissions")
+    successful_payments: int = Field(..., description="Count of paid transactions")
+    failed_payments: int = Field(..., description="Count of failed transactions")
+    pending_payments: int = Field(..., description="Count of created/pending transactions")
+    average_consultation_fee: float = Field(..., description="Average fee among successful payments")
+    total_transactions: int = Field(..., description="Count of total transaction orders")
+    monthly_revenue: List[MonthlyRevenueItem] = Field(default_factory=list, description="Aggregated monthly totals")
+    daily_revenue: List[DailyRevenueItem] = Field(default_factory=list, description="Aggregated daily totals")
+
 

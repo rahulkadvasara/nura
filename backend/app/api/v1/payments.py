@@ -4,6 +4,7 @@ API endpoints for creating payment orders.
 """
 
 import logging
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
@@ -12,7 +13,10 @@ from app.core.dependencies import (
     require_exact_patient,
     get_payment_gateway_service,
     get_appointment_service,
+    get_payment_service,
 )
+from app.services.payment_service import PaymentService
+
 from app.schemas.auth import SuccessResponse
 from app.services.payment_gateway_service import PaymentGatewayService
 from app.services.appointment_service import AppointmentService
@@ -130,3 +134,48 @@ async def verify_payment(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to verify payment",
         ) from exc
+
+
+@router.get(
+    "/history",
+    response_model=SuccessResponse,
+    summary="Get Patient Payment History",
+    description="Retrieve paginated payment transactions history for the logged-in patient with filters.",
+)
+async def get_patient_payment_history(
+    search: Optional[str] = None,
+    status_filter: Optional[str] = None,
+    doctor_id: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: int = 100,
+    skip: int = 0,
+    current_user: UserInDB = Depends(require_exact_patient),
+    payment_service: PaymentService = Depends(get_payment_service),
+) -> SuccessResponse:
+    try:
+        payments, total = await payment_service.list_patient_payment_history(
+            patient_id=current_user.id,
+            search=search,
+            status=status_filter,
+            doctor_id=doctor_id,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+            skip=skip,
+        )
+        return SuccessResponse(
+            success=True,
+            message="Patient payment history retrieved successfully",
+            data={
+                "payments": [item.model_dump() for item in payments],
+                "total": total,
+            }
+        )
+    except Exception as exc:
+        logger.exception("Failed to retrieve patient payment history")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve patient payment history",
+        ) from exc
+

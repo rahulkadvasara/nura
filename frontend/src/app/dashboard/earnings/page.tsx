@@ -586,10 +586,15 @@ export default function DoctorEarningsPage() {
                       {transactionsData.transactions.map((tx) => (
                         <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors">
                           <td className="py-4 px-6 font-semibold text-slate-800">
-                            {tx.patient_name}
+                            <div>{tx.patient_name}</div>
+                            {tx.consultation_id && (
+                              <div className="text-[10px] text-slate-400 font-normal mt-0.5">
+                                Consultation: {tx.consultation_id}
+                              </div>
+                            )}
                           </td>
                           <td className="py-4 px-6 text-slate-500 text-xs">
-                            {formatDate(tx.created_at)}
+                            {formatDate(tx.payment_date || tx.created_at)}
                           </td>
                           <td className="py-4 px-6 text-right text-slate-600">
                             {formatCurrency(tx.consultation_fee)}

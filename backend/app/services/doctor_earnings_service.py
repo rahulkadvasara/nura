@@ -247,16 +247,26 @@ class DoctorEarningsService:
                 if patient_user:
                     patient_name = patient_user.full_name
 
+            consultation_id = None
+            if p.appointment_id:
+                consultation_doc = await self.payment_repository.db["consultations"].find_one({"appointment_id": p.appointment_id})
+                if consultation_doc:
+                    consultation_id = str(consultation_doc["_id"])
+
+            payment_date = p.verified_at if p.verified_at else p.created_at
+
             transactions_list.append(
                 DoctorTransactionItem(
                     id=p.id,
                     appointment_id=p.appointment_id,
                     patient_id=p.patient_id,
                     patient_name=patient_name,
+                    consultation_id=consultation_id,
                     consultation_fee=p.amount,
                     doctor_share=p.doctor_amount,
                     platform_share=p.platform_fee,
                     status=p.payment_status.value if hasattr(p.payment_status, 'value') else p.payment_status,
+                    payment_date=payment_date,
                     created_at=p.created_at
                 )
             )
@@ -265,3 +275,4 @@ class DoctorEarningsService:
             transactions=transactions_list,
             total=total
         )
+

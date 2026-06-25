@@ -221,9 +221,18 @@ def get_payment_service(
     payment_repository: PaymentRepository = Depends(get_payment_repository),
     appointment_repository: AppointmentRepository = Depends(get_appointment_repository),
     user_repository: UserRepository = Depends(get_user_repository),
+    doctor_profile_repository: DoctorProfileRepository = Depends(get_doctor_profile_repository),
+    audit_log_service = Depends(get_audit_log_service),
 ) -> PaymentService:
     """Get PaymentService instance"""
-    return PaymentService(payment_repository, appointment_repository, user_repository)
+    return PaymentService(
+        payment_repository=payment_repository,
+        appointment_repository=appointment_repository,
+        user_repository=user_repository,
+        doctor_profile_repository=doctor_profile_repository,
+        audit_log_service=audit_log_service,
+    )
+
 
 
 def get_payment_gateway_service(

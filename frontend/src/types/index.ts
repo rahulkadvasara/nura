@@ -643,10 +643,12 @@ export interface DoctorTransactionItem {
   appointment_id: string
   patient_id: string
   patient_name: string
+  consultation_id?: string
   consultation_fee: number
   doctor_share: number
   platform_share: number
   status: string
+  payment_date?: string
   created_at: string
 }
 

@@ -4,7 +4,9 @@ Business logic, validation, and revenue split calculations for payments
 """
 
 from datetime import datetime, timezone
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Any
+from bson import ObjectId
+import logging
 
 from app.models.payment import (
     PaymentCreate,
@@ -24,6 +26,8 @@ from app.repositories.appointment_repository import AppointmentRepository
 from app.repositories.user_repository import UserRepository
 from app.repositories.doctor_repository import DoctorProfileRepository
 from app.services.base import BaseService
+
+logger = logging.getLogger(__name__)
 
 
 def utc_now() -> datetime:
@@ -68,12 +72,15 @@ class PaymentService(BaseService[PaymentInDB, PaymentCreate, PaymentUpdate]):
         appointment_repository: AppointmentRepository,
         user_repository: UserRepository,
         doctor_profile_repository: Optional[DoctorProfileRepository] = None,
+        audit_log_service: Optional[Any] = None,
     ):
         super().__init__()
         self.payment_repository = payment_repository
         self.appointment_repository = appointment_repository
         self.user_repository = user_repository
         self.doctor_profile_repository = doctor_profile_repository
+        self.audit_log_service = audit_log_service
+
 
     @staticmethod
     def calculate_revenue_split(amount: float) -> Tuple[float, float]:
@@ -187,3 +194,342 @@ class PaymentService(BaseService[PaymentInDB, PaymentCreate, PaymentUpdate]):
     def to_response(self, payment: PaymentInDB) -> PaymentResponse:
         """Convert internal model to API response"""
         return _payment_to_response(payment)
+
+    async def list_patient_payment_history(
+        self,
+        patient_id: str,
+        search: Optional[str] = None,
+        status: Optional[str] = None,
+        doctor_id: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        limit: int = 100,
+        skip: int = 0,
+    ) -> Tuple[List[Any], int]:
+        """Fetch patient's payment logs with pagination, search, status, and range filters"""
+        query = {"patient_id": patient_id}
+
+        if status:
+            query["payment_status"] = status
+
+        if doctor_id:
+            query["doctor_id"] = doctor_id
+
+        if search:
+            # Query users collection for doctor matches
+            user_cursor = self.user_repository.collection.find({
+                "role": "doctor",
+                "full_name": {"$regex": search, "$options": "i"}
+            })
+            matching_doctor_ids = [str(u["_id"]) for u in await user_cursor.to_list(length=500)]
+            if not matching_doctor_ids:
+                return [], 0
+            query["doctor_id"] = {"$in": matching_doctor_ids}
+
+        if start_date or end_date:
+            date_query = {}
+            if start_date:
+                try:
+                    start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
+                    date_query["$gte"] = start_dt
+                except ValueError:
+                    pass
+            if end_date:
+                try:
+                    end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=999999, tzinfo=timezone.utc)
+                    date_query["$lte"] = end_dt
+                except ValueError:
+                    pass
+            if date_query:
+                query["created_at"] = date_query
+
+        total = await self.payment_repository.collection.count_documents(query)
+        cursor = self.payment_repository.collection.find(query).sort("created_at", -1).skip(skip).limit(limit)
+        payments = [PaymentInDB.from_mongo(doc) for doc in await cursor.to_list(length=limit + 5)]
+
+        payments_history = []
+        for p in payments:
+            appointment_data = {}
+            appointment = await self.appointment_repository.get(p.appointment_id)
+            if appointment:
+                appointment_data = {
+                    "id": appointment.id,
+                    "slot_date": appointment.slot_date,
+                    "slot_time": appointment.slot_time,
+                    "status": appointment.status.value if hasattr(appointment.status, "value") else appointment.status,
+                    "reason": appointment.reason,
+                }
+
+            doctor_data = {"id": p.doctor_id, "full_name": "Doctor", "specialization": "Specialist", "email": ""}
+            doctor_user = await self.user_repository.get(p.doctor_id)
+            if doctor_user:
+                doctor_data["full_name"] = doctor_user.full_name
+                doctor_data["email"] = doctor_user.email
+                
+                profile_doc = await self.payment_repository.db["doctor_profiles"].find_one({"user_id": p.doctor_id})
+                if profile_doc:
+                    doctor_data["specialization"] = profile_doc.get("specialization", "Specialist")
+
+            receipt_info = {
+                "razorpay_order_id": p.razorpay_order_id,
+                "razorpay_payment_id": p.razorpay_payment_id,
+                "payment_method": p.payment_method.value if hasattr(p.payment_method, "value") else p.payment_method,
+                "transaction_reference": p.transaction_reference,
+                "doctor_share": p.doctor_amount,
+                "platform_fee": p.platform_fee,
+            }
+
+            from app.schemas.payment import PatientPaymentHistoryItemSchema
+            payments_history.append(
+                PatientPaymentHistoryItemSchema(
+                    payment_id=p.id,
+                    appointment=appointment_data,
+                    doctor=doctor_data,
+                    amount=p.amount,
+                    status=p.payment_status.value if hasattr(p.payment_status, "value") else p.payment_status,
+                    created_date=p.created_at,
+                    paid_date=p.verified_at,
+                    receipt_information=receipt_info,
+                )
+            )
+
+        return payments_history, total
+
+    async def list_payments_for_admin(
+        self,
+        search: Optional[str] = None,
+        status: Optional[str] = None,
+        doctor_id: Optional[str] = None,
+        patient_id: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        limit: int = 100,
+        skip: int = 0,
+    ) -> Tuple[List[Any], int]:
+        """Fetch all platform payments matching filters for the admin view"""
+        query = {}
+
+        if status:
+            query["payment_status"] = status
+
+        if doctor_id:
+            query["doctor_id"] = doctor_id
+
+        if patient_id:
+            query["patient_id"] = patient_id
+
+        if search:
+            user_cursor = self.user_repository.collection.find({
+                "$or": [
+                    {"full_name": {"$regex": search, "$options": "i"}},
+                    {"email": {"$regex": search, "$options": "i"}}
+                ]
+            })
+            matching_ids = [str(u["_id"]) for u in await user_cursor.to_list(length=1000)]
+            if not matching_ids:
+                return [], 0
+            query["$or"] = [
+                {"patient_id": {"$in": matching_ids}},
+                {"doctor_id": {"$in": matching_ids}}
+            ]
+
+        if start_date or end_date:
+            date_query = {}
+            if start_date:
+                try:
+                    start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
+                    date_query["$gte"] = start_dt
+                except ValueError:
+                    pass
+            if end_date:
+                try:
+                    end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=999999, tzinfo=timezone.utc)
+                    date_query["$lte"] = end_dt
+                except ValueError:
+                    pass
+            if date_query:
+                query["created_at"] = date_query
+
+        total = await self.payment_repository.collection.count_documents(query)
+        cursor = self.payment_repository.collection.find(query).sort("created_at", -1).skip(skip).limit(limit)
+        payments = [PaymentInDB.from_mongo(doc) for doc in await cursor.to_list(length=limit + 5)]
+
+        admin_payments = []
+        for p in payments:
+            patient_data = {"id": p.patient_id, "full_name": "Patient", "email": ""}
+            patient_user = await self.user_repository.get(p.patient_id)
+            if patient_user:
+                patient_data["full_name"] = patient_user.full_name
+                patient_data["email"] = patient_user.email
+
+            doctor_data = {"id": p.doctor_id, "full_name": "Doctor", "email": "", "specialization": "Specialist"}
+            doctor_user = await self.user_repository.get(p.doctor_id)
+            if doctor_user:
+                doctor_data["full_name"] = doctor_user.full_name
+                doctor_data["email"] = doctor_user.email
+                profile_doc = await self.payment_repository.db["doctor_profiles"].find_one({"user_id": p.doctor_id})
+                if profile_doc:
+                    doctor_data["specialization"] = profile_doc.get("specialization", "Specialist")
+
+            from app.schemas.payment import AdminPaymentListItemSchema
+            admin_payments.append(
+                AdminPaymentListItemSchema(
+                    payment_id=p.id,
+                    appointment_id=p.appointment_id,
+                    patient=patient_data,
+                    doctor=doctor_data,
+                    amount=p.amount,
+                    doctor_share=p.doctor_amount,
+                    platform_share=p.platform_fee,
+                    payment_status=p.payment_status.value if hasattr(p.payment_status, "value") else p.payment_status,
+                    created_at=p.created_at,
+                    verified_at=p.verified_at,
+                )
+            )
+
+        return admin_payments, total
+
+    async def get_admin_payments_summary(self) -> Any:
+        """Calculate global dashboard transaction numbers and daily/monthly aggregates"""
+        success_statuses = ["success", "paid", "completed", "approved"]
+        success_query = {"payment_status": {"$in": success_statuses}}
+        
+        cursor = self.payment_repository.collection.find(success_query)
+        successful_payments = [PaymentInDB.from_mongo(doc) for doc in await cursor.to_list(length=100000)]
+
+        total_revenue = sum(p.amount for p in successful_payments)
+        doctor_payouts = sum(p.doctor_amount for p in successful_payments)
+        platform_earnings = sum(p.platform_fee for p in successful_payments)
+        success_count = len(successful_payments)
+
+        failed_count = await self.payment_repository.collection.count_documents({"payment_status": "failed"})
+        pending_count = await self.payment_repository.collection.count_documents({
+            "payment_status": {"$in": ["created", "pending", "held"]}
+        })
+        total_transactions = await self.payment_repository.collection.count_documents({})
+
+        average_fee = total_revenue / success_count if success_count > 0 else 0.0
+
+        monthly_map = {}
+        for p in successful_payments:
+            month = p.created_at.strftime("%Y-%m")
+            if month not in monthly_map:
+                monthly_map[month] = {"amount": 0.0, "doctor_share": 0.0, "platform_share": 0.0}
+            monthly_map[month]["amount"] += p.amount
+            monthly_map[month]["doctor_share"] += p.doctor_amount
+            monthly_map[month]["platform_share"] += p.platform_fee
+
+        from app.schemas.payment import MonthlyRevenueItem
+        monthly_revenue = [
+            MonthlyRevenueItem(
+                month=m,
+                amount=round(v["amount"], 2),
+                doctor_share=round(v["doctor_share"], 2),
+                platform_share=round(v["platform_share"], 2),
+            )
+            for m, v in sorted(monthly_map.items())
+        ]
+
+        daily_map = {}
+        for p in successful_payments:
+            date = p.created_at.strftime("%Y-%m-%d")
+            if date not in daily_map:
+                daily_map[date] = {"amount": 0.0, "doctor_share": 0.0, "platform_share": 0.0}
+            daily_map[date]["amount"] += p.amount
+            daily_map[date]["doctor_share"] += p.doctor_amount
+            daily_map[date]["platform_share"] += p.platform_fee
+
+        from app.schemas.payment import DailyRevenueItem
+        daily_revenue = [
+            DailyRevenueItem(
+                date=d,
+                amount=round(v["amount"], 2),
+                doctor_share=round(v["doctor_share"], 2),
+                platform_share=round(v["platform_share"], 2),
+            )
+            for d, v in sorted(daily_map.items())
+        ]
+
+        from app.schemas.payment import AdminRevenueSummaryResponse
+        return AdminRevenueSummaryResponse(
+            total_revenue=round(total_revenue, 2),
+            doctor_payouts=round(doctor_payouts, 2),
+            platform_earnings=round(platform_earnings, 2),
+            successful_payments=success_count,
+            failed_payments=failed_count,
+            pending_payments=pending_count,
+            average_consultation_fee=round(average_fee, 2),
+            total_transactions=total_transactions,
+            monthly_revenue=monthly_revenue,
+            daily_revenue=daily_revenue,
+        )
+
+    async def get_payment_detail_for_admin(self, payment_id: str, admin_user_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch details of a single payment for administrator view, and audit-log the access"""
+        payment = await self.payment_repository.get(payment_id)
+        if not payment:
+            return None
+
+        patient_data = {"id": payment.patient_id, "full_name": "Patient", "email": ""}
+        patient_user = await self.user_repository.get(payment.patient_id)
+        if patient_user:
+            patient_data["full_name"] = patient_user.full_name
+            patient_data["email"] = patient_user.email
+
+        doctor_data = {"id": payment.doctor_id, "full_name": "Doctor", "email": "", "specialization": "Specialist"}
+        doctor_user = await self.user_repository.get(payment.doctor_id)
+        if doctor_user:
+            doctor_data["full_name"] = doctor_user.full_name
+            doctor_data["email"] = doctor_user.email
+            profile_doc = await self.payment_repository.db["doctor_profiles"].find_one({"user_id": payment.doctor_id})
+            if profile_doc:
+                doctor_data["specialization"] = profile_doc.get("specialization", "Specialist")
+
+        appointment_data = {}
+        appointment = await self.appointment_repository.get(payment.appointment_id)
+        if appointment:
+            appointment_data = {
+                "id": appointment.id,
+                "slot_date": appointment.slot_date,
+                "slot_time": appointment.slot_time,
+                "status": appointment.status.value if hasattr(appointment.status, "value") else appointment.status,
+                "reason": appointment.reason,
+                "consultation_fee": appointment.consultation_fee,
+            }
+
+        # Log audit log
+        if self.audit_log_service:
+            try:
+                from app.schemas.observability import AuditLogCreateSchema
+                audit_schema = AuditLogCreateSchema(
+                    user_id=admin_user_id,
+                    action="PAYMENT_VIEWED_ADMIN",
+                    resource_type="payments",
+                    resource_id=payment_id,
+                    old_value=None,
+                    new_value={
+                        "payment_status": payment.payment_status.value if hasattr(payment.payment_status, "value") else payment.payment_status,
+                        "amount": payment.amount,
+                    }
+                )
+                await self.audit_log_service.create_log(audit_schema)
+            except Exception:
+                logger.exception("Failed to write PAYMENT_VIEWED_ADMIN audit log")
+
+        return {
+            "payment_id": payment.id,
+            "appointment_id": payment.appointment_id,
+            "appointment": appointment_data,
+            "patient": patient_data,
+            "doctor": doctor_data,
+            "amount": payment.amount,
+            "doctor_share": payment.doctor_amount,
+            "platform_share": payment.platform_fee,
+            "payment_status": payment.payment_status.value if hasattr(payment.payment_status, "value") else payment.payment_status,
+            "razorpay_order_id": payment.razorpay_order_id,
+            "razorpay_payment_id": payment.razorpay_payment_id,
+            "gateway_response": payment.gateway_response,
+            "created_at": payment.created_at,
+            "verified_at": payment.verified_at,
+        }
+

@@ -36,6 +36,7 @@ from app.core.dependencies import (
     get_admin_analytics_service,
     get_system_monitor_service,
     get_maintenance_service,
+    get_payment_service,
 )
 from app.services.user_service import UserService
 from app.services.doctor_service import DoctorProfileService, DoctorDocumentService
@@ -44,6 +45,8 @@ from app.services.agent_log_service import AgentLogService
 from app.services.auth_service import AuthService
 from app.services.system_monitor_service import SystemMonitorService
 from app.services.maintenance_service import MaintenanceService
+from app.services.payment_service import PaymentService
+
 from app.repositories.refresh_token_repository import RefreshTokenRepository
 from app.models.user import UserUpdate
 
@@ -1385,6 +1388,111 @@ async def archive_audit_logs(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to archive audit logs"
         ) from e
+
+
+@router.get(
+    "/payments",
+    response_model=SuccessResponse,
+    summary="Get All Platform Payments",
+    description="Retrieve a paginated list of all payments with patient/doctor summaries and search/filters."
+)
+async def list_admin_payments(
+    search: Optional[str] = None,
+    status_filter: Optional[str] = None,
+    doctor_id: Optional[str] = None,
+    patient_id: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: int = 100,
+    skip: int = 0,
+    payment_service: PaymentService = Depends(get_payment_service),
+) -> SuccessResponse:
+    try:
+        payments, total = await payment_service.list_payments_for_admin(
+            search=search,
+            status=status_filter,
+            doctor_id=doctor_id,
+            patient_id=patient_id,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+            skip=skip,
+        )
+        return SuccessResponse(
+            success=True,
+            message="Platform payments retrieved successfully",
+            data={
+                "payments": [item.model_dump() for item in payments],
+                "total": total
+            }
+        )
+    except Exception as e:
+        logger.exception("Failed to retrieve platform payments")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve platform payments"
+        ) from e
+
+
+@router.get(
+    "/payments/summary",
+    response_model=SuccessResponse,
+    summary="Get Platform Revenue Summary",
+    description="Retrieve aggregated revenue splits, daily trends, monthly summaries, and counts."
+)
+async def get_admin_payments_summary(
+    payment_service: PaymentService = Depends(get_payment_service),
+) -> SuccessResponse:
+    try:
+        summary = await payment_service.get_admin_payments_summary()
+        return SuccessResponse(
+            success=True,
+            message="Platform revenue summary retrieved successfully",
+            data=summary.model_dump()
+        )
+    except Exception as e:
+        logger.exception("Failed to retrieve platform revenue summary")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve platform revenue summary"
+        ) from e
+
+
+@router.get(
+    "/payments/{payment_id}",
+    response_model=SuccessResponse,
+    summary="Get Payment Detail for Admin",
+    description="Retrieve itemized transaction details, appointment records, and log auditing access."
+)
+async def get_admin_payment_detail(
+    payment_id: str,
+    payment_service: PaymentService = Depends(get_payment_service),
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+) -> SuccessResponse:
+    try:
+        detail = await payment_service.get_payment_detail_for_admin(
+            payment_id=payment_id,
+            admin_user_id=current_user.id
+        )
+        if not detail:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Payment record not found"
+            )
+        return SuccessResponse(
+            success=True,
+            message="Payment details retrieved successfully",
+            data=detail
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to retrieve payment details")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve payment details"
+        ) from e
+
 
 
 
