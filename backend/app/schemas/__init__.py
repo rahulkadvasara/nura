@@ -115,6 +115,12 @@ from app.schemas.admin import (
     AdminDetailResponse,
 )
 
+from app.schemas.doctor_patient import (
+    DoctorPatientSummary,
+    DoctorPatientListResponse,
+    DoctorPatientDetailResponse,
+)
+
 
 __all__ = [
     # Authentication schemas
@@ -219,4 +225,9 @@ __all__ = [
     "AdminCreateRequest",
     "AdminCreateResponse",
     "AdminDetailResponse",
+
+    # Doctor Patient Management schemas
+    "DoctorPatientSummary",
+    "DoctorPatientListResponse",
+    "DoctorPatientDetailResponse",
 ]

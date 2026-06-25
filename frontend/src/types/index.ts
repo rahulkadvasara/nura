@@ -487,5 +487,83 @@ export interface AdminAnalyticsData {
   }
 }
 
+// Doctor Patient Management Types
+export interface Report {
+  id: string
+  patient_id: string
+  filename: string
+  file_url: string
+  risk_level?: string
+  processing_status: string
+  summary?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface HealthInsight {
+  id: string
+  patient_id: string
+  title: string
+  summary: string
+  recommendations: string[]
+  severity: 'low' | 'medium' | 'high'
+  created_at: string
+  updated_at: string
+}
+
+export interface Reminder {
+  id: string
+  patient_id: string
+  title: string
+  description?: string
+  time: string
+  frequency: string
+  status: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ChatSession {
+  id: string
+  patient_id: string
+  doctor_id: string
+  session_type: string
+  status: string
+  last_message_at: string
+  created_at: string
+  updated_at: string
+}
+
+export interface DoctorPatientSummary {
+  patient_id: string
+  name: string
+  age?: number
+  gender?: string
+  profile_picture?: string
+  latest_appointment?: Appointment
+  latest_consultation?: Consultation
+  total_appointments: number
+  total_consultations: number
+  total_reports: number
+  health_risk_level?: string
+}
+
+export interface DoctorPatientListResponse {
+  patients: DoctorPatientSummary[]
+  total: number
+}
+
+export interface DoctorPatientDetail {
+  profile: User
+  appointment_history: Appointment[]
+  consultation_history: Consultation[]
+  reports: Report[]
+  prescriptions: Prescription[]
+  health_insights: HealthInsight[]
+  current_reminders: Reminder[]
+  latest_chat_session?: ChatSession
+}
+
+
 
 

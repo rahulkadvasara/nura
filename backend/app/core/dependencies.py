@@ -415,4 +415,31 @@ def get_admin_analytics_service():
         reminder_repository=ReminderRepository(database.reminders),
     )
 
+
+def get_doctor_patient_service():
+    """Get DoctorPatientService instance"""
+    from app.services.doctor_patient_service import DoctorPatientService
+    from app.repositories.user_repository import UserRepository
+    from app.repositories.doctor_repository import DoctorProfileRepository
+    from app.repositories.appointment_repository import AppointmentRepository
+    from app.repositories.consultation_repository import ConsultationRepository
+    from app.repositories.prescription_repository import PrescriptionRepository
+    from app.repositories.report_repository import ReportRepository
+    from app.repositories.health_insight_repository import HealthInsightRepository
+    from app.repositories.reminder_repository import ReminderRepository
+    from app.repositories.chat_session_repository import ChatSessionRepository
+
+    database = get_database()
+    return DoctorPatientService(
+        user_repository=UserRepository(database.users),
+        doctor_profile_repository=DoctorProfileRepository(database.doctor_profiles),
+        appointment_repository=AppointmentRepository(database.appointments),
+        consultation_repository=ConsultationRepository(database.consultations),
+        prescription_repository=PrescriptionRepository(database.prescriptions),
+        report_repository=ReportRepository(database.reports),
+        health_insight_repository=HealthInsightRepository(database.health_insights),
+        reminder_repository=ReminderRepository(database.reminders),
+        chat_session_repository=ChatSessionRepository(database.chat_sessions),
+    )
+
 

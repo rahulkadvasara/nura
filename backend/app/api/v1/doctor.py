@@ -4,6 +4,7 @@ Authenticated patient-only endpoints for applying to become a doctor
 """
 
 import logging
+from typing import List, Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from bson import ObjectId
@@ -52,6 +53,7 @@ from app.core.dependencies import (
     get_audit_log_service,
     get_consultation_service,
     get_prescription_service,
+    get_doctor_patient_service,
 )
 from app.services.doctor_service import DoctorProfileService, DoctorDocumentService, DoctorAvailabilityService
 from app.services.appointment_service import AppointmentService
@@ -59,6 +61,8 @@ from app.services.notification_service import NotificationService
 from app.services.audit_log_service import AuditLogService
 from app.services.consultation_service import ConsultationService
 from app.services.prescription_service import PrescriptionService
+from app.services.doctor_patient_service import DoctorPatientService
+from app.schemas.doctor_patient import DoctorPatientListResponse, DoctorPatientDetailResponse
 
 logger = logging.getLogger(__name__)
 
@@ -967,4 +971,75 @@ async def get_doctor_prescription_details(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve prescription details",
         ) from exc
+
+
+@router.get(
+    "/patients",
+    response_model=SuccessResponse,
+    summary="List Doctor Patients",
+    description="List all patients treated by the logged-in verified doctor. Supports search, sorting, and pagination."
+)
+async def list_patients(
+    search: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    limit: int = 100,
+    skip: int = 0,
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    doctor_patient_service: DoctorPatientService = Depends(get_doctor_patient_service),
+) -> SuccessResponse:
+    try:
+        patients, total = await doctor_patient_service.get_patients(
+            doctor_profile_id=current_doctor.id,
+            search=search,
+            sort_by=sort_by,
+            limit=limit,
+            skip=skip,
+        )
+        response_data = DoctorPatientListResponse(patients=patients, total=total)
+        return SuccessResponse(
+            success=True,
+            message="Doctor's patients directory retrieved successfully",
+            data=response_data.model_dump(),
+        )
+    except Exception as exc:
+        logger.exception("Failed to retrieve patients list for doctor %s", current_doctor.id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve patients list",
+        ) from exc
+
+
+@router.get(
+    "/patients/{patient_id}",
+    response_model=SuccessResponse,
+    summary="Get Patient Consolidated Details",
+    description="Retrieve aggregated medical profiles, appointment history, report analytics, and active reminders."
+)
+async def get_patient_details(
+    patient_id: str,
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    doctor_patient_service: DoctorPatientService = Depends(get_doctor_patient_service),
+) -> SuccessResponse:
+    try:
+        details = await doctor_patient_service.get_patient_detail(
+            doctor_profile_id=current_doctor.id,
+            patient_id=patient_id,
+        )
+        return SuccessResponse(
+            success=True,
+            message="Patient medical profile details retrieved successfully",
+            data=details.model_dump(),
+        )
+    except ValueError as val_err:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(val_err)
+        )
+    except Exception as exc:
+        logger.exception("Failed to retrieve patient medical profile details for patient %s", patient_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve patient medical profile details",
+        ) from exc
+
 

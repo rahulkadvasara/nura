@@ -537,17 +537,331 @@ Admins can monitor platform health.
 
 ---
 
+## Sprint 6: System Logs & Audit Center
+
+### Objective
+
+Provide administrators with complete visibility into platform activity through a centralized logging dashboard.
+
+---
+
+### Features
+
+#### Audit Logs
+
+* View all audit logs
+* Search logs
+* Pagination
+* Filters:
+  * User
+  * Role
+  * Action
+  * Resource Type
+  * Date Range
+* View complete log details
+
+#### Agent Logs
+
+* View AI agent execution logs
+* Filter by:
+  * Agent
+  * Status
+  * Session
+  * Date
+* View execution metadata
+* View execution duration
+
+#### Authentication Logs
+
+Display:
+* Login
+* Logout
+* Password Reset
+* Password Change
+* Token Refresh
+* Session Revocation
+* Admin Security Events
+
+#### Platform Events
+
+Display:
+* Doctor Verification
+* Appointment Events
+* Consultation Events
+* Notification Events
+* Report Processing
+* Payment Events (future-ready)
+
+---
+
+### Backend Deliverables
+
+* Log APIs
+* Search
+* Pagination
+* Filtering
+* Detail endpoints
+
+---
+
+### Frontend Deliverables
+
+Create:
+```
+/dashboard/admin/logs
+```
+
+Tabs:
+* Audit Logs
+* Agent Logs
+* Authentication Logs
+
+Features:
+* Search
+* Filters
+* Pagination
+* Detail Drawer
+* Copy JSON
+* Export (future-ready)
+
+---
+
+### Exit Criteria
+
+```text
+Administrators can inspect all important platform events.
+```
+
+---
+
+## Sprint 7: Doctor Patient Management
+
+### Objective
+
+Allow doctors to manage patients they have treated through appointments and consultations.
+
+---
+
+### Features
+
+Patient Directory
+* List Patients
+* Search Patients
+* Filters
+* Patient Summary Cards
+
+Patient Profile
+* Basic Information
+* Medical Overview
+* Appointment History
+* Consultation History
+* Uploaded Reports
+* Prescriptions
+* Health Insights
+
+Actions
+* Open Chat
+* View Reports
+* View Consultation
+* Future Follow-up Support
+
+---
+
+### Backend Deliverables
+
+* Patient List APIs
+* Patient Detail APIs
+* Aggregated History APIs
+
+---
+
+### Frontend Deliverables
+
+Create:
+```
+/dashboard/patients
+```
+
+Include:
+* Patient List
+* Patient Details
+* Search
+* Filters
+* Empty States
+* Loading States
+* Error States
+
+---
+
+### Exit Criteria
+
+```text
+Doctors can manage all patients assigned to them.
+```
+
+---
+
+## Sprint 8: Doctor Earnings & Wallet Dashboard
+
+### Objective
+
+Complete the doctor's financial dashboard before Razorpay integration.
+
+This sprint must use the existing wallet infrastructure created in Phase 3 and be fully compatible with Phase 7 Payment System.
+
+---
+
+### Features
+
+Wallet
+* Available Balance
+* Pending Balance
+* Lifetime Earnings
+
+Revenue
+* Doctor Share
+* Platform Share
+* Revenue Split Summary
+
+History
+* Consultation Earnings
+* Transaction History
+* Payment Timeline
+* Pending Payouts
+
+Analytics
+* Monthly Earnings
+* Revenue Trends
+* Consultation Revenue
+* Wallet Summary
+
+Future Ready
+* Razorpay Transactions
+* Withdrawals
+* Settlements
+
+---
+
+### Backend Deliverables
+
+* Earnings APIs
+* Wallet APIs
+* Revenue Summary APIs
+* Transaction APIs
+
+---
+
+### Frontend Deliverables
+
+Create:
+```
+/dashboard/earnings
+```
+
+Include:
+* Earnings Dashboard
+* Wallet Summary
+* Charts
+* Revenue Cards
+* Transaction History
+* Empty States
+* Loading States
+* Error States
+
+---
+
+### Exit Criteria
+
+```text
+Doctors can monitor earnings before payment integration.
+```
+
+---
+
+## Sprint 9: Platform Monitoring & Maintenance
+
+### Objective
+
+Provide administrators with operational visibility into the health of the platform.
+
+---
+
+### Features
+
+System Health
+* API Status
+* MongoDB Status
+* Qdrant Status
+* Groq Status
+* Supabase Status
+* Storage Status
+
+Background Jobs
+* Reminder Jobs
+* Notification Jobs
+* AI Jobs
+* Failed Jobs
+
+Maintenance
+* Clear Expired Sessions
+* Clear Expired OTPs
+* Archive Notifications
+* Archive Audit Logs
+
+Platform Information
+* Version
+* Environment
+* Startup Time
+* Uptime
+
+---
+
+### Backend Deliverables
+
+* Monitoring APIs
+* Maintenance APIs
+* Health APIs
+
+---
+
+### Frontend Deliverables
+
+Create:
+```
+/dashboard/admin/system
+```
+
+Include:
+* Health Dashboard
+* Service Status Cards
+* Maintenance Actions
+* Job Monitor
+
+---
+
+### Exit Criteria
+
+```text
+Administrators can monitor platform health and perform maintenance.
+```
+
+---
+
 ## Acceptance Criteria
 
-1. First admin is automatically created on fresh deployment.
-2. Admin can login through normal login flow.
-3. Admin can create additional admins.
-4. Admins can use Forgot Password.
-5. Last remaining admin cannot be disabled.
-6. Last remaining admin cannot be deleted.
-7. All admin actions create audit logs.
-8. Doctor verification workflow continues to work.
-9. Payment System can depend on this administration layer.
+1. First administrator is automatically created on fresh deployment.
+2. Administrators can login using the standard authentication flow.
+3. Administrators can create additional administrators.
+4. Administrators can securely recover their accounts.
+5. Administrators can manage users.
+6. Administrators can manage doctors.
+7. Administrators can inspect audit logs.
+8. Administrators can inspect AI agent logs.
+9. Doctors can manage their patients.
+10. Doctors can monitor wallet and earnings.
+11. Administrators can monitor overall platform health.
+12. Every dashboard navigation item implemented in completed phases resolves successfully without any 404 pages.
+13. Phase 7 (Payment System) can build directly on this completed operational foundation.
 
 ---
 
