@@ -413,6 +413,29 @@ export interface AuditLog {
   created_at: string
 }
 
+export interface AgentLog {
+  id: string
+  agent_name: string
+  workflow_id: string
+  session_id?: string
+  patient_id?: string
+  user_id?: string
+  input_payload: Record<string, any>
+  output_payload: Record<string, any>
+  status: 'started' | 'completed' | 'failed'
+  latency_ms: number
+  token_usage: Record<string, number>
+  error_message?: string
+  langgraph_thread_id?: string
+  langgraph_checkpoint_id?: string
+  langfuse_trace_id?: string
+  langfuse_parent_observation_id?: string
+  orchestrator_node?: string
+  evaluation_metrics?: Record<string, any>
+  research_metadata?: Record<string, any>
+  created_at: string
+}
+
 export interface AdminDetailResponse {
   profile: User
   account_status: {
@@ -563,6 +586,69 @@ export interface DoctorPatientDetail {
   current_reminders: Reminder[]
   latest_chat_session?: ChatSession
 }
+
+// Doctor Earnings Dashboard Types (Sprint 8)
+export interface MonthlyEarningsItem {
+  month: string
+  amount: number
+}
+
+export interface RevenueTrendItem {
+  date: string
+  amount: number
+}
+
+export interface DoctorWalletResponse {
+  id: string
+  doctor_id: string
+  total_earned: number
+  total_withdrawn: number
+  available_balance: number
+  pending_balance: number
+  last_payout_at?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface DoctorEarningsResponse {
+  available_balance: number
+  pending_balance: number
+  lifetime_earnings: number
+  platform_revenue_share: number
+  doctor_revenue_share: number
+  total_consultations: number
+  total_completed_consultations: number
+  average_consultation_fee: number
+  monthly_earnings_summary: MonthlyEarningsItem[]
+  recent_transactions: Appointment[] // Or we can use more detailed representation if needed, but since it is PaymentResponse in backend, let's look at what fields PaymentResponse has. Since we also have DoctorTransactionItem, we will use that for listing. Recent transactions in DoctorEarningsResponse is actually PaymentResponse.
+  revenue_trend: RevenueTrendItem[]
+}
+
+export interface DoctorWalletDetailsResponse {
+  wallet_details: DoctorWalletResponse
+  pending_amount: number
+  available_amount: number
+  lifetime_earnings: number
+  total_withdrawn: number
+}
+
+export interface DoctorTransactionItem {
+  id: string
+  appointment_id: string
+  patient_id: string
+  patient_name: string
+  consultation_fee: number
+  doctor_share: number
+  platform_share: number
+  status: string
+  created_at: string
+}
+
+export interface DoctorTransactionsResponse {
+  transactions: DoctorTransactionItem[]
+  total: number
+}
+
 
 
 

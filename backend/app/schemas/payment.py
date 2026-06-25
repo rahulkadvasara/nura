@@ -4,7 +4,7 @@ Pydantic v2 schemas for payment and wallet API requests and responses
 """
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 from app.models.payment import (
@@ -105,3 +105,69 @@ class DoctorWalletResponse(BaseModel):
     last_payout_at: Optional[datetime] = Field(None, description="Last payout timestamp")
     created_at: datetime = Field(..., description="Wallet creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
+
+
+# ---------------------------------------------------------------------------
+# Doctor Earnings & Transactions Dashboards Schemas (Sprint 8)
+# ---------------------------------------------------------------------------
+
+class MonthlyEarningsItem(BaseModel):
+    """Monthly aggregated earnings for a doctor"""
+    month: str = Field(..., description="Calendar month in YYYY-MM format")
+    amount: float = Field(..., description="Doctor share amount earned in this month")
+
+
+class RevenueTrendItem(BaseModel):
+    """Daily revenue trend tracking"""
+    date: str = Field(..., description="Date in YYYY-MM-DD format")
+    amount: float = Field(..., description="Doctor share amount earned on this date")
+
+
+class DoctorEarningsResponse(BaseModel):
+    """Full financial breakdown response for a doctor profile"""
+    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+
+    available_balance: float = Field(..., description="Current withdrawable balance")
+    pending_balance: float = Field(..., description="Balance currently held in escrow")
+    lifetime_earnings: float = Field(..., description="Total lifetime earned doctor share")
+    platform_revenue_share: float = Field(..., description="Total 15% revenue share taken by platform")
+    doctor_revenue_share: float = Field(..., description="Total 85% revenue share received by doctor")
+    total_consultations: int = Field(..., description="Total appointments scheduled for the doctor")
+    total_completed_consultations: int = Field(..., description="Total completed consultations")
+    average_consultation_fee: float = Field(..., description="Average fee charged per completed consultation")
+    monthly_earnings_summary: List[MonthlyEarningsItem] = Field(default_factory=list, description="Earnings grouped by month")
+    recent_transactions: List[PaymentResponse] = Field(default_factory=list, description="Recent payment transaction logs")
+    revenue_trend: List[RevenueTrendItem] = Field(default_factory=list, description="Daily earnings tracking points")
+
+
+class DoctorWalletDetailsResponse(BaseModel):
+    """Detailed wallet balances status for the doctor profile"""
+    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+
+    wallet_details: DoctorWalletResponse = Field(..., description="Base wallet metrics model")
+    pending_amount: float = Field(..., description="Amount currently held pending clearance")
+    available_amount: float = Field(..., description="Withdrawable cash amount available")
+    lifetime_earnings: float = Field(..., description="Total lifetime earned amount")
+    total_withdrawn: float = Field(..., description="Total payout withdrawn amount")
+
+
+class DoctorTransactionItem(BaseModel):
+    """Single payment transaction log entry with aggregated patient details"""
+    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+
+    id: str = Field(..., description="Transaction/Payment ID")
+    appointment_id: str = Field(..., description="Reference to appointment ID")
+    patient_id: str = Field(..., description="Patient user ID")
+    patient_name: str = Field(..., description="Patient full name")
+    consultation_fee: float = Field(..., description="Total amount paid")
+    doctor_share: float = Field(..., description="Doctor's 85% share amount")
+    platform_share: float = Field(..., description="Platform's 15% fee amount")
+    status: str = Field(..., description="Payment/ Escrow clearance status")
+    created_at: datetime = Field(..., description="Transaction timestamp")
+
+
+class DoctorTransactionsResponse(BaseModel):
+    """Paginated list of transactions logs"""
+    transactions: List[DoctorTransactionItem] = Field(..., description="Transactions list page")
+    total: int = Field(..., description="Total transaction records matching filters")
+

@@ -124,3 +124,125 @@ class AuditLogService(BaseService[AuditLogInDB, AuditLogCreate, AuditLogUpdate])
         """Fetch audit logs where the admin is the actor or the target, sorted newest first"""
         return await self.audit_log_repository.get_admin_audit_logs(admin_id, limit)
 
+    async def get_audit_logs_paginated(
+        self,
+        limit: int = 50,
+        skip: int = 0,
+        search: Optional[str] = None,
+        user_id: Optional[str] = None,
+        role: Optional[str] = None,
+        action: Optional[str] = None,
+        resource_type: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> tuple[List[AuditLogInDB], int]:
+        """Dynamically filter, search, paginated audit logs"""
+        query = {}
+
+        if search:
+            query["$or"] = [
+                {"action": {"$regex": search, "$options": "i"}},
+                {"resource_type": {"$regex": search, "$options": "i"}},
+                {"resource_id": {"$regex": search, "$options": "i"}},
+                {"user_id": {"$regex": search, "$options": "i"}},
+            ]
+
+        if user_id:
+            query["user_id"] = user_id
+
+        if action:
+            query["action"] = action
+
+        if resource_type:
+            query["resource_type"] = resource_type
+
+        if start_date or end_date:
+            date_query = {}
+            if start_date:
+                try:
+                    start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
+                    date_query["$gte"] = start_dt
+                except ValueError:
+                    pass
+            if end_date:
+                try:
+                    end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=999999, tzinfo=timezone.utc)
+                    date_query["$lte"] = end_dt
+                except ValueError:
+                    pass
+            if date_query:
+                query["created_at"] = date_query
+
+        if role:
+            users_cursor = self.user_repository.collection.find({"role": role})
+            users_list = await users_cursor.to_list(length=10000)
+            user_ids = [str(u["_id"]) for u in users_list]
+            if "user_id" in query:
+                if query["user_id"] in user_ids:
+                    pass
+                else:
+                    query["user_id"] = "__non_existent_user_id__"
+            else:
+                query["user_id"] = {"$in": user_ids}
+
+        total = await self.audit_log_repository.collection.count_documents(query)
+        cursor = self.audit_log_repository.collection.find(query).sort("created_at", -1).skip(skip).limit(limit)
+        logs = [AuditLogInDB.from_mongo(doc) for doc in await cursor.to_list(length=limit)]
+
+        return logs, total
+
+    async def get_auth_logs_paginated(
+        self,
+        limit: int = 50,
+        skip: int = 0,
+        search: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> tuple[List[AuditLogInDB], int]:
+        """Fetch audit events restricted strictly to authentication/security operations"""
+        query = {}
+        
+        auth_actions = [
+            "ADMIN_LOGIN",
+            "ADMIN_LOGOUT",
+            "ADMIN_PASSWORD_RESET_REQUEST",
+            "ADMIN_PASSWORD_RESET_SUCCESS",
+            "ADMIN_PASSWORD_CHANGED",
+            "ADMIN_TOKEN_REFRESH",
+            "ADMIN_SESSION_REVOKED",
+            "ADMIN_BOOTSTRAP_CREATED",
+        ]
+        query["action"] = {"$in": auth_actions}
+
+        if search:
+            query["$or"] = [
+                {"action": {"$regex": search, "$options": "i"}},
+                {"resource_type": {"$regex": search, "$options": "i"}},
+                {"resource_id": {"$regex": search, "$options": "i"}},
+                {"user_id": {"$regex": search, "$options": "i"}},
+            ]
+
+        if start_date or end_date:
+            date_query = {}
+            if start_date:
+                try:
+                    start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
+                    date_query["$gte"] = start_dt
+                except ValueError:
+                    pass
+            if end_date:
+                try:
+                    end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=999999, tzinfo=timezone.utc)
+                    date_query["$lte"] = end_dt
+                except ValueError:
+                    pass
+            if date_query:
+                query["created_at"] = date_query
+
+        total = await self.audit_log_repository.collection.count_documents(query)
+        cursor = self.audit_log_repository.collection.find(query).sort("created_at", -1).skip(skip).limit(limit)
+        logs = [AuditLogInDB.from_mongo(doc) for doc in await cursor.to_list(length=limit)]
+
+        return logs, total
+
+

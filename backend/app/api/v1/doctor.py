@@ -54,6 +54,7 @@ from app.core.dependencies import (
     get_consultation_service,
     get_prescription_service,
     get_doctor_patient_service,
+    get_doctor_earnings_service,
 )
 from app.services.doctor_service import DoctorProfileService, DoctorDocumentService, DoctorAvailabilityService
 from app.services.appointment_service import AppointmentService
@@ -62,7 +63,13 @@ from app.services.audit_log_service import AuditLogService
 from app.services.consultation_service import ConsultationService
 from app.services.prescription_service import PrescriptionService
 from app.services.doctor_patient_service import DoctorPatientService
+from app.services.doctor_earnings_service import DoctorEarningsService
 from app.schemas.doctor_patient import DoctorPatientListResponse, DoctorPatientDetailResponse
+from app.schemas.payment import (
+    DoctorEarningsResponse,
+    DoctorWalletDetailsResponse,
+    DoctorTransactionsResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1041,5 +1048,108 @@ async def get_patient_details(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve patient medical profile details",
         ) from exc
+
+
+@router.get(
+    "/earnings",
+    response_model=SuccessResponse,
+    summary="Get Doctor Earnings Summary",
+    description="Retrieve earnings summary, month-wise data, recent transactions, and revenue trend."
+)
+async def get_doctor_earnings(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: int = 10,
+    skip: int = 0,
+    sort_by: Optional[str] = None,
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    earnings_service: DoctorEarningsService = Depends(get_doctor_earnings_service),
+) -> SuccessResponse:
+    try:
+        earnings = await earnings_service.get_earnings_summary(
+            doctor_user_id=current_doctor.user_id,
+            doctor_profile_id=current_doctor.id,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+            skip=skip,
+            sort_by=sort_by,
+        )
+        return SuccessResponse(
+            success=True,
+            message="Doctor earnings retrieved successfully",
+            data=earnings.model_dump(),
+        )
+    except Exception as exc:
+        logger.exception("Failed to retrieve doctor earnings")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve doctor earnings",
+        ) from exc
+
+
+@router.get(
+    "/wallet",
+    response_model=SuccessResponse,
+    summary="Get Doctor Wallet Details",
+    description="Retrieve balance statistics and base wallet properties."
+)
+async def get_doctor_wallet(
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    earnings_service: DoctorEarningsService = Depends(get_doctor_earnings_service),
+) -> SuccessResponse:
+    try:
+        wallet = await earnings_service.get_wallet_details(
+            doctor_user_id=current_doctor.user_id,
+        )
+        return SuccessResponse(
+            success=True,
+            message="Doctor wallet details retrieved successfully",
+            data=wallet.model_dump(),
+        )
+    except Exception as exc:
+        logger.exception("Failed to retrieve doctor wallet details")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve doctor wallet details",
+        ) from exc
+
+
+@router.get(
+    "/transactions",
+    response_model=SuccessResponse,
+    summary="Get Doctor Transactions List",
+    description="Retrieve paginated list of payment transactions with filters."
+)
+async def get_doctor_transactions(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    status_filter: Optional[str] = None,
+    limit: int = 100,
+    skip: int = 0,
+    current_doctor: DoctorProfileInDB = Depends(require_verified_doctor),
+    earnings_service: DoctorEarningsService = Depends(get_doctor_earnings_service),
+) -> SuccessResponse:
+    try:
+        transactions = await earnings_service.get_transactions(
+            doctor_user_id=current_doctor.user_id,
+            limit=limit,
+            skip=skip,
+            start_date=start_date,
+            end_date=end_date,
+            status=status_filter,
+        )
+        return SuccessResponse(
+            success=True,
+            message="Doctor transactions retrieved successfully",
+            data=transactions.model_dump(),
+        )
+    except Exception as exc:
+        logger.exception("Failed to retrieve doctor transactions")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve doctor transactions",
+        ) from exc
+
 
 

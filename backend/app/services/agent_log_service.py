@@ -140,3 +140,49 @@ class AgentLogService(BaseService[AgentLogInDB, AgentLogCreate, AgentLogUpdate])
     def to_response(self, log: AgentLogInDB) -> AgentLogResponse:
         """Convert internal model to API response"""
         return _log_to_response(log)
+
+    async def get_agent_logs_paginated(
+        self,
+        limit: int = 50,
+        skip: int = 0,
+        agent: Optional[str] = None,
+        status: Optional[str] = None,
+        session: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> tuple[List[AgentLogInDB], int]:
+        """Fetch agent execution logs matching parameters dynamically"""
+        query = {}
+        
+        if agent:
+            query["agent_name"] = agent
+            
+        if status:
+            query["status"] = status
+            
+        if session:
+            query["session_id"] = session
+
+        if start_date or end_date:
+            date_query = {}
+            if start_date:
+                try:
+                    start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
+                    date_query["$gte"] = start_dt
+                except ValueError:
+                    pass
+            if end_date:
+                try:
+                    end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=999999, tzinfo=timezone.utc)
+                    date_query["$lte"] = end_dt
+                except ValueError:
+                    pass
+            if date_query:
+                query["created_at"] = date_query
+
+        total = await self.agent_log_repository.collection.count_documents(query)
+        cursor = self.agent_log_repository.collection.find(query).sort("created_at", -1).skip(skip).limit(limit)
+        logs = [AgentLogInDB.from_mongo(doc) for doc in await cursor.to_list(length=limit)]
+
+        return logs, total
+

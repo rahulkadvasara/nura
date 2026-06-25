@@ -54,7 +54,7 @@ export function Sidebar() {
         { name: 'Users', href: '/dashboard/admin/users', icon: Users },
         { name: 'Doctors', href: '/dashboard/admin/doctors', icon: Award },
         { name: 'Analytics', href: '/dashboard/admin/analytics', icon: BarChart3 },
-        { name: 'System Logs', href: '/dashboard/logs', icon: Activity },
+        { name: 'System Logs', href: '/dashboard/admin/logs', icon: Activity },
         { name: 'Settings', href: '/dashboard/settings/profile', icon: Settings },
       ]
     }

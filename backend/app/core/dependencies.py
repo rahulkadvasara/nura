@@ -442,4 +442,37 @@ def get_doctor_patient_service():
         chat_session_repository=ChatSessionRepository(database.chat_sessions),
     )
 
+
+def get_doctor_earnings_service():
+    """Get DoctorEarningsService instance"""
+    from app.services.doctor_earnings_service import DoctorEarningsService
+    from app.repositories.doctor_wallet_repository import DoctorWalletRepository
+    from app.repositories.payment_repository import PaymentRepository
+    from app.repositories.appointment_repository import AppointmentRepository
+    from app.repositories.user_repository import UserRepository
+
+    database = get_database()
+    return DoctorEarningsService(
+        doctor_wallet_repository=DoctorWalletRepository(database.doctor_wallets),
+        payment_repository=PaymentRepository(database.payments),
+        appointment_repository=AppointmentRepository(database.appointments),
+        user_repository=UserRepository(database.users)
+    )
+
+
+def get_agent_log_repository():
+    """Get AgentLogRepository instance"""
+    from app.repositories.agent_log_repository import AgentLogRepository
+    database = get_database()
+    return AgentLogRepository(database.agent_logs)
+
+
+def get_agent_log_service():
+    """Get AgentLogService instance"""
+    from app.services.agent_log_service import AgentLogService
+    agent_log_repository = get_agent_log_repository()
+    return AgentLogService(agent_log_repository)
+
+
+
 

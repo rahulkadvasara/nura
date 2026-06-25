@@ -91,6 +91,10 @@ from app.schemas.payment import (
     DoctorWalletCreateSchema,
     DoctorWalletUpdateSchema,
     DoctorWalletResponse,
+    DoctorEarningsResponse,
+    DoctorWalletDetailsResponse,
+    DoctorTransactionItem,
+    DoctorTransactionsResponse,
 )
 
 from app.schemas.observability import (
@@ -206,6 +210,10 @@ __all__ = [
     "DoctorWalletCreateSchema",
     "DoctorWalletUpdateSchema",
     "DoctorWalletResponse",
+    "DoctorEarningsResponse",
+    "DoctorWalletDetailsResponse",
+    "DoctorTransactionItem",
+    "DoctorTransactionsResponse",
 
     # Observability and audit schemas
     "AgentLogCreateSchema",

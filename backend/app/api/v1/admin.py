@@ -22,13 +22,14 @@ from app.schemas.admin import (
     AdminCreateResponse,
     AdminDetailResponse,
 )
-from app.schemas.observability import AuditLogCreateSchema, AuditLogResponse
+from app.schemas.observability import AuditLogCreateSchema, AuditLogResponse, AgentLogResponse
 from app.core.dependencies import (
     require_role,
     get_user_service,
     get_doctor_profile_service,
     get_doctor_document_service,
     get_audit_log_service,
+    get_agent_log_service,
     get_refresh_token_repository,
     get_current_user,
     get_auth_service,
@@ -37,6 +38,7 @@ from app.core.dependencies import (
 from app.services.user_service import UserService
 from app.services.doctor_service import DoctorProfileService, DoctorDocumentService
 from app.services.audit_log_service import AuditLogService
+from app.services.agent_log_service import AgentLogService
 from app.services.auth_service import AuthService
 from app.repositories.refresh_token_repository import RefreshTokenRepository
 from app.models.user import UserUpdate
@@ -963,6 +965,185 @@ async def get_platform_analytics(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve platform analytics"
         ) from e
+
+
+@router.get(
+    "/logs/audit",
+    response_model=SuccessResponse,
+    summary="Get Audit Logs",
+    description="Retrieve paginated list of all platform action audit trails with search and filters."
+)
+async def get_audit_logs(
+    limit: int = 50,
+    skip: int = 0,
+    search: Optional[str] = None,
+    user_id: Optional[str] = None,
+    role: Optional[str] = None,
+    action: Optional[str] = None,
+    resource_type: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    audit_service: AuditLogService = Depends(get_audit_log_service),
+) -> SuccessResponse:
+    try:
+        logs, total = await audit_service.get_audit_logs_paginated(
+            limit=limit,
+            skip=skip,
+            search=search,
+            user_id=user_id,
+            role=role,
+            action=action,
+            resource_type=resource_type,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        return SuccessResponse(
+            success=True,
+            message="Audit logs retrieved successfully",
+            data={
+                "logs": [audit_service.to_response(log).model_dump() for log in logs],
+                "total": total,
+                "limit": limit,
+                "skip": skip
+            }
+        )
+    except Exception as e:
+        logger.exception("Failed to retrieve audit logs")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve audit logs"
+        ) from e
+
+
+@router.get(
+    "/logs/audit/{log_id}",
+    response_model=SuccessResponse,
+    summary="Get Audit Log Detail",
+    description="Retrieve the complete details of a single audit log entry by ID."
+)
+async def get_audit_log_detail(
+    log_id: str,
+    audit_service: AuditLogService = Depends(get_audit_log_service),
+) -> SuccessResponse:
+    log = await audit_service.get_log_by_id(log_id)
+    if not log:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Audit log entry not found"
+        )
+    return SuccessResponse(
+        success=True,
+        message="Audit log detail retrieved successfully",
+        data=audit_service.to_response(log).model_dump()
+    )
+
+
+@router.get(
+    "/logs/agents",
+    response_model=SuccessResponse,
+    summary="Get Agent Execution Logs",
+    description="Retrieve paginated list of agent execution logs and workflow run latency metadata."
+)
+async def get_agent_logs(
+    limit: int = 50,
+    skip: int = 0,
+    agent: Optional[str] = None,
+    status_filter: Optional[str] = None,
+    session: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    agent_service: AgentLogService = Depends(get_agent_log_service),
+) -> SuccessResponse:
+    try:
+        logs, total = await agent_service.get_agent_logs_paginated(
+            limit=limit,
+            skip=skip,
+            agent=agent,
+            status=status_filter,
+            session=session,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        return SuccessResponse(
+            success=True,
+            message="Agent logs retrieved successfully",
+            data={
+                "logs": [agent_service.to_response(log).model_dump() for log in logs],
+                "total": total,
+                "limit": limit,
+                "skip": skip
+            }
+        )
+    except Exception as e:
+        logger.exception("Failed to retrieve agent logs")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve agent logs"
+        ) from e
+
+
+@router.get(
+    "/logs/agents/{log_id}",
+    response_model=SuccessResponse,
+    summary="Get Agent Log Detail",
+    description="Retrieve full payload and trace checkpoints for a single agent execution log."
+)
+async def get_agent_log_detail(
+    log_id: str,
+    agent_service: AgentLogService = Depends(get_agent_log_service),
+) -> SuccessResponse:
+    log = await agent_service.get_log_by_id(log_id)
+    if not log:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent log entry not found"
+        )
+    return SuccessResponse(
+        success=True,
+        message="Agent log detail retrieved successfully",
+        data=agent_service.to_response(log).model_dump()
+    )
+
+
+@router.get(
+    "/logs/authentication",
+    response_model=SuccessResponse,
+    summary="Get Authentication Logs",
+    description="Retrieve paginated list of security audit events like logins, password resets, and revocations."
+)
+async def get_authentication_logs(
+    limit: int = 50,
+    skip: int = 0,
+    search: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    audit_service: AuditLogService = Depends(get_audit_log_service),
+) -> SuccessResponse:
+    try:
+        logs, total = await audit_service.get_auth_logs_paginated(
+            limit=limit,
+            skip=skip,
+            search=search,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        return SuccessResponse(
+            success=True,
+            message="Authentication logs retrieved successfully",
+            data={
+                "logs": [audit_service.to_response(log).model_dump() for log in logs],
+                "total": total,
+                "limit": limit,
+                "skip": skip
+            }
+        )
+    except Exception as e:
+        logger.exception("Failed to retrieve authentication logs")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve authentication logs"
+        ) from e
+
 
 
 
