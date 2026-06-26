@@ -226,8 +226,8 @@ export const aiService = {
     return response.data
   },
 
-  retrieve: async (request: RetrievalRequest): Promise<RetrievalResponse> => {
-    const response = await apiClient.post<RetrievalResponse>('/ai/retrieve', request)
+  retrieveSingle: async (request: RetrievalRequest): Promise<RetrievalResponse> => {
+    const response = await apiClient.post<RetrievalResponse>('/ai/retrieve/single', request)
     return response.data
   },
 
@@ -236,8 +236,23 @@ export const aiService = {
     return response.data
   },
 
-  getRetrievalStatistics: async (): Promise<RetrievalStatisticsResponse> => {
-    const response = await apiClient.get<RetrievalStatisticsResponse>('/ai/retrieve/statistics')
+  retrieveAgent: async (request: RetrievalRequest): Promise<RetrievalPackage> => {
+    const response = await apiClient.post<RetrievalPackage>('/ai/retrieve', request)
+    return response.data
+  },
+
+  retrieveAgentDebug: async (request: RetrievalRequest): Promise<RetrievalPackage> => {
+    const response = await apiClient.post<RetrievalPackage>('/ai/retrieve/debug', request)
+    return response.data
+  },
+
+  getRetrievalStatistics: async (): Promise<RetrievalAgentStatisticsResponse> => {
+    const response = await apiClient.get<RetrievalAgentStatisticsResponse>('/ai/retrieve/statistics')
+    return response.data
+  },
+
+  getRetrievalStatisticsRaw: async (): Promise<RetrievalStatisticsResponse> => {
+    const response = await apiClient.get<RetrievalStatisticsResponse>('/ai/retrieve/statistics/raw')
     return response.data
   },
 
@@ -346,6 +361,8 @@ export interface RetrievalRequest {
   filters?: Record<string, any>
   top_k?: number
   score_threshold?: number
+  patient_id?: string
+  intent?: string
 }
 
 export interface RetrievalMatch {
@@ -375,6 +392,39 @@ export interface RetrievalStatisticsResponse {
   avg_score: number
   duplicate_chunks_removed: number
   timeout_count: number
+}
+
+export interface RetrievalPackage {
+  intent: string
+  collections_used: string[]
+  retrieved_chunks: RetrievalMatch[]
+  context: string
+  citations: Record<string, {
+    source?: string
+    collection?: string
+    document_id?: string
+    chunk_id?: string
+    page_number?: number
+    score?: number
+  }>
+  metadata: Record<string, any>
+  latency: Record<string, number>
+  scores: Record<string, number>
+  cache_status: string
+}
+
+export interface RetrievalAgentStatisticsResponse {
+  requests: number
+  failures: number
+  cache_hits: number
+  cache_misses: number
+  cache_hit_ratio: number
+  avg_retrieval_latency_ms: number
+  avg_ranking_latency_ms: number
+  avg_context_latency_ms: number
+  avg_latency_ms: number
+  intent_counts: Record<string, number>
+  collection_usage: Record<string, number>
 }
 
 export interface ContextAssemblyRequest {

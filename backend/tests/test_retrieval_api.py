@@ -107,7 +107,7 @@ def test_retrieve_endpoint_unauthorized(client, mocks, patient_user):
     app.dependency_overrides[get_current_user] = lambda: patient_user
     
     response = client.post(
-        "/api/v1/ai/retrieve",
+        "/api/v1/ai/retrieve/single",
         json={"query": "asthma", "collections": ["REPORT"]}
     )
     
@@ -120,7 +120,7 @@ def test_retrieve_endpoint_authorized(client, mocks, admin_user, mock_retrieval_
     app.dependency_overrides[get_retrieval_service] = lambda: mock_retrieval_service
     
     response = client.post(
-        "/api/v1/ai/retrieve",
+        "/api/v1/ai/retrieve/single",
         json={"query": "asthma", "collection": "patient_reports", "collections": ["patient_reports"]}
     )
     assert response.status_code == 200
@@ -165,7 +165,7 @@ def test_get_statistics_endpoint(client, mocks, admin_user):
         timeout=False
     )
     
-    response = client.get("/api/v1/ai/retrieve/statistics")
+    response = client.get("/api/v1/ai/retrieve/statistics/raw")
     
     assert response.status_code == 200
     data = response.json()

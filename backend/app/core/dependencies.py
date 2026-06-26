@@ -53,6 +53,8 @@ from app.services import (
     DocumentIndexingService,
     RetrievalService,
     ContextAssemblyService,
+    IntentDetectionService,
+    get_intent_detection_service,
 )
 from app.agents import (
     BaseAgent,
@@ -648,9 +650,20 @@ def get_base_agent() -> BaseAgent:
     return ConcreteBaseAgent("Base Agent")
 
 
+def get_intent_detection_service() -> IntentDetectionService:
+    """Get IntentDetectionService instance"""
+    from app.services.intent_detection_service import get_intent_detection_service as get_intent_detection_service_impl
+    return get_intent_detection_service_impl()
+
+
 def get_retrieval_agent() -> RetrievalAgent:
     """Get RetrievalAgent instance"""
-    return RetrievalAgent("Retrieval Agent")
+    from app.agents.retrieval_agent import RetrievalAgent as ConcreteRetrievalAgent
+    return ConcreteRetrievalAgent(
+        intent_detector=get_intent_detection_service(),
+        retrieval_service=get_retrieval_service(),
+        context_assembly=get_context_assembly_service()
+    )
 
 
 def get_memory_agent() -> MemoryAgent:

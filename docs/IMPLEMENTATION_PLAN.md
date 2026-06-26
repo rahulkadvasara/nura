@@ -22,7 +22,8 @@ Phase 6: Completed
 Phase 6.5: Completed
 Phase 7: Completed
 Phase 8: Completed
-Current Focus: Phase 9 - Retrieval-Augmented Generation (Sprint 1: Document Indexing Pipeline Completed, Sprint 2: Retrieval Engine Completed)
+Phase 9: Completed
+Current Focus: Phase 10 - Multi-Agent System
 
 ---
 
@@ -71,8 +72,8 @@ Production Deployment
 | Phase 6  | Appointment Management                    | 2 Days   |
 | Phase 6.5| Administration & Platform Operations      | 3 Days   |
 | Phase 7  | Payment System                            | 1 Day    |
-| Phase 8  | AI Infrastructure                         | 2 Days   |
-| Phase 9  | Retrieval-Augmented Generation            | 2 Days   |
+| Phase 8  | AI Infrastructure                         | Completed|
+| Phase 9  | Retrieval-Augmented Generation            | Completed|
 | Phase 10 | Multi-Agent System                        | 3 Days   |
 | Phase 11 | Report Analysis                           | 2 Days   |
 | Phase 12 | Drug Safety                               | 2 Days   |
@@ -993,12 +994,18 @@ Implement the complete production-grade RAG infrastructure including indexing, r
 - **Deterministic Citation Badging**: Maps source documents and chunks to unique citation indexes (e.g. `[1]`, `[2]`) in the structured prompt sections, facilitating verifiable clinical claims.
 - **Playground View**: Console tab for administrators to run queries, configure budgets, inspect the raw assembled prompt text, and view performance telemetry.
 
+## Sprint 4: Retrieval Agent & Intent-Based Multi-Collection Routing
+- **Concrete Retrieval Agent**: Integrates intent classification, routing, and context assembly into a single query orchestration agent that inherits from the Base Agent class.
+- **Intent Router**: Classifies search query intents into one of the designated categories (`medical_question`, `report_analysis`, `drug_question`, `doctor_recommendation`, `conversation_recall`, `general_health`) and maps queries to specific vector collections.
+- **TTL Caching**: Caches agent execution packages using in-memory TTL caching (based on patient ID, query, and intent) to improve performance and minimize vector store roundtrips.
+- **Console Interface**: Dedicated administrator interface to run standard and debug (cache-bypass) queries, visualize step-by-step debug traces (intent scoring, raw hits, rankings, assembled prompt), and inspect real-time agent metrics.
+
 ---
 
 ## Exit Criteria
 
 ```text
-Relevant context retrieved, ranked, badged with citations, and safely compressed within token budgets.
+Relevant context retrieved, ranked, badged with citations, and safely compressed within token budgets, managed by the Retrieval Agent with intent routing and TTL caching.
 ```
 
 ---

@@ -20,7 +20,9 @@ from app.core.dependencies import (
     get_ai_orchestrator,
     get_document_indexing_service,
     get_retrieval_service,
-    get_context_assembly_service
+    get_context_assembly_service,
+    get_retrieval_agent,
+    get_intent_detection_service
 )
 from app.models import UserRole, UserInDB
 from app.schemas.ai import (
@@ -38,10 +40,11 @@ from app.schemas.ai import (
     IndexingStatisticsResponse,
     IndexDeletionResponse
 )
-from app.schemas.retrieval import RetrievalRequest, RetrievalResponse, RetrievalStatisticsResponse
+from app.schemas.retrieval import RetrievalRequest, RetrievalResponse, RetrievalStatisticsResponse, RetrievalPackage, RetrievalAgentStatisticsResponse
 from app.schemas.context_assembly import ContextAssemblyRequest, ContextAssemblyResponse, ContextAssemblyStatisticsResponse
-from app.utils.ai import retrieval_metrics, context_assembly_metrics
+from app.utils.ai import retrieval_metrics, context_assembly_metrics, retrieval_agent_metrics
 from app.services.ai_orchestrator import AIOrchestrator
+from app.agents import RetrievalAgent
 from app.schemas.embedding import EmbeddingHealthResponse, EmbeddingTestRequest, EmbeddingTestResponse
 from app.schemas.vector import (
     VectorHealthResponse,
@@ -676,12 +679,12 @@ async def get_indexing_statistics(
 
 
 @router.post(
-    "/retrieve",
+    "/retrieve/single",
     response_model=RetrievalResponse,
     summary="Retrieve matches from a single collection",
     description="Runs semantic query search with filters and score threshold on a single collection. Guarded: Admin Only.",
 )
-async def retrieve(
+async def retrieve_single(
     request_data: RetrievalRequest,
     current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
     retrieval_service: RetrievalService = Depends(get_retrieval_service)
@@ -708,6 +711,93 @@ async def retrieve(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed semantic retrieval: {str(e)}"
+        )
+
+
+@router.post(
+    "/retrieve",
+    response_model=RetrievalPackage,
+    summary="Execute Retrieval Agent query",
+    description="Runs semantic multi-collection retrieval based on auto-detected query intent, assembling context within a token budget. Guarded: Admin Only.",
+)
+async def retrieve_agent(
+    request_data: RetrievalRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    retrieval_agent: RetrievalAgent = Depends(get_retrieval_agent)
+) -> RetrievalPackage:
+    try:
+        from app.agents.base.context import AgentContext
+        
+        ctx = AgentContext(
+            user_id=current_user.id,
+            patient_id=request_data.patient_id,
+            metadata={
+                "intent": request_data.intent,
+                "filters": request_data.filters,
+                "top_k": request_data.top_k,
+                "score_threshold": request_data.score_threshold,
+                "token_budget": 4000
+            }
+        )
+        
+        agent_response = await retrieval_agent.run(request_data.query, ctx)
+        if not agent_response.success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=agent_response.message
+            )
+            
+        return RetrievalPackage(**agent_response.response)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Retrieval Agent run failed: {str(e)}"
+        )
+
+
+@router.post(
+    "/retrieve/debug",
+    response_model=RetrievalPackage,
+    summary="Debug Retrieval Agent query",
+    description="Bypasses cache and executes Retrieval Agent query, returning matched chunks and timing details. Guarded: Admin Only.",
+)
+async def retrieve_debug(
+    request_data: RetrievalRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    retrieval_agent: RetrievalAgent = Depends(get_retrieval_agent)
+) -> RetrievalPackage:
+    try:
+        from app.agents.base.context import AgentContext
+        
+        ctx = AgentContext(
+            user_id=current_user.id,
+            patient_id=request_data.patient_id,
+            metadata={
+                "intent": request_data.intent,
+                "filters": request_data.filters,
+                "top_k": request_data.top_k,
+                "score_threshold": request_data.score_threshold,
+                "token_budget": 4000,
+                "bypass_cache": True
+            }
+        )
+        
+        agent_response = await retrieval_agent.run(request_data.query, ctx)
+        if not agent_response.success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=agent_response.message
+            )
+            
+        return RetrievalPackage(**agent_response.response)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Retrieval Agent debug run failed: {str(e)}"
         )
 
 
@@ -748,17 +838,36 @@ async def retrieve_multi(
 
 
 @router.get(
-    "/retrieve/statistics",
+    "/retrieve/statistics/raw",
     response_model=RetrievalStatisticsResponse,
-    summary="Get retrieval statistics",
-    description="Returns retrieval counts, latency averages, and error counters. Guarded: Admin Only.",
+    summary="Get raw semantic retrieval statistics",
+    description="Returns raw retrieval counts, latency averages, and error counters. Guarded: Admin Only.",
 )
-async def get_retrieval_statistics(
+async def get_raw_retrieval_statistics(
     current_user: UserInDB = Depends(require_role(UserRole.ADMIN))
 ) -> RetrievalStatisticsResponse:
     try:
         stats = retrieval_metrics.get_metrics()
         return RetrievalStatisticsResponse(**stats)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch raw retrieval statistics: {str(e)}"
+        )
+
+
+@router.get(
+    "/retrieve/statistics",
+    response_model=RetrievalAgentStatisticsResponse,
+    summary="Get Retrieval Agent statistics",
+    description="Returns telemetry metrics, cache ratios, and intent usage from the Retrieval Agent. Guarded: Admin Only.",
+)
+async def get_retrieval_statistics(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN))
+) -> RetrievalAgentStatisticsResponse:
+    try:
+        stats = retrieval_agent_metrics.get_metrics()
+        return RetrievalAgentStatisticsResponse(**stats)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

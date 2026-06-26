@@ -93,4 +93,20 @@ Phase 9 - Sprint 3 completes the Context Ranking & Assembly engine:
 - **Verification Citations**: Each retrieved chunk or medical context record is stamped with a unique citation badge index (e.g. `[1]`, `[2]`). A lookup mapping matches these badges to their source database ID and metadata (like document type, section name, page number), enabling frontend clients to render verifiable source links.
 - **Telemetry Monitoring**: Built-in tracking of total assembly executions, token usage efficiency, cache status, and average latencies using `ContextAssemblyMetricsTracker`.
 
+---
+
+## 6. Retrieval Agent & Intent-Based Routing
+
+Phase 9 - Sprint 4 integrates the Agent Framework with the Retrieval Engine to build the Retrieval Agent:
+- **Centralized Orchestration**: The `RetrievalAgent` acts as a unified coordinator. It classifies the query's intent, queries target vector collections, merges results, and uses `ContextAssemblyService` to build a token-safe clinical prompt context.
+- **Deterministic Intent Classification**: Queries are analyzed by `IntentDetectionService` using regex rules and keywords to classify query intent into categories like:
+  - `medical_question` → Queries `medical_knowledge` and `patient_reports`
+  - `report_analysis` → Queries `patient_reports`
+  - `drug_question` → Queries `drug_knowledge` and `patient_reports`
+  - `doctor_recommendation` → Queries `doctor_knowledge`
+  - `conversation_recall` → Queries `chat_memory`
+  - `general_health` → Queries `medical_knowledge`
+- **TTL Caching Layer**: To reduce duplicate vector store operations, a `RetrievalCache` is integrated within the Retrieval Agent. Execution outputs are cached using a composite key `(patient_id, normalized_query, intent)`. Cache bypass is supported for tracing and debugging.
+- **Trace Playground View**: An administrator interface allows running queries in standard mode (cached) and debug mode (bypass cache). It displays step-by-step trace components (intent classification scoring, raw vector hits, ranking scores, final context) alongside latency statistics.
+
 

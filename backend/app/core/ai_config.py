@@ -52,6 +52,7 @@ class AISettings(BaseSettings):
     QDRANT_COLLECTION_PREFIX: str = Field(default="", description="Prefix for Qdrant collections")
     QDRANT_DEFAULT_DISTANCE: str = Field(default="cosine", description="Default distance metric for vector comparison (cosine, dot, euclid)")
     QDRANT_DEFAULT_VECTOR_SIZE: int = Field(default=384, description="Default vector size for embedding vectors")
+    RETRIEVAL_CACHE_TTL: int = Field(default=300, description="TTL for semantic search retrieval cache in seconds")
 
     model_config = SettingsConfigDict(
         env_file=".env",

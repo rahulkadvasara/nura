@@ -163,3 +163,20 @@ Agents that require clinical patient context or external domain knowledge (such 
    - Configured `token_budget` (tailored to the LLM model context window limit)
 3. **Structured Response Formatting**: Use the returned citation lookup map to generate verified responses, matching generated citations back to the structured `citations` field in the final `AgentResponse`.
 
+---
+
+## 8. Concrete Retrieval Agent
+
+Implemented in Phase 9 - Sprint 4, `RetrievalAgent` is the first concrete implementation of the base agent classes:
+- **Base Agent Class**: `RetrievalAgent` inherits from `app.agents.base.retrieval_agent.RetrievalAgent` (which inherits from `BaseAgent`).
+- **Execution Workflow**:
+  1. Validates input query text.
+  2. Resolves patient metadata from `AgentContext`.
+  3. Invokes `IntentDetectionService` to determine the category (e.g. `medical_question`, `report_analysis`, etc.) and target collections.
+  4. Checks the `RetrievalCache` for matching queries (unless `bypass_cache` is set in the metadata).
+  5. Performs vector search across mapped collections via `RetrievalService`.
+  6. Assembles the token-bounded context via `ContextAssemblyService`.
+  7. Formats the outputs into a standard `RetrievalPackage` structure.
+  8. Tracks execution metrics using `RetrievalAgentMetricsTracker`.
+- **TTL Cache Mechanism**: Implements `RetrievalCache` using an in-memory dictionary with a TTL based on `RETRIEVAL_CACHE_TTL`. Keys are generated deterministically from patient ID, normalized query text, and detected intent.
+

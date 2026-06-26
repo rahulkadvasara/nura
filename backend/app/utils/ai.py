@@ -497,6 +497,94 @@ class ContextAssemblyMetricsTracker:
 context_assembly_metrics = ContextAssemblyMetricsTracker()
 
 
+class RetrievalAgentMetricsTracker:
+    """In-memory metrics tracker for monitoring Retrieval Agent performance"""
+
+    def __init__(self):
+        self.requests: int = 0
+        self.failures: int = 0
+        self.cache_hits: int = 0
+        self.cache_misses: int = 0
+        self.total_retrieval_latency_ms: float = 0.0
+        self.total_ranking_latency_ms: float = 0.0
+        self.total_context_latency_ms: float = 0.0
+        self.total_latency_ms: float = 0.0
+        self.intent_counts: Dict[str, int] = {}
+        self.collection_usage: Dict[str, int] = {}
+
+    def record_execution(
+        self,
+        intent: str,
+        collections: list,
+        cache_hit: bool,
+        retrieval_latency_ms: float,
+        ranking_latency_ms: float,
+        context_latency_ms: float,
+        total_latency_ms: float,
+        success: bool
+    ) -> None:
+        """Record telemetry of a retrieval agent run"""
+        self.requests += 1
+        if not success:
+            self.failures += 1
+            return
+        
+        if cache_hit:
+            self.cache_hits += 1
+        else:
+            self.cache_misses += 1
+            self.total_retrieval_latency_ms += retrieval_latency_ms
+            self.total_ranking_latency_ms += ranking_latency_ms
+            self.total_context_latency_ms += context_latency_ms
+            self.total_latency_ms += total_latency_ms
+            
+        self.intent_counts[intent] = self.intent_counts.get(intent, 0) + 1
+        for col in collections:
+            self.collection_usage[col] = self.collection_usage.get(col, 0) + 1
+
+    def get_metrics(self) -> dict:
+        """Summarize current retrieval agent performance metrics"""
+        successful = self.requests - self.failures
+        avg_retrieval_latency = (self.total_retrieval_latency_ms / self.cache_misses) if self.cache_misses > 0 else 0.0
+        avg_ranking_latency = (self.total_ranking_latency_ms / self.cache_misses) if self.cache_misses > 0 else 0.0
+        avg_context_latency = (self.total_context_latency_ms / self.cache_misses) if self.cache_misses > 0 else 0.0
+        avg_latency = (self.total_latency_ms / successful) if successful > 0 else 0.0
+        
+        total_cache_attempts = self.cache_hits + self.cache_misses
+        cache_hit_ratio = (self.cache_hits / total_cache_attempts) if total_cache_attempts > 0 else 0.0
+
+        return {
+            "requests": self.requests,
+            "failures": self.failures,
+            "cache_hits": self.cache_hits,
+            "cache_misses": self.cache_misses,
+            "cache_hit_ratio": cache_hit_ratio,
+            "avg_retrieval_latency_ms": avg_retrieval_latency,
+            "avg_ranking_latency_ms": avg_ranking_latency,
+            "avg_context_latency_ms": avg_context_latency,
+            "avg_latency_ms": avg_latency,
+            "intent_counts": self.intent_counts,
+            "collection_usage": self.collection_usage
+        }
+
+    def reset(self) -> None:
+        """Reset internal metrics counters"""
+        self.requests = 0
+        self.failures = 0
+        self.cache_hits = 0
+        self.cache_misses = 0
+        self.total_retrieval_latency_ms = 0.0
+        self.total_ranking_latency_ms = 0.0
+        self.total_context_latency_ms = 0.0
+        self.total_latency_ms = 0.0
+        self.intent_counts = {}
+        self.collection_usage = {}
+
+
+# Global retrieval agent metrics tracker instance
+retrieval_agent_metrics = RetrievalAgentMetricsTracker()
+
+
 
 
 

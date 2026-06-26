@@ -23,9 +23,12 @@ import {
   useReindexDocument,
   useDeleteDocument,
   useDeletePatientDocuments,
-  useRetrieval,
+  useRetrievalSingle,
   useRetrievalMulti,
   useRetrievalStatistics,
+  useRetrievalStatisticsRaw,
+  useRetrievalAgent,
+  useRetrievalAgentDebug,
   useBuildContext,
   useContextAssemblyStatistics
 } from '@/hooks/use-ai'
@@ -2985,7 +2988,7 @@ function RetrievalHealthBadge() {
     isLoading: isStatsLoading, 
     isError: isStatsError,
     refetch: refetchStats
-  } = useRetrievalStatistics()
+  } = useRetrievalStatisticsRaw()
 
   return (
     <Card className="shadow-sm border-slate-200 bg-white px-4 py-2 flex items-center gap-3">
@@ -3022,7 +3025,7 @@ function RetrievalHealthBadge() {
 }
 
 function RetrievalPlaygroundView() {
-  const { data: stats, isLoading: isStatsLoading, refetch: refetchStats } = useRetrievalStatistics()
+  const { data: stats, isLoading: isStatsLoading, refetch: refetchStats } = useRetrievalStatisticsRaw()
   const retrieveMutation = useRetrievalMulti()
 
   const [query, setQuery] = useState('')
@@ -4019,8 +4022,587 @@ function ContextBuilderPlaygroundView() {
   )
 }
 
+function RetrievalAgentHealthBadge() {
+  const { data: stats, isLoading } = useRetrievalStatistics()
+
+  return (
+    <Card className="shadow-sm border-slate-200 bg-white px-4 py-2 flex items-center gap-3">
+      <div className="flex flex-col">
+        <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Cache Hit Ratio</span>
+        {isLoading ? (
+          <span className="text-sm font-medium text-slate-500 flex items-center gap-1.5 mt-0.5">
+            <RefreshCw className="h-3 w-3 animate-spin" />
+            Checking...
+          </span>
+        ) : (
+          <span className="text-sm font-bold text-teal-600 flex items-center gap-1.5 mt-0.5">
+            <Zap className="h-4 w-4 text-teal-500 animate-pulse" />
+            {((stats?.cache_hit_ratio || 0) * 100).toFixed(0)}% Hit Rate
+          </span>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+function RetrievalAgentPlaygroundView() {
+  const { data: stats, isLoading: isStatsLoading, refetch: refetchStats } = useRetrievalStatistics()
+  const agentMutation = useRetrievalAgent()
+  const debugMutation = useRetrievalAgentDebug()
+
+  const [query, setQuery] = useState('')
+  const [selectedPatientId, setSelectedPatientId] = useState('')
+  const [patientSearch, setPatientSearch] = useState('')
+  const [forcedIntent, setForcedIntent] = useState<string>('auto')
+  const [tokenBudget, setTokenBudget] = useState<number>(4000)
+  const [runMode, setRunMode] = useState<'standard' | 'debug'>('standard')
+
+  const [result, setResult] = useState<any>(null)
+  const [latency, setLatency] = useState<number | null>(null)
+  const [copiedContext, setCopiedContext] = useState(false)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [showMetadataId, setShowMetadataId] = useState<string | null>(null)
+  
+  // Debug view active accordions
+  const [debugAccordion, setDebugAccordion] = useState<Record<string, boolean>>({
+    intent: true,
+    retrieval: false,
+    ranking: false,
+    assembly: false,
+    output: false
+  })
+
+  // Fetch patients list
+  const { data: patientsResponse, isLoading: isLoadingPatients } = useQuery({
+    queryKey: ['admin', 'patients-list'],
+    queryFn: () => adminUserService.listUsers(undefined, 'patient')
+  })
+  const patients = patientsResponse?.data || []
+
+  // Filter patients list based on search term
+  const filteredPatients = patients.filter((p: any) =>
+    p.full_name?.toLowerCase().includes(patientSearch.toLowerCase()) ||
+    p.email?.toLowerCase().includes(patientSearch.toLowerCase())
+  )
+
+  const handleRunAgent = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!query.trim()) return
+
+    setResult(null)
+    const startTime = performance.now()
+    
+    const payload = {
+      query: query.trim(),
+      patient_id: selectedPatientId || undefined,
+      intent: forcedIntent !== 'auto' ? forcedIntent : undefined,
+      top_k: 5,
+      score_threshold: undefined,
+      filters: undefined
+    }
+
+    try {
+      let res
+      if (runMode === 'debug') {
+        res = await debugMutation.mutateAsync(payload)
+      } else {
+        res = await agentMutation.mutateAsync(payload)
+      }
+      const endTime = performance.now()
+      setLatency(endTime - startTime)
+      setResult(res)
+      refetchStats()
+    } catch (err: any) {
+      setResult({ success: false, error: err.message || 'Agent query run failed' })
+      setLatency(null)
+    }
+  }
+
+  const toggleDebugAccordion = (section: string) => {
+    setDebugAccordion(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }))
+  }
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Statistics Header Deck */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="border-slate-200 shadow bg-white">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Runs</p>
+              <h3 className="text-2xl font-bold text-slate-800 mt-1">
+                {isStatsLoading ? '...' : stats?.requests ?? 0}
+              </h3>
+            </div>
+            <div className="p-2.5 rounded-full bg-teal-50 text-teal-600">
+              <Zap className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow bg-white">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Average Latency</p>
+              <h3 className="text-2xl font-bold text-slate-800 mt-1">
+                {isStatsLoading ? '...' : `${(stats?.avg_latency_ms ?? 0).toFixed(1)} ms`}
+              </h3>
+            </div>
+            <div className="p-2.5 rounded-full bg-blue-50 text-blue-600">
+              <Clock className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow bg-white">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Cache Hits / Misses</p>
+              <h3 className="text-2xl font-bold text-slate-800 mt-1">
+                {isStatsLoading ? '...' : `${stats?.cache_hits ?? 0} / ${stats?.cache_misses ?? 0}`}
+              </h3>
+            </div>
+            <div className="p-2.5 rounded-full bg-indigo-50 text-indigo-600">
+              <Database className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow bg-white">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Failed Requests</p>
+              <h3 className="text-2xl font-bold text-slate-800 mt-1 text-red-600">
+                {isStatsLoading ? '...' : stats?.failures ?? 0}
+              </h3>
+            </div>
+            <div className="p-2.5 rounded-full bg-red-50 text-red-600">
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Control Panel Column */}
+        <div className="lg:col-span-1 space-y-6">
+          <Card className="border-slate-200 shadow-md bg-white">
+            <CardHeader className="border-b border-slate-100 bg-slate-50/50 py-4">
+              <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <Sliders className="h-4.5 w-4.5 text-slate-500" />
+                Retrieval Settings
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-4">
+              <form onSubmit={handleRunAgent} className="space-y-4">
+                {/* Search Phrase Query */}
+                <div className="space-y-1.5">
+                  <label htmlFor="agent-query" className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    Query Phrase
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="agent-query"
+                      type="text"
+                      placeholder="e.g. side effects of paracetamol..."
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      required
+                      className="w-full rounded-md border border-slate-200 pl-10 pr-4 py-2 text-sm text-slate-800 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                    />
+                    <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
+                  </div>
+                </div>
+
+                {/* Patient Context Select */}
+                <div className="space-y-1.5">
+                  <label htmlFor="agent-patient" className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    Patient Profile
+                  </label>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Search patient..."
+                      value={patientSearch}
+                      onChange={(e) => setPatientSearch(e.target.value)}
+                      className="w-full rounded-md border border-slate-200 px-3 py-1.5 text-xs focus:border-teal-500 focus:outline-none"
+                    />
+                    <select
+                      id="agent-patient"
+                      value={selectedPatientId}
+                      onChange={(e) => {
+                        setSelectedPatientId(e.target.value)
+                      }}
+                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-xs bg-white focus:border-teal-500 focus:outline-none"
+                    >
+                      <option value="">Anonymous (No patient history context)</option>
+                      {isLoadingPatients ? (
+                        <option disabled>Loading patients...</option>
+                      ) : (
+                        filteredPatients.map((p: any) => (
+                          <option key={p.id} value={p.id}>
+                            {p.full_name} ({p.email})
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Intent Override Options */}
+                <div className="space-y-1.5">
+                  <label htmlFor="agent-intent" className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    Retrieval Intent Override
+                  </label>
+                  <select
+                    id="agent-intent"
+                    value={forcedIntent}
+                    onChange={(e) => setForcedIntent(e.target.value)}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-xs bg-white focus:border-teal-500 focus:outline-none"
+                  >
+                    <option value="auto">Auto-Detect Intent (Deterministic Classifier)</option>
+                    <option value="medical_question">Medical Question</option>
+                    <option value="report_analysis">Report Analysis</option>
+                    <option value="drug_question">Drug Question</option>
+                    <option value="doctor_recommendation">Doctor Recommendation</option>
+                    <option value="conversation_recall">Conversation Recall</option>
+                    <option value="general_health">General Health</option>
+                  </select>
+                </div>
+
+                {/* Debug vs Standard Mode Toggle */}
+                <div className="space-y-1.5 pt-2 border-t border-slate-100 flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Debug Trace Mode</span>
+                  <div className="flex gap-2 bg-slate-100 p-1 rounded-md">
+                    <button
+                      type="button"
+                      onClick={() => setRunMode('standard')}
+                      className={`px-3 py-1 text-xs font-medium rounded transition-all ${
+                        runMode === 'standard' ? 'bg-white text-teal-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Standard
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRunMode('debug')}
+                      className={`px-3 py-1 text-xs font-medium rounded transition-all ${
+                        runMode === 'debug' ? 'bg-white text-teal-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Debug (No Cache)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Run Query Button */}
+                <Button
+                  type="submit"
+                  disabled={!query.trim() || agentMutation.isPending || debugMutation.isPending}
+                  className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 transition-all mt-4"
+                >
+                  {agentMutation.isPending || debugMutation.isPending ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Running Agent...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="h-4 w-4 mr-2" />
+                      Run Retrieval Agent
+                    </>
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* Collection usage distribution card */}
+          {stats?.collection_usage && Object.keys(stats.collection_usage).length > 0 && (
+            <Card className="border-slate-200 shadow bg-white text-xs">
+              <CardHeader className="py-3.5 border-b border-slate-100">
+                <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wider">Top Searched Collections</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-2">
+                {Object.entries(stats.collection_usage)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([col, count]) => (
+                    <div key={col} className="flex justify-between items-center text-slate-600 py-1 border-b border-slate-50/50">
+                      <span className="font-mono text-slate-700">{col}</span>
+                      <span className="font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded">{count} calls</span>
+                    </div>
+                  ))}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Right Output Panels Column */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card className="border-slate-200 shadow-md bg-white min-h-[450px] flex flex-col overflow-hidden">
+            <CardHeader className="border-b border-slate-100 bg-slate-50/50 py-4 flex flex-row items-center justify-between">
+              <CardTitle className="text-base font-semibold text-slate-800">
+                Agent Output & Traces
+              </CardTitle>
+              {result && (
+                <div className="flex items-center gap-3">
+                  <span className={`px-2 py-0.5 rounded-full font-semibold border text-[10px] uppercase ${
+                    result.cache_status === 'hit' ? 'bg-teal-50 border-teal-200 text-teal-800' : 'bg-amber-50 border-amber-200 text-amber-800'
+                  }`}>
+                    Cache: {result.cache_status}
+                  </span>
+                  {latency && (
+                    <span className="text-xs text-slate-400 font-normal">
+                      Completed in {latency.toFixed(0)} ms
+                    </span>
+                  )}
+                </div>
+              )}
+            </CardHeader>
+            <CardContent className="flex-1 p-6 flex flex-col justify-between">
+              {agentMutation.isPending || debugMutation.isPending ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
+                  <RefreshCw className="h-8 w-8 animate-spin text-teal-500 animate-pulse" />
+                  <p className="text-sm font-medium text-slate-500">Classifying query and routing vector lookups...</p>
+                </div>
+              ) : !result ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-20 text-slate-400 text-center">
+                  <Zap className="h-12 w-12 text-slate-200 mb-3 animate-bounce" />
+                  <p className="text-sm font-medium text-slate-500">Retrieval Agent Console Ready</p>
+                  <p className="text-xs text-slate-400 mt-1 max-w-[350px]">
+                    Configure query settings and click Run. The agent will determine intent, execute search on required collections, and compile token-safe context.
+                  </p>
+                </div>
+              ) : result.error ? (
+                <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-semibold">Execution Error</h4>
+                    <p className="text-sm mt-1 text-red-600">{result.error}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* General Results Header: Intent & Timings */}
+                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-100 flex flex-wrap gap-4 justify-between items-center text-sm">
+                    <div className="space-y-1">
+                      <span className="text-xs text-slate-400 font-semibold block uppercase">Detected Intent</span>
+                      <strong className="text-teal-700 uppercase text-base">{result.intent}</strong>
+                    </div>
+
+                    <div className="flex gap-4">
+                      {result.latency.retrieval && (
+                        <div className="text-center">
+                          <span className="text-[10px] text-slate-400 block uppercase">Search</span>
+                          <span className="font-semibold text-slate-700">{result.latency.retrieval.toFixed(0)}ms</span>
+                        </div>
+                      )}
+                      {result.latency.context && (
+                        <div className="text-center">
+                          <span className="text-[10px] text-slate-400 block uppercase">Assembly</span>
+                          <span className="font-semibold text-slate-700">{result.latency.context.toFixed(0)}ms</span>
+                        </div>
+                      )}
+                      {result.latency.total && (
+                        <div className="text-center bg-teal-50 border border-teal-100 px-2.5 py-0.5 rounded">
+                          <span className="text-[10px] text-teal-600 block uppercase font-bold">Total</span>
+                          <span className="font-bold text-teal-800">{result.latency.total.toFixed(0)}ms</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Debug Mode Accordion Section */}
+                  {runMode === 'debug' ? (
+                    <div className="space-y-3">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Debug Execution Traces</h4>
+                      
+                      {/* Accordion: Intent Detection Score Matches */}
+                      <div className="border border-slate-100 rounded-lg overflow-hidden bg-white">
+                        <button
+                          type="button"
+                          onClick={() => toggleDebugAccordion('intent')}
+                          className="w-full bg-slate-50 px-4 py-2.5 flex items-center justify-between text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-all border-b border-slate-100"
+                        >
+                          <span>Step 1: Deterministic Intent Scoring</span>
+                          <span className="font-mono text-teal-600">Scores</span>
+                        </button>
+                        {debugAccordion.intent && (
+                          <div className="p-4 space-y-2 text-xs max-h-[200px] overflow-y-auto bg-slate-900 text-slate-300 font-mono">
+                            {result.metadata.intent_scores && Object.entries(result.metadata.intent_scores).map(([intentName, scoreVal]: any) => (
+                              <div key={intentName} className="flex justify-between">
+                                <span className={intentName === result.intent ? 'text-teal-400 font-bold' : ''}>
+                                  {intentName} {intentName === result.intent && '◀ Winner'}
+                                </span>
+                                <span className={intentName === result.intent ? 'text-teal-400 font-bold' : ''}>
+                                  {scoreVal} pts
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Accordion: Raw Chunks list */}
+                      <div className="border border-slate-100 rounded-lg overflow-hidden bg-white">
+                        <button
+                          type="button"
+                          onClick={() => toggleDebugAccordion('retrieval')}
+                          className="w-full bg-slate-50 px-4 py-2.5 flex items-center justify-between text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-all border-b border-slate-100"
+                        >
+                          <span>Step 2: Raw Retrieved Vector Points ({result.retrieved_chunks.length} points)</span>
+                          <span className="font-mono text-teal-600">Raw Hits</span>
+                        </button>
+                        {debugAccordion.retrieval && (
+                          <div className="p-0 max-h-[300px] overflow-y-auto bg-slate-900 text-slate-400 text-[11px] font-mono divide-y divide-slate-800">
+                            {result.retrieved_chunks.map((hit: any, i: number) => (
+                              <div key={hit.id} className="p-3.5 space-y-1">
+                                <div className="flex justify-between text-teal-400 text-[10px]">
+                                  <span>Hit #{i + 1} | Point ID: {hit.id.slice(0, 8)}...</span>
+                                  <span>Col: {hit.collection} | Score: {(hit.score * 100).toFixed(0)}%</span>
+                                </div>
+                                <p className="text-slate-300 whitespace-pre-wrap">{hit.content}</p>
+                              </div>
+                            ))}
+                            {result.retrieved_chunks.length === 0 && (
+                              <div className="p-4 text-center text-slate-500">No raw hits found</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Accordion: Ranked & Deduplicated Chunks */}
+                      <div className="border border-slate-100 rounded-lg overflow-hidden bg-white">
+                        <button
+                          type="button"
+                          onClick={() => toggleDebugAccordion('ranking')}
+                          className="w-full bg-slate-50 px-4 py-2.5 flex items-center justify-between text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-all border-b border-slate-100"
+                        >
+                          <span>Step 3: Ranked Chunks & Scores mapping</span>
+                          <span className="font-mono text-teal-600">Rankings</span>
+                        </button>
+                        {debugAccordion.ranking && (
+                          <div className="p-4 space-y-2 text-xs max-h-[250px] overflow-y-auto bg-slate-900 text-slate-300 font-mono">
+                            {result.scores && Object.entries(result.scores).map(([chunkId, chunkScore]: any) => (
+                              <div key={chunkId} className="flex justify-between border-b border-slate-800 pb-1">
+                                <span>ID: {chunkId}</span>
+                                <span className="text-teal-400 font-semibold">{(chunkScore * 100).toFixed(1)}%</span>
+                              </div>
+                            ))}
+                            {(!result.scores || Object.keys(result.scores).length === 0) && (
+                              <div className="text-center text-slate-500">No chunk rankings found</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Accordion: Final Context Assembly */}
+                      <div className="border border-slate-100 rounded-lg overflow-hidden bg-white">
+                        <button
+                          type="button"
+                          onClick={() => toggleDebugAccordion('assembly')}
+                          className="w-full bg-slate-50 px-4 py-2.5 flex items-center justify-between text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-all border-b border-slate-100"
+                        >
+                          <span>Step 4: Assembled Raw Context Prompt ({result.metadata.estimated_tokens} tokens)</span>
+                          <span className="font-mono text-teal-600">Prompt</span>
+                        </button>
+                        {debugAccordion.assembly && (
+                          <div className="p-0 bg-slate-900 border border-slate-950 overflow-x-auto max-h-[350px] overflow-y-auto shadow-inner">
+                            <pre className="p-5 font-mono text-[11px] text-slate-300 whitespace-pre-wrap leading-relaxed">
+                              {result.context || 'Context is empty'}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    // Standard Mode Output Views
+                    <div className="space-y-4">
+                      {/* Context Prompt Text area */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Assembled Context Preview</h4>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              navigator.clipboard.writeText(result.context)
+                              setCopiedContext(true)
+                              setTimeout(() => setCopiedContext(false), 2000)
+                            }}
+                            className="h-7 text-xs text-teal-600 hover:text-teal-700 flex items-center gap-1.5"
+                          >
+                            {copiedContext ? (
+                              <>
+                                <Check className="h-3.5 w-3.5 text-teal-600" />
+                                Copied context
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-3.5 w-3.5" />
+                                Copy Context
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                        
+                        <div className="rounded-lg border border-slate-200 overflow-hidden bg-slate-900 text-slate-300">
+                          <pre className="p-5 font-mono text-[11px] whitespace-pre-wrap leading-relaxed max-h-[300px] overflow-y-auto">
+                            {result.context || 'Patient profile summary has no records.'}
+                          </pre>
+                        </div>
+                      </div>
+
+                      {/* Reference Citations Lookup List */}
+                      {result.citations && Object.keys(result.citations).length > 0 && (
+                        <div className="space-y-2">
+                          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Source Reference Citations</h4>
+                          <div className="border border-slate-200 rounded-lg overflow-hidden divide-y divide-slate-100 bg-white">
+                            {Object.entries(result.citations).map(([indexBadge, details]: any) => (
+                              <div key={indexBadge} className="p-3 text-xs flex justify-between items-center gap-4 bg-white hover:bg-slate-50/50 transition-all">
+                                <div className="flex items-center gap-3">
+                                  <span className="font-bold text-teal-700 bg-teal-50 border border-teal-100 px-2 py-0.5 rounded font-mono text-center min-w-[28px]">
+                                    [{indexBadge}]
+                                  </span>
+                                  <div className="space-y-0.5">
+                                    <span className="font-semibold text-slate-700 block">
+                                      Collection: <code className="text-slate-600 bg-slate-100 px-1 rounded text-[10px] font-normal">{details.collection || 'patient_reports'}</code>
+                                    </span>
+                                    <span className="text-slate-400 font-mono text-[10px] block">
+                                      Document: {details.document_id || 'N/A'}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="text-right text-[10px] text-slate-400">
+                                  {details.score && (
+                                    <span className="font-medium text-slate-500 block">Score: {(details.score * 100).toFixed(0)}%</span>
+                                  )}
+                                  {details.page_number && (
+                                    <span className="block">Page {details.page_number}</span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function AIPlaygroundContent() {
-  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder'>('llm')
+  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent'>('llm')
 
   return (
     <div className="space-y-6">
@@ -4051,6 +4633,8 @@ function AIPlaygroundContent() {
           <RetrievalHealthBadge />
         ) : activeTab === 'context-builder' ? (
           <ContextBuilderHealthBadge />
+        ) : activeTab === 'retrieval-agent' ? (
+          <RetrievalAgentHealthBadge />
         ) : (
           <IntegrationHealthSummaryBadge />
         )}
@@ -4136,6 +4720,17 @@ function AIPlaygroundContent() {
           Context Builder
         </button>
         <button
+          onClick={() => setActiveTab('retrieval-agent')}
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
+            activeTab === 'retrieval-agent'
+              ? 'border-teal-600 text-teal-600 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Zap className="h-4 w-4" />
+          Retrieval Agent
+        </button>
+        <button
           onClick={() => setActiveTab('integration')}
           className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
             activeTab === 'integration'
@@ -4162,6 +4757,8 @@ function AIPlaygroundContent() {
         <RetrievalPlaygroundView />
       ) : activeTab === 'context-builder' ? (
         <ContextBuilderPlaygroundView />
+      ) : activeTab === 'retrieval-agent' ? (
+        <RetrievalAgentPlaygroundView />
       ) : (
         <IntegrationPlaygroundView />
       )}

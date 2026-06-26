@@ -46,6 +46,7 @@ from app.services.document_metadata_service import DocumentMetadataService, get_
 from app.services.document_indexing_service import DocumentIndexingService, get_document_indexing_service
 from app.services.retrieval_service import RetrievalService, get_retrieval_service
 from app.services.context_assembly_service import ContextAssemblyService, get_context_assembly_service
+from app.services.intent_detection_service import IntentDetectionService, get_intent_detection_service
 
 
 __all__ = [
@@ -125,4 +126,6 @@ __all__ = [
     "get_retrieval_service",
     "ContextAssemblyService",
     "get_context_assembly_service",
+    "IntentDetectionService",
+    "get_intent_detection_service",
 ]

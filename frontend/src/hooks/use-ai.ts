@@ -21,6 +21,8 @@ import {
   RetrievalRequest,
   RetrievalResponse,
   RetrievalStatisticsResponse,
+  RetrievalPackage,
+  RetrievalAgentStatisticsResponse,
   ContextAssemblyRequest,
   ContextAssemblyResponse,
   ContextAssemblyStatisticsResponse
@@ -236,11 +238,41 @@ export function useDeletePatientDocuments() {
 /**
  * Custom hook to execute single-collection semantic retrieval.
  */
-export function useRetrieval() {
+export function useRetrievalSingle() {
   const queryClient = useQueryClient()
   return useMutation<RetrievalResponse, Error, RetrievalRequest>({
     mutationFn: async (request: RetrievalRequest) => {
-      return await aiService.retrieve(request)
+      return await aiService.retrieveSingle(request)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'retrieval', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to execute Retrieval Agent queries.
+ */
+export function useRetrievalAgent() {
+  const queryClient = useQueryClient()
+  return useMutation<RetrievalPackage, Error, RetrievalRequest>({
+    mutationFn: async (request: RetrievalRequest) => {
+      return await aiService.retrieveAgent(request)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'retrieval', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to execute Retrieval Agent debug queries.
+ */
+export function useRetrievalAgentDebug() {
+  const queryClient = useQueryClient()
+  return useMutation<RetrievalPackage, Error, RetrievalRequest>({
+    mutationFn: async (request: RetrievalRequest) => {
+      return await aiService.retrieveAgentDebug(request)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'retrieval', 'statistics'] })
@@ -264,13 +296,26 @@ export function useRetrievalMulti() {
 }
 
 /**
- * Custom hook to monitor retrieval metrics statistics periodically.
+ * Custom hook to monitor Retrieval Agent metrics statistics periodically.
  */
 export function useRetrievalStatistics() {
-  return useQuery<RetrievalStatisticsResponse, Error>({
+  return useQuery<RetrievalAgentStatisticsResponse, Error>({
     queryKey: ['admin', 'ai', 'retrieval', 'statistics'],
     queryFn: async () => {
       return await aiService.getRetrievalStatistics()
+    },
+    refetchInterval: 15000 // Refresh retrieval stats every 15 seconds
+  })
+}
+
+/**
+ * Custom hook to monitor raw retrieval metrics statistics periodically.
+ */
+export function useRetrievalStatisticsRaw() {
+  return useQuery<RetrievalStatisticsResponse, Error>({
+    queryKey: ['admin', 'ai', 'retrieval', 'statistics', 'raw'],
+    queryFn: async () => {
+      return await aiService.getRetrievalStatisticsRaw()
     },
     refetchInterval: 15000 // Refresh retrieval stats every 15 seconds
   })
