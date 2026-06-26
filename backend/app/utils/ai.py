@@ -427,5 +427,76 @@ class RetrievalMetricsTracker:
 retrieval_metrics = RetrievalMetricsTracker()
 
 
+class ContextAssemblyMetricsTracker:
+    """In-memory metrics tracker for monitoring Context Assembly performance"""
+
+    def __init__(self):
+        self.assemblies_executed: int = 0
+        self.failed_assemblies: int = 0
+        self.total_latency_ms: float = 0.0
+        self.total_original_chunks: int = 0
+        self.total_removed_chunks: int = 0
+        self.total_compression_ratio_sum: float = 0.0
+        self.total_tokens_sum: float = 0.0
+        self.section_counts: Dict[str, int] = {}
+
+    def record_assembly(
+        self,
+        latency_ms: float,
+        success: bool,
+        original_chunks: int = 0,
+        removed_chunks: int = 0,
+        compression_ratio: float = 0.0,
+        estimated_tokens: int = 0,
+        sections: list = None
+    ) -> None:
+        """Record telemetry of a context assembly execution event"""
+        self.assemblies_executed += 1
+        if not success:
+            self.failed_assemblies += 1
+        else:
+            self.total_latency_ms += latency_ms
+            self.total_original_chunks += original_chunks
+            self.total_removed_chunks += removed_chunks
+            self.total_compression_ratio_sum += compression_ratio
+            self.total_tokens_sum += estimated_tokens
+            if sections:
+                for sec in sections:
+                    self.section_counts[sec] = self.section_counts.get(sec, 0) + 1
+
+    def get_metrics(self) -> dict:
+        """Summarize current context assembly performance metrics"""
+        successful = self.assemblies_executed - self.failed_assemblies
+        avg_latency = (self.total_latency_ms / successful) if successful > 0 else 0.0
+        avg_compression_ratio = (self.total_compression_ratio_sum / successful) if successful > 0 else 0.0
+        avg_tokens = (self.total_tokens_sum / successful) if successful > 0 else 0.0
+        return {
+            "assemblies_executed": self.assemblies_executed,
+            "failed_assemblies": self.failed_assemblies,
+            "avg_latency_ms": avg_latency,
+            "avg_compression_ratio": avg_compression_ratio,
+            "avg_tokens_assembled": avg_tokens,
+            "total_original_chunks": self.total_original_chunks,
+            "total_removed_chunks": self.total_removed_chunks,
+            "section_counts": self.section_counts
+        }
+
+    def reset(self) -> None:
+        """Reset internal metrics counters"""
+        self.assemblies_executed = 0
+        self.failed_assemblies = 0
+        self.total_latency_ms = 0.0
+        self.total_original_chunks = 0
+        self.total_removed_chunks = 0
+        self.total_compression_ratio_sum = 0.0
+        self.total_tokens_sum = 0.0
+        self.section_counts = {}
+
+
+# Global context assembly metrics tracker instance
+context_assembly_metrics = ContextAssemblyMetricsTracker()
+
+
+
 
 

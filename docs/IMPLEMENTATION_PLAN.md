@@ -964,90 +964,41 @@ AI service can answer test queries
 
 ## Objective
 
-Implement RAG.
+Implement the complete production-grade RAG infrastructure including indexing, retrieval, and token-aware context ranking and assembly.
 
 ---
 
-## Qdrant Collections
+## Sprint 1: Document Indexing Pipeline
+- **System of Record**: MongoDB remains the System of Record. Every indexed document can be reproduced from MongoDB.
+- **Deterministic Indexing**: Standardized indexing methods that avoid duplicate vectors using document IDs as Qdrant payload points.
+- **Metadata Richness**: Automatically populates indexing metadata (document type, index version, patient/doctor IDs, tags).
 
-```text
-patient_reports
-medical_knowledge
-drug_knowledge
-chat_memory
-doctor_knowledge
-```
+## Sprint 2: Retrieval Engine
+- **Centralized Retrieval Service**: Abstracted query interface preventing direct vector DB queries.
+- **Cross-Collection Search**: Parallel search queries across collections matching patient information, doctor directories, medical guidelines, and chat memory.
+- **Deduplication & Scoring**: Merges results, scoring similarities in a normalized `[0.0, 1.0]` cosine similarity range, and filters duplicate entries by content hash.
 
----
-
-## RAG Workflow
-
-```text
-User Query
- ↓
-Intent Detection
- ↓
-Patient Context Builder
- ↓
-Embedding
- ↓
-Multi-Collection Retrieval
- ↓
-Context Ranking
- ↓
-Prompt Construction
- ↓
-Groq LLM
- ↓
-Response
-```
-
----
-
-## Multi-Collection Retrieval
-
-Retrieval occurs from multiple collections depending on detected intent.
-
-Examples:
-* Medical Question → `medical_knowledge`
-* Report Question → `patient_reports`
-* Drug Question → `drug_knowledge`
-* Doctor Search → `doctor_knowledge`
-* Conversation Recall → `chat_memory`
-* Patient Summary → `patient_memory` (MongoDB)
-
-The Retrieval Agent decides which collections to query.
-
----
-
-## Memory Update Pipeline
-
-Whenever an important healthcare event occurs:
-
-```text
-Event
- ↓
-Extract structured data
- ↓
-Generate summary
- ↓
-Update patient_memory (MongoDB)
- ↓
-Chunk relevant content
- ↓
-Generate embeddings
- ↓
-Update Qdrant
-```
-
-The system keeps MongoDB summaries synchronized with vector knowledge.
+## Sprint 3: Context Ranking & Assembly
+- **Centralized Service**: `ContextAssemblyService` maps database references, patient histories, and retrieved vector results into a structured prompt context.
+- **Strict Medical Prioritization**: Ordered by critical healthcare utility:
+  1. `patient_memory` (MongoDB patient profile summary - ALWAYS preserved)
+  2. `Reports` (Lab results, diagnostic files)
+  3. `Consultations` (Doctor consult logs)
+  4. `Prescriptions` (Active medications)
+  5. `Medical` (Medical guidelines/knowledge)
+  6. `Drug` (Drug safety database)
+  7. `Doctor` (Doctor profiles)
+  8. `Chat` (Conversational message history)
+- **Waterfall Token Budgeting**: Automatically calculates token counts using the configured tokenizer. Allocates tokens starting from the highest priority downwards. If the total token count exceeds the configured budget, lower priority categories are skipped or truncated.
+- **Deterministic Citation Badging**: Maps source documents and chunks to unique citation indexes (e.g. `[1]`, `[2]`) in the structured prompt sections, facilitating verifiable clinical claims.
+- **Playground View**: Console tab for administrators to run queries, configure budgets, inspect the raw assembled prompt text, and view performance telemetry.
 
 ---
 
 ## Exit Criteria
 
 ```text
-Relevant context retrieved
+Relevant context retrieved, ranked, badged with citations, and safely compressed within token budgets.
 ```
 
 ---

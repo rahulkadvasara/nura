@@ -25,7 +25,9 @@ import {
   useDeletePatientDocuments,
   useRetrieval,
   useRetrievalMulti,
-  useRetrievalStatistics
+  useRetrievalStatistics,
+  useBuildContext,
+  useContextAssemblyStatistics
 } from '@/hooks/use-ai'
 import { 
   Sparkles, 
@@ -3474,9 +3476,551 @@ function RetrievalPlaygroundView() {
   )
 }
 
-function AIPlaygroundContent() {
-  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval'>('llm')
+function ContextBuilderHealthBadge() {
+  const { data: stats, isLoading } = useContextAssemblyStatistics()
 
+  return (
+    <Card className="shadow-sm border-slate-200 bg-white px-4 py-2 flex items-center gap-3">
+      <div className="flex flex-col">
+        <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Assemblies Executed</span>
+        {isLoading ? (
+          <span className="text-sm font-medium text-slate-500 flex items-center gap-1.5 mt-0.5">
+            <RefreshCw className="h-3 w-3 animate-spin" />
+            Loading...
+          </span>
+        ) : (
+          <span className="text-sm font-bold text-teal-600 flex items-center gap-1.5 mt-0.5">
+            <Layers className="h-4 w-4 text-teal-500 animate-pulse" />
+            {stats?.assemblies_executed || 0} runs
+          </span>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+function ContextBuilderPlaygroundView() {
+  const [query, setQuery] = useState('')
+  const [selectedPatientId, setSelectedPatientId] = useState('')
+  const [selectedPatientName, setSelectedPatientName] = useState('')
+  const [patientSearch, setPatientSearch] = useState('')
+  const [tokenBudget, setTokenBudget] = useState<number>(4000)
+  const [collections, setCollections] = useState<string[]>([
+    'patient_reports',
+    'chat_memory',
+    'medical_knowledge',
+    'drug_knowledge',
+    'doctor_knowledge'
+  ])
+  const [testResult, setTestResult] = useState<any>(null)
+  const [latency, setLatency] = useState<number | null>(null)
+  const [copiedPrompt, setCopiedPrompt] = useState(false)
+  const [copiedJSON, setCopiedJSON] = useState(false)
+  const [activeSubTab, setActiveSubTab] = useState<'preview' | 'json'>('preview')
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    'PATIENT SUMMARY': true,
+    'CURRENT CONDITION': true,
+    'REPORT FINDINGS': true,
+    'CONSULTATION HISTORY': true,
+    'PRESCRIPTIONS': true,
+    'MEDICAL KNOWLEDGE': true,
+    'DRUG KNOWLEDGE': true,
+    'DOCTOR INFORMATION': true,
+    'CHAT MEMORY': true
+  })
+
+  // Fetch patients list
+  const { data: patientsResponse, isLoading: isLoadingPatients, isError: isPatientsError } = useQuery({
+    queryKey: ['admin', 'patients-list'],
+    queryFn: () => adminUserService.listUsers(undefined, 'patient')
+  })
+  const patients = patientsResponse?.data || []
+
+  // Filter patients list based on search term
+  const filteredPatients = patients.filter((p: any) =>
+    p.full_name?.toLowerCase().includes(patientSearch.toLowerCase()) ||
+    p.email?.toLowerCase().includes(patientSearch.toLowerCase())
+  )
+
+  const buildMutation = useBuildContext()
+
+  const handleBuild = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!query.trim()) return
+
+    const startTime = performance.now()
+    try {
+      const result = await buildMutation.mutateAsync({
+        query: query,
+        patient_id: selectedPatientId || undefined,
+        token_budget: tokenBudget,
+        collections: collections
+      })
+      const endTime = performance.now()
+      setLatency(endTime - startTime)
+      setTestResult(result)
+    } catch (err) {
+      setTestResult(null)
+      setLatency(null)
+    }
+  }
+
+  const getRawPromptText = () => {
+    if (!testResult?.sections) return ''
+    return Object.entries(testResult.sections)
+      .map(([header, content]) => `=== ${header} ===\n${content}`)
+      .join('\n\n')
+  }
+
+  const handleCopyPrompt = () => {
+    if (!testResult) return
+    navigator.clipboard.writeText(getRawPromptText())
+    setCopiedPrompt(true)
+    setTimeout(() => setCopiedPrompt(false), 2000)
+  }
+
+  const handleCopyJSON = () => {
+    if (!testResult) return
+    navigator.clipboard.writeText(JSON.stringify(testResult, null, 2))
+    setCopiedJSON(true)
+    setTimeout(() => setCopiedJSON(false), 2000)
+  }
+
+  const handleDownload = () => {
+    const text = getRawPromptText()
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `context_build_${selectedPatientId || 'anonymous'}.txt`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const toggleCollection = (colName: string) => {
+    if (collections.includes(colName)) {
+      setCollections(collections.filter(c => c !== colName))
+    } else {
+      setCollections([...collections, colName])
+    }
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
+      {/* Selector and Config Column (col-span-1) */}
+      <div className="space-y-6">
+        <Card className="border-slate-200 shadow-md bg-white">
+          <CardHeader className="border-b border-slate-100 bg-slate-50/50">
+            <CardTitle className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+              <Sliders className="h-5 w-5 text-slate-500" />
+              Console Parameters
+            </CardTitle>
+            <CardDescription>
+              Configure patient context and vector retrieval params for assembly.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6 space-y-4">
+            {/* Query Phrase */}
+            <div className="space-y-1.5">
+              <label htmlFor="query-text" className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Retrieval Query
+              </label>
+              <Textarea
+                id="query-text"
+                placeholder="Enter query to retrieve matching document chunks (e.g. chronic hypertension)..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                rows={2}
+                className="border-slate-200 focus:border-teal-500 focus:ring-teal-500 text-sm font-sans"
+              />
+            </div>
+
+            {/* Patient Select search */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Patient Select
+              </label>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search patient name/email..."
+                  value={patientSearch}
+                  onChange={(e) => setPatientSearch(e.target.value)}
+                  className="w-full rounded-md border border-slate-200 pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                />
+              </div>
+
+              {isLoadingPatients ? (
+                <div className="flex items-center justify-center py-4 text-slate-400 gap-1.5 text-xs">
+                  <RefreshCw className="h-3 w-3 animate-spin text-teal-500" />
+                  <span>Loading patients...</span>
+                </div>
+              ) : isPatientsError ? (
+                <div className="text-center py-2 text-rose-500 text-xs">
+                  Failed to fetch patients list.
+                </div>
+              ) : filteredPatients.length === 0 ? (
+                <div className="text-center py-2 text-slate-500 text-xs">
+                  No patients match.
+                </div>
+              ) : (
+                <div className="max-h-36 overflow-y-auto border border-slate-100 rounded-md divide-y divide-slate-100 text-xs bg-slate-50/30">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedPatientId('')
+                      setSelectedPatientName('')
+                    }}
+                    className={`w-full text-left px-2.5 py-2 transition-colors flex items-center justify-between ${
+                      selectedPatientId === ''
+                        ? 'bg-teal-50 font-bold text-teal-700'
+                        : 'hover:bg-slate-50 text-slate-600'
+                    }`}
+                  >
+                    <span>No Patient (Null Context)</span>
+                    {selectedPatientId === '' && (
+                      <CheckCircle2 className="h-3.5 w-3.5 text-teal-600" />
+                    )}
+                  </button>
+                  {filteredPatients.map((patient: any) => (
+                    <button
+                      key={patient.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedPatientId(patient.id)
+                        setSelectedPatientName(patient.full_name)
+                      }}
+                      className={`w-full text-left px-2.5 py-2 transition-colors flex items-center justify-between ${
+                        selectedPatientId === patient.id
+                          ? 'bg-teal-50 font-bold text-teal-700'
+                          : 'hover:bg-slate-50 text-slate-600'
+                      }`}
+                    >
+                      <div className="truncate">
+                        <span className="font-semibold">{patient.full_name}</span>{' '}
+                        <span className="text-[10px] text-slate-400 font-mono">({patient.email})</span>
+                      </div>
+                      {selectedPatientId === patient.id && (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-teal-600" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Token Budget Slider */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <span>Token Budget</span>
+                <span className="text-teal-600 font-bold text-xs">{tokenBudget} tokens</span>
+              </div>
+              <input
+                type="range"
+                min="500"
+                max="8000"
+                step="500"
+                value={tokenBudget}
+                onChange={(e) => setTokenBudget(parseInt(e.target.value))}
+                className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-teal-600"
+              />
+              <div className="flex justify-between text-[10px] text-slate-400">
+                <span>500</span>
+                <span>4000</span>
+                <span>8000</span>
+              </div>
+            </div>
+
+            {/* Collections scopes */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                Target Collections
+              </label>
+              <div className="space-y-1.5 bg-slate-50 border border-slate-100 p-3 rounded-md text-xs text-slate-600 font-medium">
+                {[
+                  { name: 'patient_reports', label: 'Patient Reports (REPORT)' },
+                  { name: 'chat_memory', label: 'Chat Memory (CHAT_MEMORY)' },
+                  { name: 'medical_knowledge', label: 'Medical Knowledge (MEDICAL_ARTICLE)' },
+                  { name: 'drug_knowledge', label: 'Drug Knowledge (DRUG_DATASET)' },
+                  { name: 'doctor_knowledge', label: 'Doctor Knowledge (DOCTOR_PROFILE)' }
+                ].map((col) => (
+                  <label key={col.name} className="flex items-center gap-2 cursor-pointer hover:text-slate-800 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={collections.includes(col.name)}
+                      onChange={() => toggleCollection(col.name)}
+                      className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-3.5 w-3.5"
+                    />
+                    <span>{col.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Run Button */}
+            <Button
+              onClick={handleBuild}
+              disabled={!query.trim() || buildMutation.isPending}
+              className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold transition-all"
+            >
+              {buildMutation.isPending ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Building Context...
+                </>
+              ) : (
+                <>
+                  <Zap className="h-4 w-4 mr-2" />
+                  Run Context Build
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Results Display Column (col-span-2) */}
+      <div className="lg:col-span-2 space-y-6">
+        {/* Loading and error states */}
+        {buildMutation.isPending && (
+          <Card className="border-slate-200 shadow-md bg-white">
+            <CardContent className="py-12 flex flex-col items-center justify-center text-slate-400 gap-3">
+              <RefreshCw className="h-8 w-8 animate-spin text-teal-500" />
+              <p className="text-sm font-medium animate-pulse text-slate-500">Querying and ranking context...</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {buildMutation.isError && (
+          <Card className="border-slate-200 shadow-md bg-white">
+            <CardContent className="pt-6">
+              <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h4 className="font-semibold">Context Build Failed</h4>
+                  <p className="text-sm mt-1 text-red-600">
+                    {buildMutation.error?.message || 'An unexpected error occurred during context assembly.'}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {!testResult && !buildMutation.isPending && !buildMutation.isError && (
+          <Card className="border-slate-200 border-dashed border-2 bg-slate-50/50 p-12 text-center">
+            <div className="mx-auto h-12 w-12 text-slate-400 flex items-center justify-center bg-white rounded-full border border-slate-200 shadow-sm mb-4">
+              <Layers className="h-6 w-6 animate-pulse" />
+            </div>
+            <h3 className="text-sm font-bold text-slate-700">No Context Built</h3>
+            <p className="text-xs text-slate-400 max-w-md mx-auto mt-2">
+              Submit a retrieval query phrase, select optional patient context, and execute to see how the platform dynamically ranks and budgets prompt overlays.
+            </p>
+          </Card>
+        )}
+
+        {testResult && !buildMutation.isPending && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            {/* Telemetry Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              {/* Estimated tokens */}
+              <Card className="border-slate-200 shadow bg-gradient-to-br from-teal-50 to-white">
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Assembled Size</p>
+                    <h3 className="text-2xl font-extrabold text-teal-900 mt-1">
+                      {testResult.estimated_tokens} <span className="text-xs font-semibold text-teal-600">tokens</span>
+                    </h3>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Latency */}
+              <Card className="border-slate-200 shadow bg-gradient-to-br from-blue-50 to-white">
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Latency</p>
+                    <h3 className="text-2xl font-extrabold text-blue-900 mt-1">
+                      {testResult.assembly_time.toFixed(1)} <span className="text-xs font-semibold text-blue-600">ms</span>
+                    </h3>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Compression Ratio */}
+              <Card className="border-slate-200 shadow bg-gradient-to-br from-indigo-50 to-white">
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Compression</p>
+                    <h3 className="text-2xl font-extrabold text-indigo-900 mt-1">
+                      {(testResult.compression_ratio * 100).toFixed(0)}<span className="text-xs font-semibold text-indigo-600">%</span>
+                    </h3>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Removed chunks / Citations */}
+              <Card className="border-slate-200 shadow bg-gradient-to-br from-slate-50 to-white">
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Pruned / Citations</p>
+                    <h3 className="text-xl font-bold text-slate-800 mt-1.5">
+                      {testResult.metadata?.removed_chunks || 0} / {Object.keys(testResult.citations).length}
+                    </h3>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Sections Accordion View */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Collapsible Sections</h3>
+              {Object.keys(testResult.sections).length === 0 ? (
+                <p className="text-xs text-slate-500 bg-slate-50 border border-slate-100 p-4 rounded text-center">No sections compiled (all empty or omitted).</p>
+              ) : (
+                Object.entries(testResult.sections).map(([sectionName, sectionText]: any) => (
+                  <div key={sectionName} className="border border-slate-200 rounded-lg bg-white overflow-hidden shadow-sm hover:border-slate-300/80 transition-colors">
+                    <button
+                      onClick={() => setOpenSections(prev => ({ ...prev, [sectionName]: !prev[sectionName] }))}
+                      className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-50/50 border-b border-slate-100 hover:bg-slate-100/30 transition-colors text-left"
+                    >
+                      <span className="text-xs font-bold text-slate-700 tracking-wide uppercase">{sectionName}</span>
+                      <span className="text-xs text-slate-400 font-mono">
+                        {openSections[sectionName] ? 'Collapse' : 'Expand'}
+                      </span>
+                    </button>
+                    {openSections[sectionName] && (
+                      <div className="p-4 text-xs text-slate-800 leading-relaxed whitespace-pre-wrap font-sans bg-white/50">
+                        {sectionText}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Citations inspector */}
+            {Object.keys(testResult.citations).length > 0 && (
+              <Card className="border-slate-200 shadow-md bg-white overflow-hidden">
+                <CardHeader className="border-b border-slate-100 bg-slate-50/50 py-3">
+                  <CardTitle className="text-xs font-bold text-slate-700 uppercase tracking-wider">Citation Inspector</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[11px] text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-semibold uppercase tracking-wider">
+                          <th className="px-4 py-2">ID</th>
+                          <th className="px-4 py-2">Collection</th>
+                          <th className="px-4 py-2">Doc ID</th>
+                          <th className="px-4 py-2">Chunk ID</th>
+                          <th className="px-4 py-2">Page</th>
+                          <th className="px-4 py-2">Cosine Score</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-600 font-medium font-mono">
+                        {Object.entries(testResult.citations).map(([citId, info]: any) => (
+                          <tr key={citId} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="px-4 py-2 font-bold text-teal-600 font-sans">[{citId}]</td>
+                            <td className="px-4 py-2">{info.collection}</td>
+                            <td className="px-4 py-2 truncate max-w-[100px]" title={info.document_id}>{info.document_id || 'N/A'}</td>
+                            <td className="px-4 py-2 truncate max-w-[100px]" title={info.chunk_id}>{info.chunk_id || 'N/A'}</td>
+                            <td className="px-4 py-2 font-sans">{info.page_number}</td>
+                            <td className="px-4 py-2 font-sans">
+                              <span className="font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-100">
+                                {info.score.toFixed(4)}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Raw Prompt Preview */}
+            <Card className="border-slate-200 shadow-md bg-white overflow-hidden">
+              <CardHeader className="border-b border-slate-100 bg-slate-50/50 flex flex-row items-center justify-between py-3">
+                <div>
+                  <CardTitle className="text-xs font-bold text-slate-700 uppercase tracking-wider">Raw Prompt Preview</CardTitle>
+                </div>
+                <div className="flex gap-2">
+                  <div className="bg-slate-100 border border-slate-200 p-0.5 rounded flex text-xs">
+                    <button
+                      onClick={() => setActiveSubTab('preview')}
+                      className={`px-2.5 py-1 rounded font-medium transition-all ${
+                        activeSubTab === 'preview'
+                          ? 'bg-white shadow-sm text-slate-800 font-bold'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Text
+                    </button>
+                    <button
+                      onClick={() => setActiveSubTab('json')}
+                      className={`px-2.5 py-1 rounded font-medium transition-all ${
+                        activeSubTab === 'json'
+                          ? 'bg-white shadow-sm text-slate-800 font-bold'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      JSON
+                    </button>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={activeSubTab === 'preview' ? handleCopyPrompt : handleCopyJSON}
+                    className="h-8 gap-1.5 text-xs"
+                  >
+                    {copiedPrompt || copiedJSON ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-teal-600" />
+                        Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy
+                      </>
+                    )}
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDownload}
+                    className="h-8 gap-1.5 text-xs"
+                  >
+                    Download
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {activeSubTab === 'json' ? (
+                  <pre className="p-5 font-mono text-[11px] text-teal-400 bg-slate-900 shadow-inner overflow-x-auto max-h-[400px] overflow-y-auto">
+                    {JSON.stringify(testResult, null, 2)}
+                  </pre>
+                ) : (
+                  <pre className="p-5 font-mono text-[11px] text-slate-300 bg-slate-900 shadow-inner overflow-x-auto max-h-[400px] overflow-y-auto whitespace-pre-wrap leading-relaxed">
+                    {getRawPromptText()}
+                  </pre>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function AIPlaygroundContent() {
+  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder'>('llm')
 
   return (
     <div className="space-y-6">
@@ -3505,6 +4049,8 @@ function AIPlaygroundContent() {
           <IndexingHealthBadge />
         ) : activeTab === 'retrieval' ? (
           <RetrievalHealthBadge />
+        ) : activeTab === 'context-builder' ? (
+          <ContextBuilderHealthBadge />
         ) : (
           <IntegrationHealthSummaryBadge />
         )}
@@ -3558,7 +4104,7 @@ function AIPlaygroundContent() {
         </button>
         <button
           onClick={() => setActiveTab('indexing')}
-          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2 relative flex-shrink-0 ${
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
             activeTab === 'indexing'
               ? 'border-teal-600 text-teal-600 font-bold'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -3569,7 +4115,7 @@ function AIPlaygroundContent() {
         </button>
         <button
           onClick={() => setActiveTab('retrieval')}
-          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2 relative flex-shrink-0 ${
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
             activeTab === 'retrieval'
               ? 'border-teal-600 text-teal-600 font-bold'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -3579,8 +4125,19 @@ function AIPlaygroundContent() {
           Retrieval Engine
         </button>
         <button
+          onClick={() => setActiveTab('context-builder')}
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
+            activeTab === 'context-builder'
+              ? 'border-teal-600 text-teal-600 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Layers className="h-4 w-4" />
+          Context Builder
+        </button>
+        <button
           onClick={() => setActiveTab('integration')}
-          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2 relative flex-shrink-0 ${
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
             activeTab === 'integration'
               ? 'border-teal-600 text-teal-600 font-bold'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -3603,6 +4160,8 @@ function AIPlaygroundContent() {
         <IndexingPlaygroundView />
       ) : activeTab === 'retrieval' ? (
         <RetrievalPlaygroundView />
+      ) : activeTab === 'context-builder' ? (
+        <ContextBuilderPlaygroundView />
       ) : (
         <IntegrationPlaygroundView />
       )}

@@ -45,6 +45,7 @@ from app.services.index_version_service import IndexVersionService, get_index_ve
 from app.services.document_metadata_service import DocumentMetadataService, get_document_metadata_service
 from app.services.document_indexing_service import DocumentIndexingService, get_document_indexing_service
 from app.services.retrieval_service import RetrievalService, get_retrieval_service
+from app.services.context_assembly_service import ContextAssemblyService, get_context_assembly_service
 
 
 __all__ = [
@@ -122,4 +123,6 @@ __all__ = [
     "get_document_indexing_service",
     "RetrievalService",
     "get_retrieval_service",
+    "ContextAssemblyService",
+    "get_context_assembly_service",
 ]

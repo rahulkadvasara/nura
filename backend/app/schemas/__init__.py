@@ -139,6 +139,12 @@ from app.schemas.patient_context import (
     PatientContextResponse,
 )
 
+from app.schemas.context_assembly import (
+    ContextAssemblyRequest,
+    ContextAssemblyResponse,
+    ContextAssemblyStatisticsResponse,
+)
+
 from app.schemas.ai import (
     AIHealthResponse,
     AITestRequest,
@@ -272,6 +278,9 @@ __all__ = [
     "MaintenanceResponse",
     "PatientContextMetadata",
     "PatientContextResponse",
+    "ContextAssemblyRequest",
+    "ContextAssemblyResponse",
+    "ContextAssemblyStatisticsResponse",
     "AIHealthResponse",
     "AITestRequest",
     "TokenUsage",

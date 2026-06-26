@@ -239,6 +239,16 @@ export const aiService = {
   getRetrievalStatistics: async (): Promise<RetrievalStatisticsResponse> => {
     const response = await apiClient.get<RetrievalStatisticsResponse>('/ai/retrieve/statistics')
     return response.data
+  },
+
+  buildContext: async (request: ContextAssemblyRequest): Promise<ContextAssemblyResponse> => {
+    const response = await apiClient.post<ContextAssemblyResponse>('/ai/context/build', request)
+    return response.data
+  },
+
+  getContextAssemblyStatistics: async (): Promise<ContextAssemblyStatisticsResponse> => {
+    const response = await apiClient.get<ContextAssemblyStatisticsResponse>('/ai/context/statistics')
+    return response.data
   }
 }
 
@@ -365,6 +375,41 @@ export interface RetrievalStatisticsResponse {
   avg_score: number
   duplicate_chunks_removed: number
   timeout_count: number
+}
+
+export interface ContextAssemblyRequest {
+  query: string
+  patient_id?: string
+  token_budget?: number
+  collections?: string[]
+  filters?: Record<string, any>
+}
+
+export interface ContextAssemblyResponse {
+  sections: Record<string, string>
+  citations: Record<string, {
+    source: string
+    collection: string
+    document_id: string
+    chunk_id: string
+    page_number: number
+    score: number
+  }>
+  estimated_tokens: number
+  compression_ratio: number
+  assembly_time: number
+  metadata: Record<string, any>
+}
+
+export interface ContextAssemblyStatisticsResponse {
+  assemblies_executed: number
+  failed_assemblies: number
+  avg_latency_ms: number
+  avg_compression_ratio: number
+  avg_tokens_assembled: number
+  total_original_chunks: number
+  total_removed_chunks: number
+  section_counts: Record<string, number>
 }
 
 

@@ -19,7 +19,8 @@ from app.core.dependencies import (
     get_doctor_profile_service,
     get_ai_orchestrator,
     get_document_indexing_service,
-    get_retrieval_service
+    get_retrieval_service,
+    get_context_assembly_service
 )
 from app.models import UserRole, UserInDB
 from app.schemas.ai import (
@@ -38,7 +39,8 @@ from app.schemas.ai import (
     IndexDeletionResponse
 )
 from app.schemas.retrieval import RetrievalRequest, RetrievalResponse, RetrievalStatisticsResponse
-from app.utils.ai import retrieval_metrics
+from app.schemas.context_assembly import ContextAssemblyRequest, ContextAssemblyResponse, ContextAssemblyStatisticsResponse
+from app.utils.ai import retrieval_metrics, context_assembly_metrics
 from app.services.ai_orchestrator import AIOrchestrator
 from app.schemas.embedding import EmbeddingHealthResponse, EmbeddingTestRequest, EmbeddingTestResponse
 from app.schemas.vector import (
@@ -57,6 +59,7 @@ from app.services.vector_service import VectorService
 from app.services.patient_context_service import PatientContextService
 from app.services.document_indexing_service import DocumentIndexingService
 from app.services.retrieval_service import RetrievalService
+from app.services.context_assembly_service import ContextAssemblyService
 
 router = APIRouter()
 
@@ -409,6 +412,52 @@ async def get_patient_context_me(
     return await context_service.assemble_context(patient_id=current_user.id)
 
 
+@router.post(
+    "/context/build",
+    response_model=ContextAssemblyResponse,
+    summary="Assemble token-aware context",
+    description="Merges MongoDB patient data with vector search chunks, ranks, applies token limits, and returns citations. Guarded: Admin Only.",
+)
+async def build_context(
+    request_data: ContextAssemblyRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    context_assembly_service: ContextAssemblyService = Depends(get_context_assembly_service)
+) -> ContextAssemblyResponse:
+    try:
+        res = await context_assembly_service.assemble(
+            query=request_data.query,
+            patient_id=request_data.patient_id,
+            token_budget=request_data.token_budget,
+            collections=request_data.collections,
+            filters=request_data.filters
+        )
+        return ContextAssemblyResponse(**res)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to assemble context: {str(e)}"
+        )
+
+
+@router.get(
+    "/context/statistics",
+    response_model=ContextAssemblyStatisticsResponse,
+    summary="Get context assembly statistics",
+    description="Returns telemetry metrics and averages for the context assembly service. Guarded: Admin Only.",
+)
+async def get_context_statistics(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN))
+) -> ContextAssemblyStatisticsResponse:
+    try:
+        stats = context_assembly_metrics.get_metrics()
+        return ContextAssemblyStatisticsResponse(**stats)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch context statistics: {str(e)}"
+        )
+
+
 @router.get(
     "/context/{patient_id}",
     response_model=PatientContextResponse,
@@ -715,5 +764,8 @@ async def get_retrieval_statistics(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch retrieval statistics: {str(e)}"
         )
+
+
+
 
 

@@ -74,3 +74,23 @@ Phase 9 - Sprint 2 completes the Retrieval Engine foundation:
 - **Cross-Collection Deduplication**: Multi-collection parallel searches merge results and discard duplicate chunks by `content_hash` tracking, preserving high-scoring results.
 - **In-Memory Telemetry**: Retrieval metrics logs track queries count, failures, latencies, averages, deduplication skips, and search timeouts.
 
+---
+
+## 5. Context Ranking & Assembly Engine
+
+Phase 9 - Sprint 3 completes the Context Ranking & Assembly engine:
+- **Centralized Assembly Service**: The `ContextAssemblyService` acts as the single orchestrator that pulls clinical data from MongoDB (using `PatientContextService`) and retrieves semantic vectors from Qdrant (using `RetrievalService`). It merges, ranks, and badges these items into a single context payload.
+- **Deterministic Prioritization**: The builder enforces a waterfall-priority list:
+  1. `patient_memory` (MongoDB patient profile summary - ALWAYS preserved)
+  2. `Reports` (Lab results, diagnostic files)
+  3. `Consultations` (Doctor consult logs)
+  4. `Prescriptions` (Active medications)
+  5. `Medical` (Medical guidelines/knowledge)
+  6. `Drug` (Drug safety database)
+  7. `Doctor` (Doctor profiles)
+  8. `Chat` (Conversational message history)
+- **Waterfall Token Compression**: A tokenizer estimates the size of each section. The service iteratively adds sections in order of their priority. If a section would cause the total token count to exceed the configured `token_budget` (e.g. 4000 tokens), it is dropped (or truncated) to guarantee that the LLM is never sent prompts exceeding its context window.
+- **Verification Citations**: Each retrieved chunk or medical context record is stamped with a unique citation badge index (e.g. `[1]`, `[2]`). A lookup mapping matches these badges to their source database ID and metadata (like document type, section name, page number), enabling frontend clients to render verifiable source links.
+- **Telemetry Monitoring**: Built-in tracking of total assembly executions, token usage efficiency, cache status, and average latencies using `ContextAssemblyMetricsTracker`.
+
+

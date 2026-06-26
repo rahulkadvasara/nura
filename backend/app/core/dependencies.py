@@ -52,6 +52,7 @@ from app.services import (
     DocumentMetadataService,
     DocumentIndexingService,
     RetrievalService,
+    ContextAssemblyService,
 )
 from app.agents import (
     BaseAgent,
@@ -692,6 +693,12 @@ def get_retrieval_service() -> RetrievalService:
     """Get RetrievalService instance"""
     from app.services.retrieval_service import get_retrieval_service as get_retrieval_service_impl
     return get_retrieval_service_impl()
+
+
+def get_context_assembly_service() -> ContextAssemblyService:
+    """Get ContextAssemblyService instance"""
+    from app.services.context_assembly_service import get_context_assembly_service as get_context_assembly_service_impl
+    return get_context_assembly_service_impl()
 
 
 

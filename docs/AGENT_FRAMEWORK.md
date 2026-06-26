@@ -149,3 +149,17 @@ class ScheduleAppointmentTool(Tool):
 To comply with HIPAA and security directives:
 - **Metrics**: Automatically records latency, timeouts, execution totals, and token counts in the global `agent_metrics` singleton.
 - **Privacy Boundary**: Custom structured logs include metadata (agent name, latencies, status) but **never** record prompt templates, input prompts, medical texts, clinical reports, or raw AI completions.
+
+---
+
+## 7. Context Assembly Integration
+
+Agents that require clinical patient context or external domain knowledge (such as the Symptom Agent, Medical Knowledge Agent, or Chatbot) should not query Qdrant or MongoDB directly. Instead, they must invoke the `ContextAssemblyService` to construct token-safe, prioritized prompts:
+
+1. **Context Initialization**: Retrieve the `patient_id` from the `AgentContext` object.
+2. **Context Compilation**: Call `context_assembly_service.build_context(...)` with:
+   - The user's semantic `query`
+   - Target `patient_id`
+   - Configured `token_budget` (tailored to the LLM model context window limit)
+3. **Structured Response Formatting**: Use the returned citation lookup map to generate verified responses, matching generated citations back to the structured `citations` field in the final `AgentResponse`.
+

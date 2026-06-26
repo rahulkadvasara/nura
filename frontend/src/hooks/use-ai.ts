@@ -20,7 +20,10 @@ import {
   IndexDeletionResponse,
   RetrievalRequest,
   RetrievalResponse,
-  RetrievalStatisticsResponse
+  RetrievalStatisticsResponse,
+  ContextAssemblyRequest,
+  ContextAssemblyResponse,
+  ContextAssemblyStatisticsResponse
 } from '@/services/ai.service'
 
 /**
@@ -270,6 +273,34 @@ export function useRetrievalStatistics() {
       return await aiService.getRetrievalStatistics()
     },
     refetchInterval: 15000 // Refresh retrieval stats every 15 seconds
+  })
+}
+
+/**
+ * Custom hook to execute context assembly prompts build.
+ */
+export function useBuildContext() {
+  const queryClient = useQueryClient()
+  return useMutation<ContextAssemblyResponse, Error, ContextAssemblyRequest>({
+    mutationFn: async (request: ContextAssemblyRequest) => {
+      return await aiService.buildContext(request)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'context', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to retrieve context assembly telemetry statistics periodically.
+ */
+export function useContextAssemblyStatistics() {
+  return useQuery<ContextAssemblyStatisticsResponse, Error>({
+    queryKey: ['admin', 'ai', 'context', 'statistics'],
+    queryFn: async () => {
+      return await aiService.getContextAssemblyStatistics()
+    },
+    refetchInterval: 15000 // Refresh assembly stats every 15 seconds
   })
 }
 
