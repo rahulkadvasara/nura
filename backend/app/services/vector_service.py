@@ -256,28 +256,40 @@ class VectorService:
         limit: int = 10,
         filter_dict: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
-        """Query nearest neighbor matches against a collection, supporting metadata filtering options"""
+        """Query nearest neighbor matches against a collection, supporting metadata filtering options (protected by circuit breaker)"""
         target_col = self.collection_service.get_collection_name(collection_name)
         qdrant_filter = self.build_qdrant_filter(filter_dict)
-        try:
-            logger.info(f"Searching nearest neighbors in collection {target_col} (limit: {limit})")
-            results = self.client.search(
-                collection_name=target_col,
-                query_vector=query_vector,
-                query_filter=qdrant_filter,
-                limit=limit
-            )
-            return [
-                {
-                    "id": str(r.id),
-                    "score": float(r.score),
-                    "payload": r.payload or {}
-                }
-                for r in results
-            ]
-        except Exception as e:
-            logger.error(f"Search query failed in collection '{target_col}': {e}")
-            raise AIConfigurationError(f"Vector search failed: {str(e)}") from e
+
+        from app.utils.circuit_breaker import get_circuit_breaker
+        
+        def fallback_search(*args, **kwargs) -> List[Dict[str, Any]]:
+            logger.error(f"Qdrant vector search circuit breaker fallback triggered for '{target_col}'. Returning empty list.")
+            return []
+
+        cb = get_circuit_breaker("qdrant_service", fallback_func=fallback_search)
+
+        async def do_search():
+            try:
+                logger.info(f"Searching nearest neighbors in collection {target_col} (limit: {limit})")
+                results = self.client.search(
+                    collection_name=target_col,
+                    query_vector=query_vector,
+                    query_filter=qdrant_filter,
+                    limit=limit
+                )
+                return [
+                    {
+                        "id": str(r.id),
+                        "score": float(r.score),
+                        "payload": r.payload or {}
+                    }
+                    for r in results
+                ]
+            except Exception as e:
+                logger.error(f"Search query failed in collection '{target_col}': {e}")
+                raise AIConfigurationError(f"Vector search failed: {str(e)}") from e
+
+        return await cb.execute_async(do_search)
 
     async def delete(self, collection_name: str, ids: List[Union[str, int]]) -> bool:
         """Delete specific vector point records by ID"""

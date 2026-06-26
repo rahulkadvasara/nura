@@ -1000,6 +1000,16 @@ Implement the complete production-grade RAG infrastructure including indexing, r
 - **TTL Caching**: Caches agent execution packages using in-memory TTL caching (based on patient ID, query, and intent) to improve performance and minimize vector store roundtrips.
 - **Console Interface**: Dedicated administrator interface to run standard and debug (cache-bypass) queries, visualize step-by-step debug traces (intent scoring, raw hits, rankings, assembled prompt), and inspect real-time agent metrics.
 
+## Sprint 5: Memory Synchronization Pipeline
+- **Event-Driven Synchronization**: Automated listener triggers memory compilation and Qdrant index updates on clinical events (Consultation Completed, Report Uploaded, Prescription Created, Profile Updated).
+- **Audit Logs & DLQs**: Ensures sync pipeline operations are logged in audit system. Failsafe dead-letter queuing handles indexing errors.
+
+## Sprint 6: RAG Production Optimization & Evaluation
+- **Multi-Stage Caching**: Configurable TTL caching on query classification, vector embeddings, multi-collection retrieval search results, and assembled context prompts.
+- **Parallel Retrieval Bounds**: Uses `asyncio.Semaphore` bounded limits and timeout controls to prevent thread congestion.
+- **Circuit Breakers**: Wrapping for external Groq APIs, embedding generation engines, and vector searches to trigger deterministic fallbacks when failures occur.
+- **Retrieval Evaluation & Benchmarking**: Measures E2E metrics (Precision, Recall, Citation Quality, Duplicates Rate, Context Utilization) and compiles datasets benchmarking suites.
+
 ---
 
 ## Exit Criteria

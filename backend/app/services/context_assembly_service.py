@@ -367,6 +367,15 @@ class ContextAssemblyService:
         start_time = time.perf_counter()
         budget = token_budget or 4000
 
+        # 0. Check Cache
+        from app.services.rag_cache_service import get_rag_cache_service
+        cache_svc = get_rag_cache_service()
+        cached = cache_svc.get_context(patient_id, query, budget, collections or [], filters)
+        if cached is not None:
+            res = dict(cached)
+            res["assembly_time"] = 0.0
+            return res
+
         try:
             # 1. Fetch MongoDB patient context if patient_id is present
             patient_context_response = None
@@ -486,7 +495,7 @@ class ContextAssemblyService:
             )
 
             # Response structure
-            return {
+            response_payload = {
                 "sections": sections,
                 "citations": final_citations,
                 "estimated_tokens": estimated_tokens,
@@ -502,6 +511,9 @@ class ContextAssemblyService:
                     "total_final_chars": final_chars
                 }
             }
+            
+            cache_svc.set_context(patient_id, query, budget, target_cols or [], filters, response_payload)
+            return response_payload
 
         except Exception as e:
             assembly_time = (time.perf_counter() - start_time) * 1000.0

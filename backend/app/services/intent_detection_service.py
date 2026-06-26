@@ -79,6 +79,13 @@ class IntentDetectionService:
         if not query or not query.strip():
             return "unknown", {k: 0 for k in self.INTENT_KEYWORDS.keys()}
 
+        # 0. Check Cache
+        from app.services.rag_cache_service import get_rag_cache_service
+        cache_svc = get_rag_cache_service()
+        cached = cache_svc.get_query(query)
+        if cached is not None:
+            return cached[0], cached[1]
+
         cleaned_query = query.lower().strip()
         scores = {k: 0 for k in self.INTENT_KEYWORDS.keys()}
 
@@ -112,6 +119,7 @@ class IntentDetectionService:
         if max_score == 0:
             winner = "unknown"
 
+        cache_svc.set_query(query, winner, scores)
         return winner, scores
 
 def get_intent_detection_service() -> IntentDetectionService:

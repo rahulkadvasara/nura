@@ -284,6 +284,48 @@ export const aiService = {
   getSyncStatistics: async (): Promise<SyncStatisticsResponse> => {
     const response = await apiClient.get<SyncStatisticsResponse>('/ai/sync/statistics')
     return response.data
+  },
+
+  getRagHealth: async (): Promise<RagHealthResponse> => {
+    const response = await apiClient.get<RagHealthResponse>('/ai/rag/health')
+    return response.data
+  },
+
+  getRagStatistics: async (): Promise<RagStatisticsResponse> => {
+    const response = await apiClient.get<RagStatisticsResponse>('/ai/rag/statistics')
+    return response.data
+  },
+
+  runRagBenchmark: async (patientId?: string, tokenBudget?: number, scoreThreshold?: number): Promise<RagBenchmarkResponse> => {
+    const response = await apiClient.post<RagBenchmarkResponse>('/ai/rag/benchmark', {
+      patient_id: patientId,
+      token_budget: tokenBudget,
+      score_threshold: scoreThreshold
+    })
+    return response.data
+  },
+
+  evaluateQuery: async (
+    query: string,
+    patientId?: string,
+    collections?: string[],
+    filters?: Record<string, any>,
+    groundTruthDocIds?: string[],
+    topK?: number,
+    scoreThreshold?: number,
+    tokenBudget?: number
+  ): Promise<RagEvaluateResponse> => {
+    const response = await apiClient.post<RagEvaluateResponse>('/ai/rag/evaluate', {
+      query,
+      patient_id: patientId,
+      collections,
+      filters,
+      ground_truth_doc_ids: groundTruthDocIds,
+      top_k: topK,
+      score_threshold: scoreThreshold,
+      token_budget: tokenBudget
+    })
+    return response.data
   }
 }
 
@@ -512,6 +554,158 @@ export interface SyncStatisticsResponse {
   rebuilt_summaries: number
   vectors_regenerated: number
   vectors_skipped: number
+}
+
+export interface RagHealthSubsystem {
+  status: string
+  latency_ms?: number
+  latency?: number
+  reachable?: boolean
+  error?: string
+  provider?: string
+  model?: string
+  dimensions?: number
+}
+
+export interface RagHealthResponse {
+  status: string
+  groq: RagHealthSubsystem
+  embedding: RagHealthSubsystem
+  qdrant: RagHealthSubsystem
+}
+
+export interface RagStatisticsResponse {
+  health_status: string
+  caches: {
+    query_hits: number
+    query_misses: number
+    query_hit_ratio: number
+    embedding_hits: number
+    embedding_misses: number
+    embedding_hit_ratio: number
+    retrieval_hits: number
+    retrieval_misses: number
+    retrieval_hit_ratio: number
+    context_hits: number
+    context_misses: number
+    context_hit_ratio: number
+    total_hits: number
+    total_misses: number
+    total_hit_ratio: number
+  }
+  embeddings: {
+    embeddings_generated: number
+    avg_latency_ms: number
+    failed_embeddings: number
+    avg_batch_size: number
+    duplicate_chunks_skipped: number
+  }
+  retrieval: {
+    searches_executed: number
+    failed_searches: number
+    avg_latency_ms: number
+    avg_score: number
+    duplicate_chunks_removed: number
+    timeout_count: number
+  }
+  assembly: {
+    assemblies_executed: number
+    failed_assemblies: number
+    avg_latency_ms: number
+    avg_compression_ratio: number
+    avg_tokens_assembled: number
+    total_original_chunks: number
+    total_removed_chunks: number
+    section_counts: Record<string, number>
+  }
+  agent: {
+    requests: number
+    failures: number
+    cache_hits: number
+    cache_misses: number
+    cache_hit_ratio: number
+    avg_retrieval_latency_ms: number
+    avg_ranking_latency_ms: number
+    avg_context_latency_ms: number
+    avg_latency_ms: number
+    intent_counts: Record<string, number>
+    collection_usage: Record<string, number>
+  }
+  orchestrator: {
+    requests: number
+    failures: number
+    avg_latency_ms: number
+    avg_llm_latency_ms: number
+    avg_embedding_latency_ms: number
+    avg_context_latency_ms: number
+    avg_tokens: number
+    total_cost: number
+    model_usage: Record<string, number>
+    success_rate: number
+  }
+  overall: {
+    success_rate: number
+    total_queries: number
+    avg_query_latency_ms: number
+    estimated_llm_cost_usd: number
+  }
+}
+
+export interface RagBenchmarkCategory {
+  intent: string
+  avg_latency_ms: number
+  avg_precision: number
+  avg_recall: number
+  avg_citation_quality: number
+  query_details: {
+    query: string
+    latency_ms: number
+    precision: number
+    recall: number
+    citation_quality: number
+    duplicate_rate: number
+    context_utilization: number
+  }[]
+}
+
+export interface RagBenchmarkResponse {
+  timestamp: string
+  total_queries_run: number
+  total_latency_ms: number
+  avg_latency_per_query_ms: number
+  avg_precision: number
+  avg_recall: number
+  avg_citation_quality: number
+  avg_duplicate_rate: number
+  avg_context_utilization: number
+  categories: Record<string, RagBenchmarkCategory>
+}
+
+export interface RagEvaluateResponse {
+  query: string
+  patient_id?: string
+  timestamp: string
+  metrics: {
+    precision: number
+    recall: number
+    latency_ms: number
+    citation_quality: number
+    chunk_relevance: number
+    duplicate_rate: number
+    context_utilization: number
+  }
+  parameters: {
+    collections: string[]
+    top_k: number
+    score_threshold: number
+    token_budget: number
+  }
+  retrieval_summary: {
+    hits_count: number
+    chunks_found: number
+    duplicates_removed: number
+    assembled_sections: string[]
+  }
 }
 
 

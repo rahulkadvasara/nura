@@ -651,6 +651,90 @@ class MemorySyncMetricsTracker:
 memory_sync_metrics = MemorySyncMetricsTracker()
 
 
+class RAGCacheMetricsTracker:
+    """In-memory metrics tracker for monitoring RAG Cache performance"""
+
+    def __init__(self):
+        self.query_hits: int = 0
+        self.query_misses: int = 0
+        self.embedding_hits: int = 0
+        self.embedding_misses: int = 0
+        self.retrieval_hits: int = 0
+        self.retrieval_misses: int = 0
+        self.context_hits: int = 0
+        self.context_misses: int = 0
+
+    def record_hit(self, cache_type: str) -> None:
+        """Record a cache hit for a specific cache type"""
+        t = cache_type.lower()
+        if t == "query":
+            self.query_hits += 1
+        elif t == "embedding":
+            self.embedding_hits += 1
+        elif t == "retrieval":
+            self.retrieval_hits += 1
+        elif t == "context":
+            self.context_hits += 1
+
+    def record_miss(self, cache_type: str) -> None:
+        """Record a cache miss for a specific cache type"""
+        t = cache_type.lower()
+        if t == "query":
+            self.query_misses += 1
+        elif t == "embedding":
+            self.embedding_misses += 1
+        elif t == "retrieval":
+            self.retrieval_misses += 1
+        elif t == "context":
+            self.context_misses += 1
+
+    def get_metrics(self) -> dict:
+        """Summarize current cache performance metrics"""
+        def ratio(hits, misses):
+            tot = hits + misses
+            return hits / tot if tot > 0 else 0.0
+
+        total_hits = self.query_hits + self.embedding_hits + self.retrieval_hits + self.context_hits
+        total_misses = self.query_misses + self.embedding_misses + self.retrieval_misses + self.context_misses
+
+        return {
+            "query_hits": self.query_hits,
+            "query_misses": self.query_misses,
+            "query_hit_ratio": ratio(self.query_hits, self.query_misses),
+            
+            "embedding_hits": self.embedding_hits,
+            "embedding_misses": self.embedding_misses,
+            "embedding_hit_ratio": ratio(self.embedding_hits, self.embedding_misses),
+            
+            "retrieval_hits": self.retrieval_hits,
+            "retrieval_misses": self.retrieval_misses,
+            "retrieval_hit_ratio": ratio(self.retrieval_hits, self.retrieval_misses),
+            
+            "context_hits": self.context_hits,
+            "context_misses": self.context_misses,
+            "context_hit_ratio": ratio(self.context_hits, self.context_misses),
+            
+            "total_hits": total_hits,
+            "total_misses": total_misses,
+            "total_hit_ratio": ratio(total_hits, total_misses)
+        }
+
+    def reset(self) -> None:
+        """Reset internal metrics counters"""
+        self.query_hits = 0
+        self.query_misses = 0
+        self.embedding_hits = 0
+        self.embedding_misses = 0
+        self.retrieval_hits = 0
+        self.retrieval_misses = 0
+        self.context_hits = 0
+        self.context_misses = 0
+
+
+# Global RAG cache metrics tracker instance
+rag_cache_metrics = RAGCacheMetricsTracker()
+
+
 
 
 

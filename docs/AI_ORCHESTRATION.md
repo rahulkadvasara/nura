@@ -107,6 +107,22 @@ Phase 9 - Sprint 4 integrates the Agent Framework with the Retrieval Engine to b
   - `conversation_recall` → Queries `chat_memory`
   - `general_health` → Queries `medical_knowledge`
 - **TTL Caching Layer**: To reduce duplicate vector store operations, a `RetrievalCache` is integrated within the Retrieval Agent. Execution outputs are cached using a composite key `(patient_id, normalized_query, intent)`. Cache bypass is supported for tracing and debugging.
+
+---
+
+## 7. RAG Production Optimization & Evaluation (Phase 9 - Sprint 6)
+
+Phase 9 - Sprint 6 introduces production-grade performance optimization and automated quality evaluation harnesses:
+- **Multi-Stage Cache**: Enforces TTL caching across all retrieval levels:
+  - **Query Cache**: Caches detected intents (TTL: 30m).
+  - **Embedding Cache**: Caches text chunk vectors (TTL: 24h).
+  - **Retrieval Cache**: Caches multi-collection queries (TTL: 5m).
+  - **Context Cache**: Caches assembled contexts (TTL: 2m).
+- **Concurrency & Parallel Searches**: Employs `asyncio.Semaphore(3)` bounds and a `2.0s` wait_for timeout on parallel collection searches to prevent system lockups.
+- **Subsystem Circuit Breakers**: Protects external integrations by tracking failures. Trips to OPEN state after 5 failures and returns fallback structures (mock Groq JSON, dummy embeddings, empty Qdrant results).
+- **Retrieval Evaluation & Benchmarking**: Evaluates retrieval accuracy parameters (Precision, Recall, Citation Quality, Duplicate Rate, and Context Utilization) and logs reports to MongoDB (`rag_evaluations` and `rag_benchmarks` collections).
+- **Admin Dashboard Integration**: The RAG administrator dashboard is redesigned to trace performance metrics, caching statistics, interactive evaluations playground, and benchmarking suite runners.
+
 - **Trace Playground View**: An administrator interface allows running queries in standard mode (cached) and debug mode (bypass cache). It displays step-by-step trace components (intent classification scoring, raw vector hits, ranking scores, final context) alongside latency statistics.
 
 

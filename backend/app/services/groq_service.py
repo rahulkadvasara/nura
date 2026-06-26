@@ -72,22 +72,48 @@ class GroqService:
         max_tokens: Optional[int] = None,
         **kwargs
     ) -> Any:
-        """Generate response for a prompt"""
+        """Generate response for a prompt, protected by a circuit breaker"""
         target_model = model or self.settings.GROQ_MODEL
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
-        async with handle_groq_exceptions():
-            response = await self.client.chat.completions.create(
-                model=target_model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                **kwargs
-            )
-            return response
+        from app.utils.circuit_breaker import get_circuit_breaker
+        
+        def fallback_groq(*args, **fallback_kwargs):
+            logger.error("Groq API circuit breaker fallback triggered.")
+            class MockMessage:
+                content = "Service temporarily unavailable due to upstream API issues. Fallback triggered."
+                role = "assistant"
+            class MockChoice:
+                message = MockMessage()
+                finish_reason = "stop"
+            class MockUsage:
+                prompt_tokens = 0
+                completion_tokens = 0
+                total_tokens = 0
+            class MockResponse:
+                id = "mock-id"
+                choices = [MockChoice()]
+                model = "fallback-model"
+                usage = MockUsage()
+            return MockResponse()
+
+        cb = get_circuit_breaker("groq_service", fallback_func=fallback_groq)
+
+        async def do_generate():
+            async with handle_groq_exceptions():
+                response = await self.client.chat.completions.create(
+                    model=target_model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    **kwargs
+                )
+                return response
+
+        return await cb.execute_async(do_generate)
 
     async def generate_json(
         self,
@@ -98,7 +124,7 @@ class GroqService:
         max_tokens: Optional[int] = None,
         **kwargs
     ) -> Any:
-        """Generate JSON response for a prompt (enforces json_object format)"""
+        """Generate JSON response for a prompt (enforces json_object format), protected by a circuit breaker"""
         target_model = model or self.settings.GROQ_MODEL
         # Enforce JSON formatting instructions in system prompt
         sys_prompt = system_prompt or "You are a helpful assistant. You must respond with a valid JSON object."
@@ -107,16 +133,42 @@ class GroqService:
             {"role": "user", "content": prompt}
         ]
 
-        async with handle_groq_exceptions():
-            response = await self.client.chat.completions.create(
-                model=target_model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                response_format={"type": "json_object"},
-                **kwargs
-            )
-            return response
+        from app.utils.circuit_breaker import get_circuit_breaker
+        
+        def fallback_groq_json(*args, **fallback_kwargs):
+            logger.error("Groq API JSON circuit breaker fallback triggered.")
+            class MockMessage:
+                content = '{"error": "Service temporarily unavailable", "status": "degraded"}'
+                role = "assistant"
+            class MockChoice:
+                message = MockMessage()
+                finish_reason = "stop"
+            class MockUsage:
+                prompt_tokens = 0
+                completion_tokens = 0
+                total_tokens = 0
+            class MockResponse:
+                id = "mock-id"
+                choices = [MockChoice()]
+                model = "fallback-model"
+                usage = MockUsage()
+            return MockResponse()
+
+        cb = get_circuit_breaker("groq_service_json", fallback_func=fallback_groq_json)
+
+        async def do_generate_json():
+            async with handle_groq_exceptions():
+                response = await self.client.chat.completions.create(
+                    model=target_model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    response_format={"type": "json_object"},
+                    **kwargs
+                )
+                return response
+
+        return await cb.execute_async(do_generate_json)
 
     async def stream(
         self,

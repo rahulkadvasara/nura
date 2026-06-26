@@ -108,15 +108,25 @@ class RetrievalService:
         Query multiple collections simultaneously, merge and normalize scores, 
         remove duplicate chunks, and rank by score descending.
         """
-        start_time = time.perf_counter()
-        
         # Validation checks
         if not query or not query.strip():
             raise ValueError("Retrieval query string cannot be empty")
         if not collections:
             raise ValueError("At least one target collection must be specified")
 
-        # 1. Generate Query Vector
+        # 0. Check Cache
+        from app.services.rag_cache_service import get_rag_cache_service
+        cache_svc = get_rag_cache_service()
+        cached = cache_svc.get_retrieval(query, collections, filters, top_k, score_threshold)
+        if cached is not None:
+            # Return cached response dictionary with latency set to 0.0 or similar
+            res = dict(cached)
+            res["retrieval_time"] = 0.0
+            return res
+
+        start_time = time.perf_counter()
+        
+        # 1. Generate Query Vector (automatically hits Embedding Cache)
         try:
             query_vector = await self.embedding_service.embed(query)
         except Exception as e:
@@ -131,28 +141,30 @@ class RetrievalService:
         # 3. Translate filters
         qdrant_filters = self._translate_filters(filters)
 
-        # 4. Search collections in parallel
+        # 4. Search collections in parallel with bounded concurrency and timeout
         search_timeout = timeout or self.settings.TIMEOUT_SECONDS
         timeout_occurred = False
+        sem = asyncio.Semaphore(3)  # limit parallel collection queries to 3
 
         async def search_collection(col_name: str):
-            try:
-                hits = await asyncio.wait_for(
-                    self.vector_service.search(
-                        collection_name=col_name,
-                        query_vector=query_vector,
-                        limit=top_k,
-                        filter_dict=qdrant_filters
-                    ),
-                    timeout=search_timeout
-                )
-                return col_name, hits, False
-            except asyncio.TimeoutError:
-                logger.error(f"Search query timed out in collection '{col_name}' after {search_timeout}s")
-                return col_name, [], True
-            except Exception as e:
-                logger.error(f"Search query failed in collection '{col_name}': {e}")
-                raise e
+            async with sem:
+                try:
+                    hits = await asyncio.wait_for(
+                        self.vector_service.search(
+                            collection_name=col_name,
+                            query_vector=query_vector,
+                            limit=top_k,
+                            filter_dict=qdrant_filters
+                        ),
+                        timeout=search_timeout
+                    )
+                    return col_name, hits, False
+                except asyncio.TimeoutError:
+                    logger.error(f"Search query timed out in collection '{col_name}' after {search_timeout}s")
+                    return col_name, [], True
+                except Exception as e:
+                    logger.error(f"Search query failed in collection '{col_name}': {e}")
+                    raise e
 
         tasks = [search_collection(col) for col in resolved_cols]
         try:
@@ -238,13 +250,18 @@ class RetrievalService:
             timeout=timeout_occurred
         )
 
-        return {
+        response_payload = {
             "results": final_matches,
             "retrieval_time": latency_ms,
             "collections_queried": resolved_cols,
             "chunks_found": chunks_found,
             "duplicates_removed": duplicates_removed
         }
+        
+        # Save to Cache
+        cache_svc.set_retrieval(query, collections, filters, top_k, score_threshold, response_payload)
+
+        return response_payload
 
     async def retrieve(
         self,

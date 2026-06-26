@@ -81,6 +81,13 @@ class EmbeddingService:
         """Generate normalized vector embedding for a single text string"""
         self.validate_text(text)
         
+        # Check Cache
+        from app.services.rag_cache_service import get_rag_cache_service
+        cache_svc = get_rag_cache_service()
+        cached = cache_svc.get_embedding(text)
+        if cached is not None:
+            return cached
+
         start_time = time.perf_counter()
         try:
             vectors = await self._generate_embeddings([text])
@@ -90,6 +97,7 @@ class EmbeddingService:
             latency = (time.perf_counter() - start_time) * 1000.0
             embedding_metrics.record_success(count=1, latency_ms=latency, batch_size=1)
             
+            cache_svc.set_embedding(text, vector)
             return vector
         except Exception as e:
             embedding_metrics.record_failure(count=1)
@@ -118,6 +126,9 @@ class EmbeddingService:
         unique_texts_to_process: List[str] = []
         unique_text_indices: List[int] = []
         
+        from app.services.rag_cache_service import get_rag_cache_service
+        cache_svc = get_rag_cache_service()
+        
         for idx, text in enumerate(texts):
             try:
                 self.validate_text(text)
@@ -125,6 +136,26 @@ class EmbeddingService:
                 # Track failed item and propagate error
                 embedding_metrics.record_failure(count=1)
                 raise e
+
+            # Check Embedding Cache First
+            cached_vector = cache_svc.get_embedding(text)
+            if cached_vector is not None:
+                metadata = EmbeddingMetadata(
+                    content_hash=generate_content_hash(text),
+                    embedding_model=self.settings.EMBEDDING_MODEL,
+                    embedding_version=self.settings.EMBEDDING_VERSION,
+                    indexed_at=datetime.now(timezone.utc),
+                    document_type=document_type,
+                    source_id=source_id,
+                    patient_id=patient_id,
+                    collection_target=collection_target
+                )
+                results[idx] = EmbeddingResult(
+                    vector=cached_vector,
+                    text=text,
+                    metadata=metadata
+                )
+                continue
 
             content_hash = generate_content_hash(text)
             
@@ -186,6 +217,8 @@ class EmbeddingService:
                 norm_vector = self.normalize_vector(vector)
                 self.validate_vector(norm_vector)
                 
+                cache_svc.set_embedding(txt, norm_vector)
+                
                 content_hash = generate_content_hash(txt)
                 metadata = EmbeddingMetadata(
                     content_hash=content_hash,
@@ -211,13 +244,24 @@ class EmbeddingService:
         return results
 
     async def _generate_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """Run encoding inside threadpool to keep event loop free"""
-        loop = asyncio.get_running_loop()
-        embeddings = await loop.run_in_executor(
-            None,
-            lambda: self.model.encode(texts, normalize_embeddings=True)
-        )
-        return [v.tolist() for v in embeddings]
+        """Run encoding inside threadpool to keep event loop free, wrapped in a circuit breaker"""
+        from app.utils.circuit_breaker import get_circuit_breaker
+        
+        def fallback_embeddings(texts_list: List[str]) -> List[List[float]]:
+            logger.error("Embedding circuit breaker fallback triggered. Returning dummy vectors.")
+            return [[0.0] * self.settings.EMBEDDING_DIMENSIONS for _ in texts_list]
+
+        cb = get_circuit_breaker("embedding_service", fallback_func=fallback_embeddings)
+        
+        async def do_generate():
+            loop = asyncio.get_running_loop()
+            embeddings = await loop.run_in_executor(
+                None,
+                lambda: self.model.encode(texts, normalize_embeddings=True)
+            )
+            return [v.tolist() for v in embeddings]
+
+        return await cb.execute_async(do_generate, texts)
 
     async def health_check(self) -> dict:
         """Health check validation of embedding engine"""

@@ -3,7 +3,7 @@ Nura - AI API Router
 Endpoints for monitoring and testing the AI infrastructure
 """
 
-from typing import List
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.dependencies import (
@@ -25,6 +25,10 @@ from app.core.dependencies import (
     get_intent_detection_service,
     get_event_queue,
     get_memory_sync_service,
+    get_rag_cache_service,
+    get_rag_monitoring_service,
+    get_retrieval_evaluation_service,
+    get_rag_benchmark_service,
 )
 from app.models import UserRole, UserInDB
 from app.schemas.ai import (
@@ -962,6 +966,138 @@ async def get_sync_statistics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch sync statistics: {str(e)}"
+        )
+
+
+# RAG Production Optimization request models
+from pydantic import BaseModel
+
+class RAGBenchmarkRequest(BaseModel):
+    patient_id: Optional[str] = None
+    token_budget: Optional[int] = 4000
+    score_threshold: Optional[float] = 0.3
+
+class RAGEvaluateRequest(BaseModel):
+    query: str
+    patient_id: Optional[str] = None
+    collections: Optional[List[str]] = None
+    filters: Optional[Dict[str, Any]] = None
+    ground_truth_doc_ids: Optional[List[str]] = None
+    top_k: Optional[int] = 5
+    score_threshold: Optional[float] = 0.3
+    token_budget: Optional[int] = 4000
+
+
+@router.get(
+    "/rag/health",
+    summary="Get RAG Subsystems Health Check",
+    description="Returns detailed connectivity, configuration, and health check validation from Groq, Qdrant, and Embedding services. Guarded: Admin Only.",
+)
+async def get_rag_health(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    groq_service = Depends(get_groq_service),
+    embedding_service = Depends(get_embedding_service),
+    vector_service = Depends(get_vector_service),
+):
+    try:
+        import time
+        # Perform subsystem health checks
+        groq_health = await groq_service.health_check()
+        embedding_health = await embedding_service.health_check()
+        
+        # Test Qdrant connectivity directly or via search/health
+        qdrant_status = "healthy"
+        qdrant_latency = 0.0
+        start_qdrant = time.perf_counter()
+        try:
+            await vector_service.collection_service.get_collection_info("patient_memory")
+            qdrant_latency = (time.perf_counter() - start_qdrant) * 1000.0
+        except Exception as e:
+            qdrant_status = "unhealthy"
+            qdrant_latency = (time.perf_counter() - start_qdrant) * 1000.0
+
+        return {
+            "status": "healthy" if (groq_health.get("status") == "healthy" and embedding_health.get("status") == "healthy" and qdrant_status == "healthy") else "degraded",
+            "groq": groq_health,
+            "embedding": embedding_health,
+            "qdrant": {
+                "status": qdrant_status,
+                "latency_ms": qdrant_latency
+            }
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"RAG health check failed: {str(e)}"
+        )
+
+
+@router.get(
+    "/rag/statistics",
+    summary="Get RAG Pipeline Telemetry Statistics",
+    description="Returns detailed telemetry monitors, cache ratios, and latencies. Guarded: Admin Only.",
+)
+async def get_rag_statistics(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    monitoring_service = Depends(get_rag_monitoring_service),
+):
+    try:
+        return monitoring_service.get_summary_statistics()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch RAG statistics: {str(e)}"
+        )
+
+
+@router.post(
+    "/rag/benchmark",
+    summary="Execute RAG Benchmark Suite",
+    description="Executes automated test queries benchmarks and returns the resulting report. Guarded: Admin Only.",
+)
+async def run_rag_benchmark(
+    request_data: RAGBenchmarkRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    benchmark_service = Depends(get_rag_benchmark_service),
+):
+    try:
+        return await benchmark_service.execute_benchmarks(
+            patient_id=request_data.patient_id,
+            token_budget=request_data.token_budget or 4000,
+            score_threshold=request_data.score_threshold or 0.3
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Benchmark execution failed: {str(e)}"
+        )
+
+
+@router.post(
+    "/rag/evaluate",
+    summary="Evaluate RAG Retrieval Query Quality",
+    description="Runs retrieval precision, recall, citation, and duplicates metrics analysis for a query. Guarded: Admin Only.",
+)
+async def run_rag_evaluation(
+    request_data: RAGEvaluateRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    evaluation_service = Depends(get_retrieval_evaluation_service),
+):
+    try:
+        return await evaluation_service.evaluate_query(
+            query=request_data.query,
+            patient_id=request_data.patient_id,
+            collections=request_data.collections,
+            filters=request_data.filters,
+            ground_truth_doc_ids=request_data.ground_truth_doc_ids,
+            top_k=request_data.top_k or 5,
+            score_threshold=request_data.score_threshold or 0.3,
+            token_budget=request_data.token_budget or 4000
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Evaluation execution failed: {str(e)}"
         )
 
 

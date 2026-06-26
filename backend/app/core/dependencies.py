@@ -782,6 +782,30 @@ def get_memory_sync_service(
     )
 
 
+def get_rag_cache_service():
+    """Get RAGCacheService instance"""
+    from app.services.rag_cache_service import get_rag_cache_service as get_rag_cache_service_impl
+    return get_rag_cache_service_impl()
+
+
+def get_rag_monitoring_service():
+    """Get RAGMonitoringService instance"""
+    from app.services.rag_monitoring_service import get_rag_monitoring_service as get_rag_monitoring_service_impl
+    return get_rag_monitoring_service_impl()
+
+
+def get_retrieval_evaluation_service():
+    """Get RetrievalEvaluationService instance"""
+    from app.services.retrieval_evaluation_service import get_retrieval_evaluation_service as get_retrieval_evaluation_service_impl
+    return get_retrieval_evaluation_service_impl()
+
+
+def get_rag_benchmark_service():
+    """Get RAGBenchmarkService instance"""
+    from app.services.rag_benchmark_service import get_rag_benchmark_service as get_rag_benchmark_service_impl
+    return get_rag_benchmark_service_impl()
+
+
 
 
 
