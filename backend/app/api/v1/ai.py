@@ -18,7 +18,8 @@ from app.core.dependencies import (
     get_current_user,
     get_doctor_profile_service,
     get_ai_orchestrator,
-    get_document_indexing_service
+    get_document_indexing_service,
+    get_retrieval_service
 )
 from app.models import UserRole, UserInDB
 from app.schemas.ai import (
@@ -36,6 +37,8 @@ from app.schemas.ai import (
     IndexingStatisticsResponse,
     IndexDeletionResponse
 )
+from app.schemas.retrieval import RetrievalRequest, RetrievalResponse, RetrievalStatisticsResponse
+from app.utils.ai import retrieval_metrics
 from app.services.ai_orchestrator import AIOrchestrator
 from app.schemas.embedding import EmbeddingHealthResponse, EmbeddingTestRequest, EmbeddingTestResponse
 from app.schemas.vector import (
@@ -53,6 +56,7 @@ from app.services.vector_collection_service import VectorCollectionService
 from app.services.vector_service import VectorService
 from app.services.patient_context_service import PatientContextService
 from app.services.document_indexing_service import DocumentIndexingService
+from app.services.retrieval_service import RetrievalService
 
 router = APIRouter()
 
@@ -620,4 +624,96 @@ async def get_indexing_statistics(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to compute indexing statistics: {str(e)}"
         )
+
+
+@router.post(
+    "/retrieve",
+    response_model=RetrievalResponse,
+    summary="Retrieve matches from a single collection",
+    description="Runs semantic query search with filters and score threshold on a single collection. Guarded: Admin Only.",
+)
+async def retrieve(
+    request_data: RetrievalRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    retrieval_service: RetrievalService = Depends(get_retrieval_service)
+) -> RetrievalResponse:
+    try:
+        target_col = request_data.collection
+        if not target_col:
+            if request_data.collections:
+                target_col = request_data.collections[0]
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Must specify a target collection"
+                )
+        res = await retrieval_service.retrieve(
+            query=request_data.query,
+            collection=target_col,
+            top_k=request_data.top_k or 5,
+            score_threshold=request_data.score_threshold,
+            filters=request_data.filters
+        )
+        return RetrievalResponse(**res)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed semantic retrieval: {str(e)}"
+        )
+
+
+@router.post(
+    "/retrieve/multi",
+    response_model=RetrievalResponse,
+    summary="Retrieve matches from multiple collections",
+    description="Queries multiple vector collections in parallel, merges, normalizes scores, and ranks results. Guarded: Admin Only.",
+)
+async def retrieve_multi(
+    request_data: RetrievalRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    retrieval_service: RetrievalService = Depends(get_retrieval_service)
+) -> RetrievalResponse:
+    try:
+        cols = request_data.collections
+        if not cols:
+            if request_data.collection:
+                cols = [request_data.collection]
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Must specify target collections"
+                )
+        res = await retrieval_service.retrieve_multiple(
+            query=request_data.query,
+            collections=cols,
+            filters=request_data.filters,
+            top_k=request_data.top_k or 5,
+            score_threshold=request_data.score_threshold
+        )
+        return RetrievalResponse(**res)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed multi-collection retrieval: {str(e)}"
+        )
+
+
+@router.get(
+    "/retrieve/statistics",
+    response_model=RetrievalStatisticsResponse,
+    summary="Get retrieval statistics",
+    description="Returns retrieval counts, latency averages, and error counters. Guarded: Admin Only.",
+)
+async def get_retrieval_statistics(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN))
+) -> RetrievalStatisticsResponse:
+    try:
+        stats = retrieval_metrics.get_metrics()
+        return RetrievalStatisticsResponse(**stats)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch retrieval statistics: {str(e)}"
+        )
+
 

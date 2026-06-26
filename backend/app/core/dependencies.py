@@ -51,6 +51,7 @@ from app.services import (
     IndexVersionService,
     DocumentMetadataService,
     DocumentIndexingService,
+    RetrievalService,
 )
 from app.agents import (
     BaseAgent,
@@ -685,6 +686,13 @@ def get_document_indexing_service() -> DocumentIndexingService:
     """Get DocumentIndexingService instance"""
     from app.services.document_indexing_service import get_document_indexing_service as get_document_indexing_service_impl
     return get_document_indexing_service_impl()
+
+
+def get_retrieval_service() -> RetrievalService:
+    """Get RetrievalService instance"""
+    from app.services.retrieval_service import get_retrieval_service as get_retrieval_service_impl
+    return get_retrieval_service_impl()
+
 
 
 

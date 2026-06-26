@@ -22,7 +22,10 @@ import {
   useBatchIndexDocuments,
   useReindexDocument,
   useDeleteDocument,
-  useDeletePatientDocuments
+  useDeletePatientDocuments,
+  useRetrieval,
+  useRetrievalMulti,
+  useRetrievalStatistics
 } from '@/hooks/use-ai'
 import { 
   Sparkles, 
@@ -2974,8 +2977,506 @@ function IndexingPlaygroundView() {
   )
 }
 
+function RetrievalHealthBadge() {
+  const { 
+    data: stats, 
+    isLoading: isStatsLoading, 
+    isError: isStatsError,
+    refetch: refetchStats
+  } = useRetrievalStatistics()
+
+  return (
+    <Card className="shadow-sm border-slate-200 bg-white px-4 py-2 flex items-center gap-3">
+      <div className="flex flex-col">
+        <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Retrieval Queries</span>
+        {isStatsLoading ? (
+          <span className="text-sm font-medium text-slate-500 flex items-center gap-1.5 mt-0.5">
+            <RefreshCw className="h-3 w-3 animate-spin" />
+            Loading...
+          </span>
+        ) : isStatsError ? (
+          <span className="text-sm font-medium text-red-500 flex items-center gap-1.5 mt-0.5">
+            <AlertTriangle className="h-4 w-4" />
+            Error Loading
+          </span>
+        ) : (
+          <span className="text-sm font-medium text-teal-600 flex items-center gap-1.5 mt-0.5">
+            <Activity className="h-4 w-4 text-teal-500" />
+            {stats?.searches_executed || 0} Executed
+          </span>
+        )}
+      </div>
+      <Button 
+        variant="ghost" 
+        size="icon" 
+        onClick={() => refetchStats()} 
+        disabled={isStatsLoading}
+        className="h-8 w-8 text-slate-400 hover:text-slate-600"
+      >
+        <RefreshCw className={`h-4 w-4 ${isStatsLoading ? 'animate-spin' : ''}`} />
+      </Button>
+    </Card>
+  )
+}
+
+function RetrievalPlaygroundView() {
+  const { data: stats, isLoading: isStatsLoading, refetch: refetchStats } = useRetrievalStatistics()
+  const retrieveMutation = useRetrievalMulti()
+
+  const [query, setQuery] = useState('')
+  const [selectedCollections, setSelectedCollections] = useState<string[]>(['patient_reports'])
+  const [topK, setTopK] = useState(5)
+  const [scoreThreshold, setScoreThreshold] = useState(0.5)
+
+  // Dynamic filter state
+  const [filterKey, setFilterKey] = useState('')
+  const [filterValue, setFilterValue] = useState('')
+  const [filters, setFilters] = useState<Record<string, any>>({})
+
+  const [searchResult, setSearchResult] = useState<any>(null)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [showMetadataId, setShowMetadataId] = useState<string | null>(null)
+
+  const handleAddFilter = () => {
+    if (!filterKey.trim() || !filterValue.trim()) return
+    setFilters(prev => ({
+      ...prev,
+      [filterKey.trim()]: filterValue.trim()
+    }))
+    setFilterKey('')
+    setFilterValue('')
+  }
+
+  const handleRemoveFilter = (key: string) => {
+    setFilters(prev => {
+      const copy = { ...prev }
+      delete copy[key]
+      return copy
+    })
+  }
+
+  const handleRunSearch = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!query.trim() || selectedCollections.length === 0) return
+
+    setSearchResult(null)
+    const payload = {
+      query: query.trim(),
+      collections: selectedCollections,
+      top_k: topK,
+      score_threshold: scoreThreshold > 0 ? scoreThreshold : undefined,
+      filters: Object.keys(filters).length > 0 ? filters : undefined
+    }
+
+    try {
+      const res = await retrieveMutation.mutateAsync(payload)
+      setSearchResult(res)
+      refetchStats()
+    } catch (err: any) {
+      setSearchResult({ success: false, error: err.message || 'Retrieval query execution failed' })
+    }
+  }
+
+  const toggleCollection = (colName: string) => {
+    setSelectedCollections(prev => 
+      prev.includes(colName)
+        ? prev.filter(c => c !== colName)
+        : [...prev, colName]
+    )
+  }
+
+  const highlightText = (text: string, queryStr: string) => {
+    if (!queryStr.trim()) return text
+    const escaped = queryStr.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')
+    const parts = text.split(new RegExp(`(${escaped})`, 'gi'))
+    return (
+      <>
+        {parts.map((part, i) => 
+          part.toLowerCase() === queryStr.toLowerCase()
+            ? <mark key={i} className="bg-yellow-200 text-slate-900 px-0.5 rounded font-medium">{part}</mark>
+            : part
+        )}
+      </>
+    )
+  }
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Telemetry Metrics Deck */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <Card className="border-slate-200 shadow bg-white">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Searches Executed</p>
+              <h3 className="text-2xl font-bold text-slate-800 mt-1">
+                {isStatsLoading ? '...' : stats?.searches_executed ?? 0}
+              </h3>
+            </div>
+            <div className="p-2.5 rounded-full bg-teal-50 text-teal-600">
+              <Search className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow bg-white">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Average Latency</p>
+              <h3 className="text-2xl font-bold text-slate-800 mt-1">
+                {isStatsLoading ? '...' : `${(stats?.avg_latency_ms ?? 0).toFixed(1)} ms`}
+              </h3>
+            </div>
+            <div className="p-2.5 rounded-full bg-blue-50 text-blue-600">
+              <Clock className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow bg-white">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Average Match Score</p>
+              <h3 className="text-2xl font-bold text-slate-800 mt-1">
+                {isStatsLoading ? '...' : `${((stats?.avg_score ?? 0) * 100).toFixed(1)}%`}
+              </h3>
+            </div>
+            <div className="p-2.5 rounded-full bg-indigo-50 text-indigo-600">
+              <Zap className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow bg-white">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Duplicates Removed</p>
+              <h3 className="text-2xl font-bold text-slate-800 mt-1">
+                {isStatsLoading ? '...' : stats?.duplicate_chunks_removed ?? 0}
+              </h3>
+            </div>
+            <div className="p-2.5 rounded-full bg-amber-50 text-amber-600">
+              <Layers className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow bg-white">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Failed & Timeouts</p>
+              <h3 className="text-2xl font-bold text-slate-800 mt-1">
+                {isStatsLoading ? '...' : `${stats?.failed_searches ?? 0} / ${stats?.timeout_count ?? 0}`}
+              </h3>
+            </div>
+            <div className="p-2.5 rounded-full bg-red-50 text-red-600">
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main Console Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column: Search & Configurations */}
+        <div className="lg:col-span-1 space-y-6">
+          <Card className="border-slate-200 shadow-md bg-white">
+            <CardHeader className="border-b border-slate-100 bg-slate-50/50 py-4">
+              <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <Sliders className="h-4.5 w-4.5 text-slate-500" />
+                Query Settings
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-5">
+              <form onSubmit={handleRunSearch} className="space-y-4">
+                <div className="space-y-2">
+                  <label htmlFor="retrieval-query" className="text-sm font-semibold text-slate-700">
+                    Search Phrase
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="retrieval-query"
+                      type="text"
+                      placeholder="Enter search phrase query..."
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      disabled={retrieveMutation.isPending}
+                      className="w-full rounded-md border border-slate-200 pl-10 pr-4 py-2 text-sm text-slate-800 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                    />
+                    <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
+                  </div>
+                </div>
+
+                <div className="space-y-2.5">
+                  <label className="text-sm font-semibold text-slate-700">Collections Targets</label>
+                  <div className="space-y-2 rounded-lg border border-slate-100 p-3.5 bg-slate-50/50">
+                    {[
+                      { key: 'patient_reports', label: 'Patient Reports' },
+                      { key: 'medical_knowledge', label: 'Medical Knowledge' },
+                      { key: 'drug_knowledge', label: 'Drug Knowledge' },
+                      { key: 'doctor_knowledge', label: 'Doctor Knowledge' },
+                      { key: 'chat_memory', label: 'Chat Memory' }
+                    ].map(col => (
+                      <label key={col.key} className="flex items-center gap-2.5 text-sm text-slate-600 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedCollections.includes(col.key)}
+                          onChange={() => toggleCollection(col.key)}
+                          className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                        />
+                        {col.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <label className="font-semibold text-slate-700">Top K Chunks</label>
+                    <span className="font-mono text-teal-600 font-bold">{topK} hits</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="20"
+                    value={topK}
+                    onChange={(e) => setTopK(parseInt(e.target.value))}
+                    className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-teal-600"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <label className="font-semibold text-slate-700">Score Threshold</label>
+                    <span className="font-mono text-teal-600 font-bold">{(scoreThreshold * 100).toFixed(0)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={scoreThreshold}
+                    onChange={(e) => setScoreThreshold(parseFloat(e.target.value))}
+                    className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-teal-600"
+                  />
+                </div>
+
+                {/* Metadata filters section */}
+                <div className="space-y-3 pt-3 border-t border-slate-100">
+                  <label className="text-sm font-semibold text-slate-700 block">Metadata Filters</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Key (e.g. language)"
+                      value={filterKey}
+                      onChange={(e) => setFilterKey(e.target.value)}
+                      className="w-1/2 rounded border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:border-teal-500"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Value (e.g. en)"
+                      value={filterValue}
+                      onChange={(e) => setFilterValue(e.target.value)}
+                      className="w-1/2 rounded border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:border-teal-500"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleAddFilter}
+                      className="px-2 py-1 h-auto text-xs"
+                    >
+                      Add
+                    </Button>
+                  </div>
+
+                  {/* Active filters badges */}
+                  {Object.keys(filters).length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 p-2 rounded-md bg-slate-50 border border-slate-100">
+                      {Object.entries(filters).map(([k, v]) => (
+                        <div key={k} className="flex items-center gap-1 bg-white border border-slate-200 px-1.5 py-0.5 rounded text-[10px] text-slate-600 font-medium">
+                          <span>{k}: <strong className="text-slate-800">{v}</strong></span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFilter(k)}
+                            className="text-red-400 hover:text-red-600 text-xs font-bold"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={!query.trim() || selectedCollections.length === 0 || retrieveMutation.isPending}
+                  className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 transition-all mt-4"
+                >
+                  {retrieveMutation.isPending ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Retrieving Chunks...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="h-4 w-4 mr-2" />
+                      Execute Retrieval
+                    </>
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Column: Search Results */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card className="border-slate-200 shadow-md bg-white min-h-[400px] flex flex-col overflow-hidden">
+            <CardHeader className="border-b border-slate-100 bg-slate-50/50 py-4">
+              <CardTitle className="text-base font-semibold text-slate-800 flex items-center justify-between">
+                <span>Semantic Matches</span>
+                {searchResult && !searchResult.error && (
+                  <span className="text-xs text-slate-400 font-normal">
+                    Fetched {searchResult.results.length} ranked hits in {(searchResult.retrieval_time).toFixed(1)} ms
+                  </span>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 p-6 flex flex-col justify-between">
+              {retrieveMutation.isPending ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
+                  <RefreshCw className="h-8 w-8 animate-spin text-teal-500" />
+                  <p className="text-sm font-medium animate-pulse text-slate-500">Querying collections in parallel...</p>
+                </div>
+              ) : !searchResult ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-20 text-slate-400 text-center">
+                  <Search className="h-12 w-12 text-slate-200 mb-3" />
+                  <p className="text-sm font-medium text-slate-500">Retrieval Playground Ready</p>
+                  <p className="text-xs text-slate-400 mt-1 max-w-[300px]">
+                    Enter a search phrase and configure collection scopes to trigger semantic lookup testing.
+                  </p>
+                </div>
+              ) : searchResult.error ? (
+                <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-semibold">Retrieval Execution Failed</h4>
+                    <p className="text-sm mt-1 text-red-600">{searchResult.error}</p>
+                  </div>
+                </div>
+              ) : searchResult.results.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-20 text-slate-400 text-center">
+                  <Activity className="h-12 w-12 text-slate-200 mb-3" />
+                  <p className="text-sm font-medium text-slate-500">No matching chunks found</p>
+                  <p className="text-xs text-slate-400 mt-1 max-w-[300px]">
+                    Try adjusting the similarity score threshold slider down or search for a different phrase.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {searchResult.results.map((hit: any, index: number) => {
+                    const colColors: Record<string, string> = {
+                      patient_reports: 'border-teal-200 bg-teal-50 text-teal-800',
+                      medical_knowledge: 'border-indigo-200 bg-indigo-50 text-indigo-800',
+                      drug_knowledge: 'border-violet-200 bg-violet-50 text-violet-800',
+                      doctor_knowledge: 'border-blue-200 bg-blue-50 text-blue-800',
+                      chat_memory: 'border-amber-200 bg-amber-50 text-amber-800'
+                    }
+                    const colClass = colColors[hit.collection] || 'border-slate-200 bg-slate-50 text-slate-800'
+
+                    return (
+                      <div key={hit.id} className="border border-slate-200 rounded-lg overflow-hidden shadow-sm hover:shadow transition-all bg-white">
+                        {/* Hit Header */}
+                        <div className="border-b border-slate-100 bg-slate-50/50 px-4 py-3 flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-900 bg-slate-200 px-1.5 py-0.5 rounded text-[10px]">
+                              Rank #{index + 1}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-full font-semibold border text-[10px] ${colClass}`}>
+                              {hit.collection}
+                            </span>
+                            {hit.document_type && (
+                              <span className="text-slate-400 font-medium font-mono text-[10px]">
+                                {hit.document_type}
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-teal-600 bg-teal-50 px-2 py-0.5 rounded">
+                              Score: {(hit.score * 100).toFixed(1)}%
+                            </span>
+                            
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                navigator.clipboard.writeText(JSON.stringify(hit, null, 2))
+                                setCopiedId(hit.id)
+                                setTimeout(() => setCopiedId(null), 2000)
+                              }}
+                              className="h-6 w-6 text-slate-400 hover:text-slate-600"
+                            >
+                              {copiedId === hit.id ? (
+                                <Check className="h-3.5 w-3.5 text-teal-600" />
+                              ) : (
+                                <Copy className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Content text */}
+                        <div className="p-4 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                          {highlightText(hit.content, query)}
+                        </div>
+
+                        {/* Citations Footer */}
+                        <div className="bg-slate-50/50 border-t border-slate-100 px-4 py-2.5 flex items-center justify-between text-xs">
+                          <div className="text-slate-400 flex items-center gap-4">
+                            {hit.citations.page_number && (
+                              <span>Page: <strong className="text-slate-600">{hit.citations.page_number}</strong></span>
+                            )}
+                            {hit.citations.section && (
+                              <span>Section: <strong className="text-slate-600">{hit.citations.section}</strong></span>
+                            )}
+                            {hit.citations.document_id && (
+                              <span>Doc ID: <strong className="text-slate-500 font-mono">{hit.citations.document_id}</strong></span>
+                            )}
+                          </div>
+
+                          <Button
+                            variant="ghost"
+                            onClick={() => setShowMetadataId(showMetadataId === hit.id ? null : hit.id)}
+                            className="text-teal-600 hover:text-teal-700 font-semibold text-xs h-auto p-0 flex items-center gap-1"
+                          >
+                            <Code className="h-3.5 w-3.5" />
+                            {showMetadataId === hit.id ? 'Hide Headers' : 'View Payload'}
+                          </Button>
+                        </div>
+
+                        {/* Metadata payload details */}
+                        {showMetadataId === hit.id && (
+                          <div className="border-t border-slate-100 bg-slate-900 p-4 overflow-x-auto text-[11px]">
+                            <pre className="font-mono text-teal-400">{JSON.stringify(hit.metadata, null, 2)}</pre>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function AIPlaygroundContent() {
-  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing'>('llm')
+  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval'>('llm')
+
 
   return (
     <div className="space-y-6">
@@ -3002,6 +3503,8 @@ function AIPlaygroundContent() {
           <PatientContextHealthBadge />
         ) : activeTab === 'indexing' ? (
           <IndexingHealthBadge />
+        ) : activeTab === 'retrieval' ? (
+          <RetrievalHealthBadge />
         ) : (
           <IntegrationHealthSummaryBadge />
         )}
@@ -3065,6 +3568,17 @@ function AIPlaygroundContent() {
           Indexing Pipeline
         </button>
         <button
+          onClick={() => setActiveTab('retrieval')}
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2 relative flex-shrink-0 ${
+            activeTab === 'retrieval'
+              ? 'border-teal-600 text-teal-600 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Search className="h-4 w-4" />
+          Retrieval Engine
+        </button>
+        <button
           onClick={() => setActiveTab('integration')}
           className={`pb-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2 relative flex-shrink-0 ${
             activeTab === 'integration'
@@ -3087,6 +3601,8 @@ function AIPlaygroundContent() {
         <PatientContextPlaygroundView />
       ) : activeTab === 'indexing' ? (
         <IndexingPlaygroundView />
+      ) : activeTab === 'retrieval' ? (
+        <RetrievalPlaygroundView />
       ) : (
         <IntegrationPlaygroundView />
       )}

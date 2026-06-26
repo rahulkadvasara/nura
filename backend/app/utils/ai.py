@@ -364,4 +364,68 @@ class IndexingMetricsTracker:
 indexing_metrics = IndexingMetricsTracker()
 
 
+class RetrievalMetricsTracker:
+    """In-memory metrics tracker for monitoring Retrieval Engine performance"""
+
+    def __init__(self):
+        self.searches_executed: int = 0
+        self.failed_searches: int = 0
+        self.total_latency_ms: float = 0.0
+        self.total_score_sum: float = 0.0
+        self.total_score_hits_count: int = 0
+        self.duplicate_chunks_removed: int = 0
+        self.timeout_count: int = 0
+
+    def record_search(
+        self,
+        latency_ms: float,
+        success: bool,
+        hits_count: int = 0,
+        avg_score: float = 0.0,
+        duplicates_removed: int = 0,
+        timeout: bool = False
+    ) -> None:
+        """Record telemetry of a search execution event"""
+        self.searches_executed += 1
+        if not success:
+            self.failed_searches += 1
+        if timeout:
+            self.timeout_count += 1
+        if success:
+            self.total_latency_ms += latency_ms
+            self.duplicate_chunks_removed += duplicates_removed
+            if hits_count > 0:
+                self.total_score_sum += avg_score * hits_count
+                self.total_score_hits_count += hits_count
+
+    def get_metrics(self) -> dict:
+        """Summarize current retrieval performance metrics"""
+        successful_searches = self.searches_executed - self.failed_searches
+        avg_latency = (self.total_latency_ms / successful_searches) if successful_searches > 0 else 0.0
+        avg_score = (self.total_score_sum / self.total_score_hits_count) if self.total_score_hits_count > 0 else 0.0
+        return {
+            "searches_executed": self.searches_executed,
+            "failed_searches": self.failed_searches,
+            "avg_latency_ms": avg_latency,
+            "avg_score": avg_score,
+            "duplicate_chunks_removed": self.duplicate_chunks_removed,
+            "timeout_count": self.timeout_count
+        }
+
+    def reset(self) -> None:
+        """Reset internal metrics counters"""
+        self.searches_executed = 0
+        self.failed_searches = 0
+        self.total_latency_ms = 0.0
+        self.total_score_sum = 0.0
+        self.total_score_hits_count = 0
+        self.duplicate_chunks_removed = 0
+        self.timeout_count = 0
+
+
+# Global retrieval metrics tracker instance
+retrieval_metrics = RetrievalMetricsTracker()
+
+
+
 

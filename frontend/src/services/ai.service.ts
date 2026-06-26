@@ -224,6 +224,21 @@ export const aiService = {
   getIndexStatistics: async (): Promise<IndexingStatisticsResponse> => {
     const response = await apiClient.get<IndexingStatisticsResponse>('/ai/index/statistics')
     return response.data
+  },
+
+  retrieve: async (request: RetrievalRequest): Promise<RetrievalResponse> => {
+    const response = await apiClient.post<RetrievalResponse>('/ai/retrieve', request)
+    return response.data
+  },
+
+  retrieveMulti: async (request: RetrievalRequest): Promise<RetrievalResponse> => {
+    const response = await apiClient.post<RetrievalResponse>('/ai/retrieve/multi', request)
+    return response.data
+  },
+
+  getRetrievalStatistics: async (): Promise<RetrievalStatisticsResponse> => {
+    const response = await apiClient.get<RetrievalStatisticsResponse>('/ai/retrieve/statistics')
+    return response.data
   }
 }
 
@@ -313,5 +328,44 @@ export interface IndexDeletionResponse {
   success: boolean
   message?: string
 }
+
+export interface RetrievalRequest {
+  query: string
+  collection?: string
+  collections?: string[]
+  filters?: Record<string, any>
+  top_k?: number
+  score_threshold?: number
+}
+
+export interface RetrievalMatch {
+  collection: string
+  id: string
+  score: number
+  content: string
+  metadata: Record<string, any>
+  document_type: string
+  patient_id?: string
+  report_id?: string
+  citations: Record<string, any>
+}
+
+export interface RetrievalResponse {
+  results: RetrievalMatch[]
+  retrieval_time: number
+  collections_queried: string[]
+  chunks_found: number
+  duplicates_removed: number
+}
+
+export interface RetrievalStatisticsResponse {
+  searches_executed: number
+  failed_searches: number
+  avg_latency_ms: number
+  avg_score: number
+  duplicate_chunks_removed: number
+  timeout_count: number
+}
+
 
 

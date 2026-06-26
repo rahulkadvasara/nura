@@ -17,7 +17,10 @@ import {
   BatchDocumentIndexRequest,
   BatchDocumentIndexResponse,
   IndexingStatisticsResponse,
-  IndexDeletionResponse
+  IndexDeletionResponse,
+  RetrievalRequest,
+  RetrievalResponse,
+  RetrievalStatisticsResponse
 } from '@/services/ai.service'
 
 /**
@@ -226,3 +229,47 @@ export function useDeletePatientDocuments() {
     }
   })
 }
+
+/**
+ * Custom hook to execute single-collection semantic retrieval.
+ */
+export function useRetrieval() {
+  const queryClient = useQueryClient()
+  return useMutation<RetrievalResponse, Error, RetrievalRequest>({
+    mutationFn: async (request: RetrievalRequest) => {
+      return await aiService.retrieve(request)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'retrieval', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to execute multi-collection semantic retrieval.
+ */
+export function useRetrievalMulti() {
+  const queryClient = useQueryClient()
+  return useMutation<RetrievalResponse, Error, RetrievalRequest>({
+    mutationFn: async (request: RetrievalRequest) => {
+      return await aiService.retrieveMulti(request)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'retrieval', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to monitor retrieval metrics statistics periodically.
+ */
+export function useRetrievalStatistics() {
+  return useQuery<RetrievalStatisticsResponse, Error>({
+    queryKey: ['admin', 'ai', 'retrieval', 'statistics'],
+    queryFn: async () => {
+      return await aiService.getRetrievalStatistics()
+    },
+    refetchInterval: 15000 // Refresh retrieval stats every 15 seconds
+  })
+}
+

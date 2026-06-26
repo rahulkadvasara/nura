@@ -621,5 +621,24 @@ Database architecture is considered complete when:
 * Data ownership is clearly defined
 * Retention policies are documented
 
+
+---
+
+# 10. Semantic Retrieval Routing
+
+Unified vector retrieval is managed strictly by the `RetrievalService` layer. direct Qdrant reads are centralized to prevent divergent filtering logic.
+
+## Cosine score normalization
+Raw Qdrant cosine similarity scores are converted to the standard `[0.0, 1.0]` range:
 ```
+normalized_score = (raw_score + 1.0) / 2.0
 ```
+
+## Collection routing mapping
+Vector targets are resolved either by direct collection names or document type aliases:
+* `REPORT` &rarr; `patient_reports` (requires patient_id filtering)
+* `MEDICAL_ARTICLE` &rarr; `medical_knowledge`
+* `DRUG_DATASET` &rarr; `drug_knowledge`
+* `DOCTOR_PROFILE` &rarr; `doctor_knowledge`
+* `CHAT_MEMORY` &rarr; `chat_memory`
+

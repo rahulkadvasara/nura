@@ -44,6 +44,7 @@ from app.services.ai_orchestrator import AIOrchestrator
 from app.services.index_version_service import IndexVersionService, get_index_version_service
 from app.services.document_metadata_service import DocumentMetadataService, get_document_metadata_service
 from app.services.document_indexing_service import DocumentIndexingService, get_document_indexing_service
+from app.services.retrieval_service import RetrievalService, get_retrieval_service
 
 
 __all__ = [
@@ -119,4 +120,6 @@ __all__ = [
     "get_document_metadata_service",
     "DocumentIndexingService",
     "get_document_indexing_service",
+    "RetrievalService",
+    "get_retrieval_service",
 ]

@@ -69,6 +69,7 @@ class DocumentMetadataService:
             "indexed_at": datetime.now(timezone.utc).isoformat(),
             "embedding_model": self.settings.EMBEDDING_MODEL,
             "embedding_version": self.version_service.get_embedding_version(),
+            "content": content,
             "content_hash": content_hash,
             "index_version": self.version_service.get_index_version()
         }

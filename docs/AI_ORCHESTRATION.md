@@ -66,8 +66,11 @@ This pattern parses `{placeholder}` elements without matching JSON curly braces 
 
 ---
 
-## 4. Next Phase: Qdrant Retrieval-Augmented Generation (RAG)
+## 4. Retrieval Engine Integration (RAG Foundation)
 
-In the upcoming phases:
-- **Semantic Retrieval**: The Orchestrator will call `EmbeddingService` to vectorize user prompts, run a nearest-neighbor query in Qdrant via `VectorService`, and append retrieved medical insights to the patient context.
-- **LLM Prompt Enrichment**: The prompt template will dynamically load retrieved context alongside MongoDB history.
+Phase 9 - Sprint 2 completes the Retrieval Engine foundation:
+- **Centralized Retrieval Service**: Vector inquiries are encapsulated in `RetrievalService` preventing direct Qdrant reads in upper workflows.
+- **Score Normalization**: Similarity score outputs are normalized to `[0.0, 1.0]` cosine range.
+- **Cross-Collection Deduplication**: Multi-collection parallel searches merge results and discard duplicate chunks by `content_hash` tracking, preserving high-scoring results.
+- **In-Memory Telemetry**: Retrieval metrics logs track queries count, failures, latencies, averages, deduplication skips, and search timeouts.
+
