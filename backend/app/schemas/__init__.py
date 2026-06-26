@@ -139,6 +139,18 @@ from app.schemas.patient_context import (
     PatientContextResponse,
 )
 
+from app.schemas.ai import (
+    AIHealthResponse,
+    AITestRequest,
+    TokenUsage,
+    AITestResponse,
+    AIExecutionSession,
+    AIPlaygroundChatRequest,
+    AIPlaygroundChatResponse,
+    AIPlaygroundHealthResponse,
+)
+
+
 
 __all__ = [
     # Authentication schemas
@@ -260,4 +272,12 @@ __all__ = [
     "MaintenanceResponse",
     "PatientContextMetadata",
     "PatientContextResponse",
+    "AIHealthResponse",
+    "AITestRequest",
+    "TokenUsage",
+    "AITestResponse",
+    "AIExecutionSession",
+    "AIPlaygroundChatRequest",
+    "AIPlaygroundChatResponse",
+    "AIPlaygroundHealthResponse",
 ]

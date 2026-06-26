@@ -14,7 +14,9 @@ import {
   useEmbeddingTest,
   useVectorHealth,
   useVectorTest,
-  usePatientContext
+  usePatientContext,
+  useAIPlaygroundHealth,
+  useAIPlaygroundChat
 } from '@/hooks/use-ai'
 import { 
   Sparkles, 
@@ -32,7 +34,9 @@ import {
   FileText,
   Code,
   Users,
-  Search
+  Search,
+  Sliders,
+  Settings
 } from 'lucide-react'
 
 
@@ -1462,8 +1466,751 @@ function PatientContextPlaygroundView() {
   )
 }
 
+function IntegrationHealthSummaryBadge() {
+  const { data: health, isLoading, isError, refetch } = useAIPlaygroundHealth()
+
+  // Calculate overall connectivity count
+  const isHealthy = health && 
+    health.groq?.reachable && 
+    health.embedding?.status === 'healthy' && 
+    health.vector?.connected && 
+    health.prompt_registry?.status === 'healthy' && 
+    health.context_builder?.status === 'healthy'
+
+  return (
+    <Card className="shadow-sm border-slate-200 bg-white px-4 py-2 flex items-center gap-3">
+      <div className="flex flex-col">
+        <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Orchestrator Status</span>
+        {isLoading ? (
+          <span className="text-sm font-medium text-slate-500 flex items-center gap-1.5 mt-0.5">
+            <RefreshCw className="h-3 w-3 animate-spin" />
+            Checking...
+          </span>
+        ) : isError ? (
+          <span className="text-sm font-medium text-red-500 flex items-center gap-1.5 mt-0.5">
+            <AlertTriangle className="h-4 w-4" />
+            System Errors
+          </span>
+        ) : isHealthy ? (
+          <span className="text-sm font-medium text-teal-600 flex items-center gap-1.5 mt-0.5">
+            <CheckCircle2 className="h-4 w-4 text-teal-500" />
+            Integrated System Healthy
+          </span>
+        ) : (
+          <span className="text-sm font-medium text-amber-500 flex items-center gap-1.5 mt-0.5">
+            <AlertTriangle className="h-4 w-4" />
+            Degraded State
+          </span>
+        )}
+      </div>
+      <Button 
+        variant="ghost" 
+        size="icon" 
+        onClick={() => refetch()} 
+        disabled={isLoading}
+        className="h-8 w-8 text-slate-400 hover:text-slate-600"
+      >
+        <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+      </Button>
+    </Card>
+  )
+}
+
+function IntegrationPlaygroundView() {
+  const [prompt, setPrompt] = useState('')
+  const [selectedPatientId, setSelectedPatientId] = useState('')
+  const [selectedPatientName, setSelectedPatientName] = useState('')
+  const [selectedModel, setSelectedModel] = useState('')
+  const [temperature, setTemperature] = useState<number>(0.7)
+  const [maxTokens, setMaxTokens] = useState<number>(1024)
+  const [search, setSearch] = useState('')
+  const [testResult, setTestResult] = useState<any>(null)
+  const [latency, setLatency] = useState<number | null>(null)
+  const [copiedPrompt, setCopiedPrompt] = useState(false)
+  const [copiedResponse, setCopiedResponse] = useState(false)
+  const [activeSubTab, setActiveSubTab] = useState<'response' | 'prompt' | 'metadata'>('response')
+
+  const { data: health, isLoading: isHealthLoading, isError: isHealthError, refetch: refetchHealth } = useAIPlaygroundHealth()
+  const chatMutation = useAIPlaygroundChat()
+
+  // Fetch patients list
+  const { data: patientsResponse, isLoading: isLoadingPatients, isError: isPatientsError } = useQuery({
+    queryKey: ['admin', 'patients-list'],
+    queryFn: () => adminUserService.listUsers(undefined, 'patient')
+  })
+  const patients = patientsResponse?.data || []
+
+  // Filter patients list based on search term
+  const filteredPatients = patients.filter((p: any) =>
+    p.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+    p.email?.toLowerCase().includes(search.toLowerCase())
+  )
+
+  const handleRunChat = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!prompt.trim()) return
+
+    const startTime = performance.now()
+    try {
+      const result = await chatMutation.mutateAsync({
+        prompt: prompt,
+        patient_id: selectedPatientId || undefined,
+        model: selectedModel || undefined,
+        temperature: temperature,
+        max_tokens: maxTokens
+      })
+      const endTime = performance.now()
+      setLatency(endTime - startTime)
+      setTestResult(result)
+    } catch (err) {
+      setTestResult(null)
+      setLatency(null)
+    }
+  }
+
+  const handleCopyPrompt = () => {
+    if (!testResult?.prompt_template) return
+    navigator.clipboard.writeText(testResult.prompt_template)
+    setCopiedPrompt(true)
+    setTimeout(() => setCopiedPrompt(false), 2000)
+  }
+
+  const handleCopyResponse = () => {
+    if (!testResult?.response) return
+    navigator.clipboard.writeText(testResult.response)
+    setCopiedResponse(true)
+    setTimeout(() => setCopiedResponse(false), 2000)
+  }
+
+  // Health check badges helper status
+  const getStatusBadge = (status: string | undefined) => {
+    if (!status) return <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-slate-100 text-slate-700">Unknown</span>
+    const isHealthy = status.toLowerCase() === 'healthy' || status.toLowerCase() === 'connected' || status === 'true'
+    return isHealthy ? (
+      <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-teal-50 text-teal-700 border-teal-200">Healthy</span>
+    ) : (
+      <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-rose-50 text-rose-700 border-rose-200">Unhealthy</span>
+    )
+  }
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* 1. Health Metrics Overview Panel */}
+      <Card className="border-slate-200 shadow-sm bg-white">
+        <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50 flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
+              <Settings className="h-4 w-4 text-slate-500" />
+              Integrated Infrastructure Health Overview
+            </CardTitle>
+            <CardDescription>
+              Consolidated connectivity health status across all active system-wide AI endpoints.
+            </CardDescription>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => refetchHealth()}
+            disabled={isHealthLoading}
+            className="text-slate-500 hover:text-slate-700 text-xs gap-1"
+          >
+            <RefreshCw className={`h-3 w-3 ${isHealthLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </CardHeader>
+        <CardContent className="pt-6">
+          {isHealthLoading && !health ? (
+            <div className="flex justify-center items-center py-6 text-slate-400 gap-2">
+              <RefreshCw className="h-4 w-4 animate-spin text-teal-500" />
+              <span>Querying integrated health checks...</span>
+            </div>
+          ) : isHealthError ? (
+            <div className="p-4 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-rose-500" />
+              Failed to fetch consolidated platform health check status.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              {/* Groq Card */}
+              <div className="p-4 rounded-lg border border-slate-100 bg-slate-50/50 flex flex-col justify-between space-y-2">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Groq LLM</span>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-bold text-slate-700">
+                    {health?.groq?.reachable ? 'Reachable' : 'Unreachable'}
+                  </span>
+                  {health?.groq?.reachable ? (
+                    <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-teal-50 text-teal-700 border-teal-200">Healthy</span>
+                  ) : (
+                    <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-rose-50 text-rose-700 border-rose-200">Unhealthy</span>
+                  )}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-1">
+                  Model: {health?.groq?.model || 'N/A'} <br />
+                  Latency: {health?.groq?.latency_ms ? `${health.groq.latency_ms.toFixed(0)} ms` : 'N/A'}
+                </div>
+              </div>
+
+              {/* Embedding Card */}
+              <div className="p-4 rounded-lg border border-slate-100 bg-slate-50/50 flex flex-col justify-between space-y-2">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Embeddings</span>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-bold text-slate-700 capitalize">
+                    {health?.embedding?.status || 'Unknown'}
+                  </span>
+                  {getStatusBadge(health?.embedding?.status)}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-1">
+                  Provider: {health?.embedding?.provider || 'N/A'} <br />
+                  Dimensions: {health?.embedding?.dimensions || 'N/A'}
+                </div>
+              </div>
+
+              {/* Vector DB Card */}
+              <div className="p-4 rounded-lg border border-slate-100 bg-slate-50/50 flex flex-col justify-between space-y-2">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Vector DB</span>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-bold text-slate-700">
+                    {health?.vector?.connected ? 'Connected' : 'Disconnected'}
+                  </span>
+                  {health?.vector?.connected ? (
+                    <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-teal-50 text-teal-700 border-teal-200">Healthy</span>
+                  ) : (
+                    <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-rose-50 text-rose-700 border-rose-200">Unhealthy</span>
+                  )}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-1">
+                  Status: {health?.vector?.status || 'N/A'} <br />
+                  Collections: {health?.vector?.collections?.length || 0}
+                </div>
+              </div>
+
+              {/* Prompt Registry Card */}
+              <div className="p-4 rounded-lg border border-slate-100 bg-slate-50/50 flex flex-col justify-between space-y-2">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Prompt Registry</span>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-bold text-slate-700 capitalize">
+                    {health?.prompt_registry?.status || 'Unknown'}
+                  </span>
+                  {getStatusBadge(health?.prompt_registry?.status)}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-1">
+                  Version: {health?.prompt_registry?.version || 'N/A'} <br />
+                  Templates: {health?.prompt_registry?.templates_count || 'N/A'}
+                </div>
+              </div>
+
+              {/* Context Builder Card */}
+              <div className="p-4 rounded-lg border border-slate-100 bg-slate-50/50 flex flex-col justify-between space-y-2">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Context Builder</span>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-bold text-slate-700 capitalize">
+                    {health?.context_builder?.status || 'Unknown'}
+                  </span>
+                  {getStatusBadge(health?.context_builder?.status)}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-1">
+                  Error: {health?.context_builder?.error ? 'Failed check' : 'None'}
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 2. Double Column Layout: Selector + Playground */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Left Column: Form Configuration */}
+        <div className="lg:col-span-1 space-y-6">
+          <Card className="border-slate-200 shadow-md bg-white">
+            <CardHeader className="border-b border-slate-100 bg-slate-50/50">
+              <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <Sliders className="h-4 w-4 text-slate-500" />
+                Playground Config
+              </CardTitle>
+              <CardDescription>
+                Configure parameters for context assembly and LLM response generation.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-5">
+              
+              {/* Patient Selector */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Patient Context Override
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search patient name/email..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full rounded-md border border-slate-200 pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  />
+                </div>
+
+                {isLoadingPatients ? (
+                  <div className="flex items-center justify-center py-4 text-slate-400 gap-1.5 text-xs">
+                    <RefreshCw className="h-3 w-3 animate-spin text-teal-500" />
+                    <span>Loading patients...</span>
+                  </div>
+                ) : isPatientsError ? (
+                  <div className="text-center py-2 text-rose-500 text-xs">
+                    Failed to fetch patients list.
+                  </div>
+                ) : filteredPatients.length === 0 ? (
+                  <div className="text-center py-2 text-slate-500 text-xs">
+                    No patients match.
+                  </div>
+                ) : (
+                  <div className="max-h-40 overflow-y-auto border border-slate-100 rounded-md divide-y divide-slate-100 text-xs bg-slate-50/30">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedPatientId('')
+                        setSelectedPatientName('')
+                      }}
+                      className={`w-full text-left px-2.5 py-2 transition-colors flex items-center justify-between ${
+                        selectedPatientId === ''
+                          ? 'bg-teal-50 font-semibold text-teal-700 font-bold'
+                          : 'hover:bg-slate-50 text-slate-600'
+                      }`}
+                    >
+                      <span>No Patient (Null Context)</span>
+                      {selectedPatientId === '' && (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-teal-600" />
+                      )}
+                    </button>
+                    {filteredPatients.map((patient: any) => (
+                      <button
+                        key={patient.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedPatientId(patient.id)
+                          setSelectedPatientName(patient.full_name)
+                        }}
+                        className={`w-full text-left px-2.5 py-2 transition-colors flex items-center justify-between ${
+                          selectedPatientId === patient.id
+                            ? 'bg-teal-50 font-semibold text-teal-700 font-bold'
+                            : 'hover:bg-slate-50 text-slate-600'
+                        }`}
+                      >
+                        <div className="truncate pr-2">
+                          <span className="font-semibold text-slate-800">{patient.full_name}</span>
+                          <span className="text-[10px] text-slate-400 block truncate">{patient.email}</span>
+                        </div>
+                        {selectedPatientId === patient.id && (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-teal-600 flex-shrink-0" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Model Selector */}
+              <div className="space-y-2">
+                <label htmlFor="model-select" className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  LLM Model Selector
+                </label>
+                <select
+                  id="model-select"
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                >
+                  <option value="">System Default ({health?.groq?.model || 'llama-3.3-70b-versatile'})</option>
+                  <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
+                  <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
+                  <option value="mixtral-8x7b-32768">mixtral-8x7b-32768</option>
+                </select>
+              </div>
+
+              {/* Temperature Slider */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center text-xs">
+                  <label className="font-bold text-slate-700 uppercase tracking-wider">
+                    Temperature
+                  </label>
+                  <span className="font-mono font-semibold text-teal-600 bg-teal-50 border border-teal-100 rounded px-1.5 py-0.5">
+                    {temperature.toFixed(1)}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0.0"
+                  max="2.0"
+                  step="0.1"
+                  value={temperature}
+                  onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                  className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-teal-600"
+                />
+                <div className="flex justify-between text-[10px] text-slate-400 font-medium">
+                  <span>Deterministic (0.0)</span>
+                  <span>Creative (2.0)</span>
+                </div>
+              </div>
+
+              {/* Max Tokens Slider */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center text-xs">
+                  <label className="font-bold text-slate-700 uppercase tracking-wider">
+                    Max Tokens
+                  </label>
+                  <span className="font-mono font-semibold text-teal-600 bg-teal-50 border border-teal-100 rounded px-1.5 py-0.5">
+                    {maxTokens}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="256"
+                  max="4096"
+                  step="128"
+                  value={maxTokens}
+                  onChange={(e) => setMaxTokens(parseInt(e.target.value))}
+                  className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-teal-600"
+                />
+                <div className="flex justify-between text-[10px] text-slate-400 font-medium">
+                  <span>Short (256)</span>
+                  <span>Long (4096)</span>
+                </div>
+              </div>
+
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Column: Execution Form Console + Responses */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card className="border-slate-200 shadow-md bg-white">
+            <CardHeader className="border-b border-slate-100 bg-slate-50/50">
+              <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <Terminal className="h-4 w-4 text-slate-500" />
+                Integration Playground Console
+              </CardTitle>
+              <CardDescription>
+                Test prompt templates mapped with real patient database profiles. Coordinates context rendering and LLM calls.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <form onSubmit={handleRunChat} className="space-y-4">
+                <div className="space-y-2">
+                  <label htmlFor="integration-prompt" className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    User Query / Prompt
+                  </label>
+                  <Textarea
+                    id="integration-prompt"
+                    placeholder="Enter medical question or symptom search query..."
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    rows={4}
+                    disabled={chatMutation.isPending}
+                    className="border-slate-200 focus:border-teal-500 focus:ring-teal-500 resize-none font-sans text-sm"
+                  />
+                </div>
+
+                <div className="flex justify-between items-center pt-2">
+                  <div className="text-xs text-slate-400 font-medium">
+                    {selectedPatientId ? (
+                      <span className="flex items-center gap-1 text-teal-600 font-semibold bg-teal-50 border border-teal-100 rounded px-2 py-0.5">
+                        <Users className="h-3 w-3" /> Context: {selectedPatientName}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 italic">No patient context selected</span>
+                    )}
+                  </div>
+                  <Button
+                    type="submit"
+                    disabled={!prompt.trim() || chatMutation.isPending}
+                    className="bg-teal-600 hover:bg-teal-700 text-white font-semibold transition-all px-5"
+                  >
+                    {chatMutation.isPending ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Generating Response...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="h-4 w-4 mr-2" />
+                        Execute Orchestrator
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* Response & Telemetry Output */}
+          {chatMutation.isPending && (
+            <Card className="border-slate-200 shadow-md bg-white">
+              <CardContent className="py-12 flex flex-col items-center justify-center text-slate-400 gap-3">
+                <RefreshCw className="h-8 w-8 animate-spin text-teal-500" />
+                <p className="text-sm font-medium animate-pulse text-slate-500">Executing integration orchestrator lifecycle...</p>
+                <p className="text-xs text-slate-400 text-center max-w-sm">
+                  Assembling MongoDB context, loading & checking templates, formatting variables, and calling Groq LLM endpoint.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {chatMutation.isError && (
+            <Card className="border-slate-200 shadow-md bg-white">
+              <CardContent className="pt-6">
+                <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-semibold">Orchestration Call Failed</h4>
+                    <p className="text-sm mt-1 text-red-600">
+                      {chatMutation.error?.message || 'An unexpected error occurred during execution.'}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {testResult && !chatMutation.isPending && (
+            <div className="space-y-6">
+              
+              {/* Telemetry Metrics Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                
+                {/* Total Latency */}
+                <Card className="border-slate-200 shadow bg-gradient-to-br from-teal-50 to-white">
+                  <CardContent className="p-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Total Duration</p>
+                      <h3 className="text-xl font-extrabold text-teal-900 mt-1">
+                        {testResult.execution_session?.duration?.toFixed(0) || latency?.toFixed(0) || 'N/A'} <span className="text-xs font-semibold text-teal-600">ms</span>
+                      </h3>
+                    </div>
+                    <div className="p-2 rounded-full bg-teal-100 text-teal-700">
+                      <Clock className="h-4 w-4" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Token Count */}
+                <Card className="border-slate-200 shadow bg-gradient-to-br from-blue-50 to-white">
+                  <CardContent className="p-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Token Usage</p>
+                      <h3 className="text-xl font-extrabold text-blue-900 mt-1">
+                        {testResult.execution_session?.tokens || 0} <span className="text-xs font-semibold text-blue-600">tkn</span>
+                      </h3>
+                    </div>
+                    <div className="p-2 rounded-full bg-blue-100 text-blue-700">
+                      <Database className="h-4 w-4" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Estimated Cost */}
+                <Card className="border-slate-200 shadow bg-gradient-to-br from-indigo-50 to-white">
+                  <CardContent className="p-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Estimated Cost</p>
+                      <h3 className="text-xl font-extrabold text-indigo-900 mt-1">
+                        ${testResult.execution_session?.cost?.toFixed(5) || '0.00000'}
+                      </h3>
+                    </div>
+                    <div className="p-2 rounded-full bg-indigo-100 text-indigo-700">
+                      <Zap className="h-4 w-4" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Model Used */}
+                <Card className="border-slate-200 shadow bg-gradient-to-br from-slate-50 to-white">
+                  <CardContent className="p-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Model Executed</p>
+                      <h3 className="text-xs font-bold text-slate-800 mt-1 truncate max-w-[100px]" title={testResult.execution_session?.model}>
+                        {testResult.execution_session?.model || 'Unknown'}
+                      </h3>
+                    </div>
+                    <div className="p-2 rounded-full bg-slate-100 text-slate-700">
+                      <Cpu className="h-4 w-4" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+              </div>
+
+              {/* Main Response & Debug Console Tabs */}
+              <Card className="border-slate-200 shadow-md bg-white overflow-hidden">
+                <CardHeader className="border-b border-slate-100 bg-slate-50/50 flex flex-row items-center justify-between py-4">
+                  <div>
+                    <CardTitle className="text-base font-semibold text-slate-800">
+                      Orchestration Response Details
+                    </CardTitle>
+                    <CardDescription>
+                      Review the model completions, assembled inputs, templates, and execution contexts.
+                    </CardDescription>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <div className="bg-slate-100 border border-slate-200 p-0.5 rounded flex text-[10px] font-medium">
+                      <button
+                        type="button"
+                        onClick={() => setActiveSubTab('response')}
+                        className={`px-2 py-1 rounded transition-all ${
+                          activeSubTab === 'response'
+                            ? 'bg-white shadow-sm text-slate-800 font-bold'
+                            : 'text-slate-500 hover:text-slate-700 font-semibold'
+                        }`}
+                      >
+                        Model Output
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveSubTab('prompt')}
+                        className={`px-2 py-1 rounded transition-all ${
+                          activeSubTab === 'prompt'
+                            ? 'bg-white shadow-sm text-slate-800 font-bold'
+                            : 'text-slate-500 hover:text-slate-700 font-semibold'
+                        }`}
+                      >
+                        Assembled Prompt
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveSubTab('metadata')}
+                        className={`px-2 py-1 rounded transition-all ${
+                          activeSubTab === 'metadata'
+                            ? 'bg-white shadow-sm text-slate-800 font-bold'
+                            : 'text-slate-500 hover:text-slate-700 font-semibold'
+                        }`}
+                      >
+                        Metadata Traces
+                      </button>
+                    </div>
+                  </div>
+                </CardHeader>
+                
+                <CardContent className="p-0">
+                  {/* Model Response Tab */}
+                  {activeSubTab === 'response' && (
+                    <div className="p-5 space-y-4">
+                      <div className="flex justify-between items-center text-xs text-slate-400 font-semibold uppercase tracking-wide">
+                        <span>Response Content</span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleCopyResponse}
+                          className="h-7 text-[10px] gap-1 px-2.5"
+                        >
+                          {copiedResponse ? (
+                            <>
+                              <Check className="h-3 w-3 text-teal-600" />
+                              Copied
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-3 w-3" />
+                              Copy Completion
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-5 font-sans text-sm text-slate-800 whitespace-pre-wrap leading-relaxed shadow-inner max-h-[400px] overflow-y-auto">
+                        {testResult.response || <span className="italic text-slate-400">Empty response from model</span>}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Assembled Prompt Tab */}
+                  {activeSubTab === 'prompt' && (
+                    <div className="p-5 space-y-4">
+                      <div className="flex justify-between items-center text-xs text-slate-400 font-semibold uppercase tracking-wide">
+                        <span>Final Assembled Payload (System + User Prompt templates)</span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleCopyPrompt}
+                          className="h-7 text-[10px] gap-1 px-2.5"
+                        >
+                          {copiedPrompt ? (
+                            <>
+                              <Check className="h-3 w-3 text-teal-600" />
+                              Copied
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-3 w-3" />
+                              Copy Prompt
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 bg-slate-900 p-5 font-mono text-xs text-teal-400 whitespace-pre-wrap leading-relaxed shadow-inner max-h-[400px] overflow-y-auto">
+                        {testResult.prompt_template || <span className="italic text-slate-500">No prompt templates assembled</span>}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Metadata Traces Tab */}
+                  {activeSubTab === 'metadata' && (
+                    <div className="p-5 space-y-4 text-xs">
+                      {/* Session Metadata */}
+                      <div className="space-y-2 border-b border-slate-100 pb-4">
+                        <h4 className="font-bold text-slate-700 uppercase tracking-wider">Execution Session Metadata</h4>
+                        <div className="grid grid-cols-2 gap-4 text-slate-600">
+                          <div>
+                            <span className="font-semibold text-slate-500">Request Trace ID:</span>{' '}
+                            <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">
+                              {testResult.execution_session?.request_id}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="font-semibold text-slate-500">Execution Status:</span>{' '}
+                            <span className="font-semibold text-teal-600 capitalize">
+                              {testResult.execution_session?.status}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="font-semibold text-slate-500">Start Time:</span>{' '}
+                            <span>{testResult.execution_session?.start_time ? new Date(testResult.execution_session.start_time).toLocaleString() : 'N/A'}</span>
+                          </div>
+                          <div>
+                            <span className="font-semibold text-slate-500">End Time:</span>{' '}
+                            <span>{testResult.execution_session?.end_time ? new Date(testResult.execution_session.end_time).toLocaleString() : 'N/A'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Context Metadata */}
+                      <div className="space-y-2">
+                        <h4 className="font-bold text-slate-700 uppercase tracking-wider">Assembled Context Sections</h4>
+                        {testResult.patient_context_sections?.length > 0 ? (
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {testResult.patient_context_sections.map((section: string) => (
+                              <span key={section} className="font-mono bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-slate-700 font-semibold">
+                                {section}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="italic text-slate-400">No patient database records assembled in this call context.</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function AIPlaygroundContent() {
-  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context'>('llm')
+  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration'>('llm')
 
   return (
     <div className="space-y-6">
@@ -1486,8 +2233,10 @@ function AIPlaygroundContent() {
           <EmbeddingHealthBadge />
         ) : activeTab === 'vector' ? (
           <VectorHealthBadge />
-        ) : (
+        ) : activeTab === 'patient-context' ? (
           <PatientContextHealthBadge />
+        ) : (
+          <IntegrationHealthSummaryBadge />
         )}
       </div>
 
@@ -1537,6 +2286,17 @@ function AIPlaygroundContent() {
           <Users className="h-4 w-4" />
           Patient Context
         </button>
+        <button
+          onClick={() => setActiveTab('integration')}
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2 relative ${
+            activeTab === 'integration'
+              ? 'border-teal-600 text-teal-600 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Settings className="h-4 w-4" />
+          Integration Orchestrator
+        </button>
       </div>
 
       {activeTab === 'llm' ? (
@@ -1545,8 +2305,10 @@ function AIPlaygroundContent() {
         <EmbeddingsPlaygroundView />
       ) : activeTab === 'vector' ? (
         <VectorPlaygroundView />
-      ) : (
+      ) : activeTab === 'patient-context' ? (
         <PatientContextPlaygroundView />
+      ) : (
+        <IntegrationPlaygroundView />
       )}
     </div>
   )

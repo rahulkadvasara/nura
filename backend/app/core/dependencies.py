@@ -47,6 +47,7 @@ from app.services import (
     VectorCollectionService,
     VectorService,
     PatientContextService,
+    AIOrchestrator,
 )
 from app.agents import (
     BaseAgent,
@@ -650,6 +651,20 @@ def get_retrieval_agent() -> RetrievalAgent:
 def get_memory_agent() -> MemoryAgent:
     """Get MemoryAgent instance"""
     return MemoryAgent("Memory Agent")
+
+
+def get_ai_orchestrator() -> AIOrchestrator:
+    """Get AIOrchestrator instance"""
+    from app.prompts.loader import PromptLoader
+    
+    return AIOrchestrator(
+        groq_service=get_groq_service(),
+        embedding_service=get_embedding_service(),
+        vector_service=get_vector_service(),
+        patient_context_service=get_patient_context_service(),
+        prompt_loader=PromptLoader()
+    )
+
 
 
 

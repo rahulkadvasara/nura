@@ -156,5 +156,59 @@ export const aiService = {
     const url = patientId ? `/ai/context/${patientId}` : '/ai/context/me'
     const response = await apiClient.get<PatientContextResponse>(url)
     return response.data
+  },
+
+  /**
+   * Retrieves overall status details of the integrated AI infrastructure health check. Admin only.
+   */
+  getAIPlaygroundHealth: async (): Promise<AIPlaygroundHealthResponse> => {
+    const response = await apiClient.get<AIPlaygroundHealthResponse>('/ai/playground/health')
+    return response.data
+  },
+
+  /**
+   * Executes a playground chat session query with optional patient context. Admin only.
+   */
+  testAIPlaygroundChat: async (request: AIPlaygroundChatRequest): Promise<AIPlaygroundChatResponse> => {
+    const response = await apiClient.post<AIPlaygroundChatResponse>('/ai/playground/chat', request)
+    return response.data
   }
 }
+
+export interface AIPlaygroundChatRequest {
+  prompt: string
+  patient_id?: string
+  model?: string
+  temperature?: number
+  max_tokens?: number
+}
+
+export interface AIExecutionSession {
+  request_id: string
+  user_id?: string
+  patient_id?: string
+  model: string
+  start_time: string
+  end_time: string
+  duration: number
+  tokens: number
+  cost: number
+  status: string
+  errors?: string
+}
+
+export interface AIPlaygroundChatResponse {
+  response: string
+  execution_session: AIExecutionSession
+  prompt_template: string
+  patient_context_sections: string[]
+}
+
+export interface AIPlaygroundHealthResponse {
+  groq: Record<string, any>
+  embedding: Record<string, any>
+  vector: Record<string, any>
+  prompt_registry: Record<string, any>
+  context_builder: Record<string, any>
+}
+

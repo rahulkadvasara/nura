@@ -8,7 +8,10 @@ import {
   VectorCollectionInfo,
   VectorHealthResponse,
   VectorTestResponse,
-  PatientContextResponse
+  PatientContextResponse,
+  AIPlaygroundHealthResponse,
+  AIPlaygroundChatResponse,
+  AIPlaygroundChatRequest
 } from '@/services/ai.service'
 
 /**
@@ -102,6 +105,30 @@ export function usePatientContext() {
   return useMutation<PatientContextResponse, Error, string | undefined>({
     mutationFn: async (patientId?: string) => {
       return await aiService.getPatientContext(patientId)
+    }
+  })
+}
+
+/**
+ * Custom hook to monitor backend integrated AI playground health periodically.
+ */
+export function useAIPlaygroundHealth() {
+  return useQuery<AIPlaygroundHealthResponse, Error>({
+    queryKey: ['admin', 'ai', 'playground', 'health'],
+    queryFn: async () => {
+      return await aiService.getAIPlaygroundHealth()
+    },
+    refetchInterval: 30000, // Refresh status check every 30 seconds
+  })
+}
+
+/**
+ * Custom hook to trigger a playground chat session execution.
+ */
+export function useAIPlaygroundChat() {
+  return useMutation<AIPlaygroundChatResponse, Error, AIPlaygroundChatRequest>({
+    mutationFn: async (request: AIPlaygroundChatRequest) => {
+      return await aiService.testAIPlaygroundChat(request)
     }
   })
 }

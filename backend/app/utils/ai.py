@@ -237,3 +237,82 @@ class AgentMetricsTracker:
 # Global agent metrics tracker instance
 agent_metrics = AgentMetricsTracker()
 
+
+class OrchestratorMetricsTracker:
+    """In-memory metrics tracker for monitoring AI Orchestrator performance"""
+
+    def __init__(self):
+        self.requests: int = 0
+        self.failures: int = 0
+        self.total_llm_latency_ms: float = 0.0
+        self.total_embedding_latency_ms: float = 0.0
+        self.total_context_latency_ms: float = 0.0
+        self.total_latency_ms: float = 0.0
+        self.total_tokens: int = 0
+        self.total_cost: float = 0.0
+        self.model_usage: dict = {}
+
+    def record_orchestration(
+        self,
+        llm_latency_ms: float,
+        embedding_latency_ms: float,
+        context_latency_ms: float,
+        total_latency_ms: float,
+        success: bool,
+        tokens: int = 0,
+        cost: float = 0.0,
+        model: str = None
+    ) -> None:
+        """Record telemetry metrics from an orchestrator execution lifecycle"""
+        self.requests += 1
+        self.total_latency_ms += total_latency_ms
+        self.total_llm_latency_ms += llm_latency_ms
+        self.total_embedding_latency_ms += embedding_latency_ms
+        self.total_context_latency_ms += context_latency_ms
+        
+        if not success:
+            self.failures += 1
+        self.total_tokens += tokens
+        self.total_cost += cost
+        if model:
+            self.model_usage[model] = self.model_usage.get(model, 0) + 1
+
+    def get_metrics(self) -> dict:
+        """Summarize current orchestrator performance metrics"""
+        successful = self.requests - self.failures
+        avg_latency = (self.total_latency_ms / self.requests) if self.requests > 0 else 0.0
+        avg_llm_latency = (self.total_llm_latency_ms / self.requests) if self.requests > 0 else 0.0
+        avg_embedding_latency = (self.total_embedding_latency_ms / self.requests) if self.requests > 0 else 0.0
+        avg_context_latency = (self.total_context_latency_ms / self.requests) if self.requests > 0 else 0.0
+        avg_tokens = (self.total_tokens / successful) if successful > 0 else 0.0
+        
+        return {
+            "requests": self.requests,
+            "failures": self.failures,
+            "avg_latency_ms": avg_latency,
+            "avg_llm_latency_ms": avg_llm_latency,
+            "avg_embedding_latency_ms": avg_embedding_latency,
+            "avg_context_latency_ms": avg_context_latency,
+            "avg_tokens": avg_tokens,
+            "total_cost": self.total_cost,
+            "model_usage": self.model_usage,
+            "success_rate": ((self.requests - self.failures) / self.requests) if self.requests > 0 else 1.0
+        }
+
+    def reset(self) -> None:
+        """Reset internal metrics counters"""
+        self.requests = 0
+        self.failures = 0
+        self.total_llm_latency_ms = 0.0
+        self.total_embedding_latency_ms = 0.0
+        self.total_context_latency_ms = 0.0
+        self.total_latency_ms = 0.0
+        self.total_tokens = 0
+        self.total_cost = 0.0
+        self.model_usage = {}
+
+
+# Global orchestrator metrics tracker instance
+orchestrator_metrics = OrchestratorMetricsTracker()
+
+

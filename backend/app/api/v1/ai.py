@@ -16,10 +16,20 @@ from app.core.dependencies import (
     get_patient_context_service,
     require_exact_patient,
     get_current_user,
-    get_doctor_profile_service
+    get_doctor_profile_service,
+    get_ai_orchestrator
 )
 from app.models import UserRole, UserInDB
-from app.schemas.ai import AIHealthResponse, AITestRequest, AITestResponse, TokenUsage
+from app.schemas.ai import (
+    AIHealthResponse,
+    AITestRequest,
+    AITestResponse,
+    TokenUsage,
+    AIPlaygroundChatRequest,
+    AIPlaygroundChatResponse,
+    AIPlaygroundHealthResponse
+)
+from app.services.ai_orchestrator import AIOrchestrator
 from app.schemas.embedding import EmbeddingHealthResponse, EmbeddingTestRequest, EmbeddingTestResponse
 from app.schemas.vector import (
     VectorHealthResponse,
@@ -437,3 +447,34 @@ async def get_patient_context_by_id(
         status_code=status.HTTP_403_FORBIDDEN,
         detail="Insufficient permissions to access patient context"
     )
+
+
+@router.post(
+    "/playground/chat",
+    response_model=AIPlaygroundChatResponse,
+    summary="Execute Playground Chat Query",
+    description="Main integration playground entry point executing deterministic context-based chat calls. Guarded: Admin.",
+)
+async def playground_chat(
+    request: AIPlaygroundChatRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    orchestrator: AIOrchestrator = Depends(get_ai_orchestrator)
+) -> AIPlaygroundChatResponse:
+    """Executes chatbot inference within a specific patient context and trace logger"""
+    return await orchestrator.execute_chat(request, user_id=current_user.id)
+
+
+@router.get(
+    "/playground/health",
+    response_model=AIPlaygroundHealthResponse,
+    summary="Check AI Infrastructure Integrated Health",
+    description="Runs checks across Groq, Embedding, Vector databases, Prompt loader registries, and context DBs. Guarded: Admin.",
+)
+async def playground_health(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    orchestrator: AIOrchestrator = Depends(get_ai_orchestrator)
+) -> AIPlaygroundHealthResponse:
+    """Consolidated status ping checks for AI playground panel"""
+    health_results = await orchestrator.health_check()
+    return AIPlaygroundHealthResponse(**health_results)
+
