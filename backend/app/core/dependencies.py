@@ -25,6 +25,7 @@ from app.repositories import (
     PrescriptionRepository,
     PaymentRepository,
     DoctorWalletRepository,
+    PatientMemoryRepository,
 )
 from app.services import (
     UserService,
@@ -45,6 +46,7 @@ from app.services import (
     EmbeddingService,
     VectorCollectionService,
     VectorService,
+    PatientContextService,
 )
 
 
@@ -590,6 +592,36 @@ def get_vector_service() -> VectorService:
     """Get VectorService instance"""
     from app.services.vector_service import get_vector_service as get_vector_service_impl
     return get_vector_service_impl()
+
+
+def get_patient_memory_repository() -> PatientMemoryRepository:
+    """Get PatientMemoryRepository instance"""
+    database = get_database()
+    return PatientMemoryRepository(database.patient_memory)
+
+
+def get_patient_context_service() -> PatientContextService:
+    """Get PatientContextService instance"""
+    database = get_database()
+    
+    from app.repositories.report_repository import ReportRepository
+    from app.repositories.consultation_repository import ConsultationRepository
+    from app.repositories.prescription_repository import PrescriptionRepository
+    from app.repositories.reminder_repository import ReminderRepository
+    from app.repositories.health_insight_repository import HealthInsightRepository
+    from app.repositories.chat_session_repository import ChatSessionRepository
+    
+    return PatientContextService(
+        user_repository=get_user_repository(),
+        patient_memory_repository=get_patient_memory_repository(),
+        report_repository=ReportRepository(database.reports),
+        appointment_repository=get_appointment_repository(),
+        consultation_repository=ConsultationRepository(database.consultations),
+        prescription_repository=PrescriptionRepository(database.prescriptions),
+        reminder_repository=ReminderRepository(database.reminders),
+        health_insight_repository=HealthInsightRepository(database.health_insights),
+        chat_session_repository=ChatSessionRepository(database.chat_sessions),
+    )
 
 
 

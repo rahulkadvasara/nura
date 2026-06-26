@@ -7,7 +7,8 @@ import {
   EmbeddingTestResponse,
   VectorCollectionInfo,
   VectorHealthResponse,
-  VectorTestResponse
+  VectorTestResponse,
+  PatientContextResponse
 } from '@/services/ai.service'
 
 /**
@@ -90,6 +91,17 @@ export function useVectorTest() {
   return useMutation<VectorTestResponse, Error, { collection: string; text: string }>({
     mutationFn: async ({ collection, text }) => {
       return await aiService.testVectorSearch(collection, text)
+    }
+  })
+}
+
+/**
+ * Custom hook to trigger patient context assembly.
+ */
+export function usePatientContext() {
+  return useMutation<PatientContextResponse, Error, string | undefined>({
+    mutationFn: async (patientId?: string) => {
+      return await aiService.getPatientContext(patientId)
     }
   })
 }

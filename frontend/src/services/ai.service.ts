@@ -63,6 +63,35 @@ export interface VectorTestResponse {
   similarity_scores: number[]
 }
 
+export interface PatientContextMetadata {
+  patient_id: string
+  generated_at: string
+  sources_used: string[]
+  sections_returned: string[]
+  estimated_tokens: number
+  context_version: string
+}
+
+export interface PatientContextResponse {
+  patient_profile?: Record<string, any>
+  medical_summary?: string
+  current_conditions: string[]
+  past_medical_history: string[]
+  current_medications: string[]
+  medication_allergies: string[]
+  drug_allergies: string[]
+  lab_reports_summary: Record<string, any>[]
+  appointments_summary: Record<string, any>[]
+  consultations_summary: Record<string, any>[]
+  prescriptions_summary: Record<string, any>[]
+  reminder_summary: Record<string, any>[]
+  recent_health_insights: Record<string, any>[]
+  lifestyle_notes?: string
+  emergency_information?: string
+  risk_factors: string[]
+  metadata: PatientContextMetadata
+}
+
 export const aiService = {
   /**
    * Retrieves connectivity and latency details from the AI backend health check.
@@ -117,6 +146,15 @@ export const aiService = {
    */
   testVectorSearch: async (collection: string, text: string): Promise<VectorTestResponse> => {
     const response = await apiClient.post<VectorTestResponse>('/ai/vector/test', { collection, text })
+    return response.data
+  },
+
+  /**
+   * Assembles a patient's complete structured AI context. Admin/Doctor accounts only (or Patient /context/me).
+   */
+  getPatientContext: async (patientId?: string): Promise<PatientContextResponse> => {
+    const url = patientId ? `/ai/context/${patientId}` : '/ai/context/me'
+    const response = await apiClient.get<PatientContextResponse>(url)
     return response.data
   }
 }

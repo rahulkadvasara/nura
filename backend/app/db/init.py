@@ -195,4 +195,10 @@ async def setup_database(database: AsyncIOMotorDatabase) -> None:
     await audit_logs_collection.create_index("created_at", name="created_at_index")
     logger.info("Created audit_logs collection indexes")
     
+    # patient_memory collection
+    patient_memory_collection = database.patient_memory
+    await patient_memory_collection.create_index("patient_id", unique=True, name="patient_id_unique")
+    await patient_memory_collection.create_index("last_updated", name="last_updated_index")
+    logger.info("Created patient_memory collection indexes")
+    
     logger.info("Database setup completed")

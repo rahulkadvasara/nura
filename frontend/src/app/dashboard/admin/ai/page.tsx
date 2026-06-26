@@ -1,17 +1,20 @@
 'use client'
 
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
+import { adminUserService } from '@/services/admin-user.service'
 import { 
   useAIHealth, 
   useAIPlaygroundTest, 
   useEmbeddingHealth, 
   useEmbeddingTest,
   useVectorHealth,
-  useVectorTest
+  useVectorTest,
+  usePatientContext
 } from '@/hooks/use-ai'
 import { 
   Sparkles, 
@@ -27,8 +30,11 @@ import {
   Copy,
   Check,
   FileText,
-  Code
+  Code,
+  Users,
+  Search
 } from 'lucide-react'
+
 
 function LLMHealthBadge() {
   const { 
@@ -993,8 +999,471 @@ function VectorPlaygroundView() {
   )
 }
 
+function PatientContextHealthBadge() {
+  return (
+    <Card className="shadow-sm border-slate-200 bg-white px-4 py-2 flex items-center gap-3">
+      <div className="flex flex-col">
+        <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Context Builder</span>
+        <span className="text-sm font-medium text-teal-600 flex items-center gap-1.5 mt-0.5">
+          <CheckCircle2 className="h-4 w-4 text-teal-500" />
+          Deterministic Engine Ready
+        </span>
+      </div>
+    </Card>
+  )
+}
+
+function PatientContextPlaygroundView() {
+  const [search, setSearch] = useState('')
+  const [selectedPatientId, setSelectedPatientId] = useState('')
+  const [selectedPatientName, setSelectedPatientName] = useState('')
+  const [testResult, setTestResult] = useState<any>(null)
+  const [latency, setLatency] = useState<number | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [activeSubTab, setActiveSubTab] = useState<'raw' | 'parsed'>('parsed')
+
+  // Fetch patients list
+  const { data: patientsResponse, isLoading: isLoadingPatients, isError: isPatientsError } = useQuery({
+    queryKey: ['admin', 'patients-list'],
+    queryFn: () => adminUserService.listUsers(undefined, 'patient')
+  })
+  const patients = patientsResponse?.data || []
+
+  // Filter patients list based on search term
+  const filteredPatients = patients.filter((p: any) =>
+    p.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+    p.email?.toLowerCase().includes(search.toLowerCase())
+  )
+
+  const buildMutation = usePatientContext()
+
+  const handleBuild = async () => {
+    if (!selectedPatientId) return
+    const startTime = performance.now()
+    try {
+      const result = await buildMutation.mutateAsync(selectedPatientId)
+      const endTime = performance.now()
+      setLatency(endTime - startTime)
+      setTestResult(result)
+    } catch (err) {
+      setTestResult(null)
+      setLatency(null)
+    }
+  }
+
+  const handleCopy = () => {
+    if (!testResult) return
+    navigator.clipboard.writeText(JSON.stringify(testResult, null, 2))
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
+      {/* Left Column - Patient Selection (col-span-1) */}
+      <div className="space-y-6">
+        <Card className="border-slate-200 shadow-md bg-white">
+          <CardHeader className="border-b border-slate-100 bg-slate-50/50">
+            <CardTitle className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+              <Users className="h-5 w-5 text-slate-500" />
+              Patient Selector
+            </CardTitle>
+            <CardDescription>
+              Search and select an active patient to compile their unified medical history profile.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6 space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search patient name/email..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full rounded-md border border-slate-200 pl-9 pr-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+              />
+            </div>
+
+            {isLoadingPatients ? (
+              <div className="flex items-center justify-center py-12 text-slate-400 gap-2">
+                <RefreshCw className="h-4 w-4 animate-spin text-teal-500" />
+                <span className="text-sm">Loading patients list...</span>
+              </div>
+            ) : isPatientsError ? (
+              <div className="text-center py-6 text-red-500 text-sm">
+                Failed to fetch patients list.
+              </div>
+            ) : filteredPatients.length === 0 ? (
+              <div className="text-center py-6 text-slate-500 text-sm">
+                No patients match the search filter.
+              </div>
+            ) : (
+              <div className="max-h-60 overflow-y-auto border border-slate-100 rounded-md divide-y divide-slate-100">
+                {filteredPatients.map((patient: any) => (
+                  <button
+                    key={patient.id}
+                    onClick={() => {
+                      setSelectedPatientId(patient.id)
+                      setSelectedPatientName(patient.full_name)
+                    }}
+                    className={`w-full text-left px-3 py-2.5 transition-colors flex items-center gap-3 ${
+                      selectedPatientId === patient.id
+                        ? 'bg-teal-50 hover:bg-teal-100'
+                        : 'hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center font-bold text-xs uppercase ${
+                      selectedPatientId === patient.id
+                        ? 'bg-teal-600 text-white'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}>
+                      {patient.full_name?.charAt(0) || 'P'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-slate-800 truncate">
+                        {patient.full_name}
+                      </div>
+                      <div className="text-xs text-slate-400 truncate">
+                        {patient.email}
+                      </div>
+                    </div>
+                    {selectedPatientId === patient.id && (
+                      <CheckCircle2 className="h-4 w-4 text-teal-600 flex-shrink-0" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <Button
+              onClick={handleBuild}
+              disabled={!selectedPatientId || buildMutation.isPending}
+              className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold transition-all"
+            >
+              {buildMutation.isPending ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Compiling Context...
+                </>
+              ) : (
+                <>
+                  <Zap className="h-4 w-4 mr-2" />
+                  Assemble Context
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Telemetry metadata panels */}
+        {testResult && (
+          <Card className="border-slate-200 shadow-sm bg-white">
+            <CardHeader className="pb-3 border-b border-slate-100">
+              <CardTitle className="text-sm font-semibold text-slate-700">Sources & Provenance</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-3 text-xs">
+              <div className="flex flex-col gap-1.5">
+                <span className="text-slate-400 font-medium">MongoDB Collections Queried:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {testResult.metadata.sources_used.map((src: string) => (
+                    <span key={src} className="font-mono bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-slate-700">
+                      {src}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="flex justify-between items-center text-slate-600 pt-2 border-t border-slate-100">
+                <span>Context Version:</span>
+                <span className="font-semibold text-slate-800">{testResult.metadata.context_version}</span>
+              </div>
+              <div className="flex justify-between items-center text-slate-600">
+                <span>Compiled At:</span>
+                <span className="text-slate-500">{new Date(testResult.metadata.generated_at).toLocaleString()}</span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Right Column - Results Console (col-span-2) */}
+      <div className="lg:col-span-2 space-y-6">
+        {/* Loading State */}
+        {buildMutation.isPending && (
+          <Card className="border-slate-200 shadow-md bg-white">
+            <CardContent className="py-12 flex flex-col items-center justify-center text-slate-400 gap-3">
+              <RefreshCw className="h-8 w-8 animate-spin text-teal-500" />
+              <p className="text-sm font-medium animate-pulse text-slate-500">Querying database collections...</p>
+              <p className="text-xs text-slate-400 max-w-sm text-center">
+                Fetching patient records and compiling structured output. Running token-budget compression if necessary.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Error State */}
+        {buildMutation.isError && (
+          <Card className="border-slate-200 shadow-md bg-white">
+            <CardContent className="pt-6">
+              <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h4 className="font-semibold">Context Assembly Failed</h4>
+                  <p className="text-sm mt-1 text-red-600">
+                    {buildMutation.error?.message || 'An unexpected error occurred during database compilation.'}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Ready / Unselected State */}
+        {!testResult && !buildMutation.isPending && !buildMutation.isError && (
+          <Card className="border-slate-200 border-dashed border-2 bg-slate-50/50 p-12 text-center">
+            <div className="mx-auto h-12 w-12 text-slate-400 flex items-center justify-center bg-white rounded-full border border-slate-200 shadow-sm mb-4">
+              <Users className="h-6 w-6" />
+            </div>
+            <h3 className="text-sm font-bold text-slate-700">No Patient Selected</h3>
+            <p className="text-xs text-slate-400 max-w-md mx-auto mt-2">
+              Select a patient from the list on the left and click &apos;Assemble Context&apos; to fetch, build, and audit their deterministic structured AI context profile.
+            </p>
+          </Card>
+        )}
+
+        {/* Success State */}
+        {testResult && !buildMutation.isPending && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            {/* Telemetry Stats Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Token Count */}
+              <Card className="border-slate-200 shadow bg-gradient-to-br from-teal-50 to-white">
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Estimated Context Size</p>
+                    <h3 className="text-2xl font-extrabold text-teal-900 mt-1">
+                      {testResult.metadata.estimated_tokens} <span className="text-xs font-semibold text-teal-600">tokens</span>
+                    </h3>
+                  </div>
+                  <div className="p-2 rounded-full bg-teal-100 text-teal-700">
+                    <Database className="h-4 w-4" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Sections Count */}
+              <Card className="border-slate-200 shadow bg-gradient-to-br from-blue-50 to-white">
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Active Sections</p>
+                    <h3 className="text-2xl font-extrabold text-blue-900 mt-1">
+                      {testResult.metadata.sections_returned.length} <span className="text-xs font-semibold text-blue-600">sections</span>
+                    </h3>
+                  </div>
+                  <div className="p-2 rounded-full bg-blue-100 text-blue-700">
+                    <FileText className="h-4 w-4" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Execution Latency */}
+              <Card className="border-slate-200 shadow bg-gradient-to-br from-indigo-50 to-white">
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Assembly Duration</p>
+                    <h3 className="text-2xl font-extrabold text-indigo-900 mt-1">
+                      {latency ? `${latency.toFixed(1)}` : 'N/A'} <span className="text-xs font-semibold text-indigo-600">ms</span>
+                    </h3>
+                  </div>
+                  <div className="p-2 rounded-full bg-indigo-100 text-indigo-700">
+                    <Clock className="h-4 w-4" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Main Payload Display */}
+            <Card className="border-slate-200 shadow-md bg-white overflow-hidden">
+              <CardHeader className="border-b border-slate-100 bg-slate-50/50 flex flex-row items-center justify-between py-4">
+                <div>
+                  <CardTitle className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                    <Code className="h-5 w-5 text-teal-600" />
+                    Structured Context Profile
+                  </CardTitle>
+                  <CardDescription>
+                    Assembled patient context data generated for {selectedPatientName}.
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <div className="bg-slate-100 border border-slate-200 p-0.5 rounded flex text-xs">
+                    <button
+                      onClick={() => setActiveSubTab('parsed')}
+                      className={`px-2.5 py-1 rounded font-medium transition-all ${
+                        activeSubTab === 'parsed'
+                          ? 'bg-white shadow-sm text-slate-800'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Summary Accordion
+                    </button>
+                    <button
+                      onClick={() => setActiveSubTab('raw')}
+                      className={`px-2.5 py-1 rounded font-medium transition-all ${
+                        activeSubTab === 'raw'
+                          ? 'bg-white shadow-sm text-slate-800'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Raw JSON
+                    </button>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopy}
+                    className="h-8 gap-1.5"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-teal-600" />
+                        Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy JSON
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {activeSubTab === 'raw' ? (
+                  <pre className="p-5 font-mono text-xs text-slate-100 bg-slate-900 shadow-inner overflow-x-auto max-h-[500px] overflow-y-auto">
+                    {JSON.stringify(testResult, null, 2)}
+                  </pre>
+                ) : (
+                  <div className="p-6 space-y-4 max-h-[500px] overflow-y-auto">
+                    {/* Patient Profile */}
+                    {testResult.patient_profile && (
+                      <div className="border-b border-slate-100 pb-4">
+                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Patient Profile</h4>
+                        <div className="grid grid-cols-2 gap-2 text-sm text-slate-600">
+                          <div><span className="font-semibold text-slate-500">Name:</span> {testResult.patient_profile.full_name}</div>
+                          <div><span className="font-semibold text-slate-500">Email:</span> {testResult.patient_profile.email}</div>
+                          <div><span className="font-semibold text-slate-500">Phone:</span> {testResult.patient_profile.phone || 'N/A'}</div>
+                          <div><span className="font-semibold text-slate-500">Registered:</span> {new Date(testResult.patient_profile.created_at).toLocaleDateString()}</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Medical Summary */}
+                    {testResult.medical_summary && (
+                      <div className="border-b border-slate-100 pb-4">
+                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Medical Summary</h4>
+                        <p className="text-sm text-slate-700 bg-slate-50 border border-slate-100 p-3 rounded-md italic">
+                          {testResult.medical_summary}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Chronic / Active Conditions */}
+                    {testResult.current_conditions?.length > 0 && (
+                      <div className="border-b border-slate-100 pb-4">
+                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Current Conditions</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {testResult.current_conditions.map((cond: string, i: number) => (
+                            <span key={i} className="text-xs bg-red-50 border border-red-100 text-red-700 font-semibold px-2 py-0.5 rounded-full">
+                              {cond}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Medications */}
+                    {testResult.current_medications?.length > 0 && (
+                      <div className="border-b border-slate-100 pb-4">
+                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Current Medications</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {testResult.current_medications.map((med: string, i: number) => (
+                            <span key={i} className="text-xs bg-blue-50 border border-blue-100 text-blue-700 font-semibold px-2 py-0.5 rounded-full">
+                              {med}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Allergies */}
+                    {(testResult.medication_allergies?.length > 0 || testResult.drug_allergies?.length > 0) && (
+                      <div className="border-b border-slate-100 pb-4">
+                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Allergies</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {Array.from(new Set([...(testResult.medication_allergies || []), ...(testResult.drug_allergies || [])])).map((all: string, i: number) => (
+                            <span key={i} className="text-xs bg-amber-50 border border-amber-100 text-amber-700 font-semibold px-2 py-0.5 rounded-full">
+                              {all}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Lifestyle Notes */}
+                    {testResult.lifestyle_notes && (
+                      <div className="border-b border-slate-100 pb-4">
+                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Lifestyle Notes</h4>
+                        <p className="text-sm text-slate-600 bg-slate-50 border border-slate-100 p-3 rounded-md">
+                          {testResult.lifestyle_notes}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Emergency Information */}
+                    {testResult.emergency_information && (
+                      <div className="border-b border-slate-100 pb-4 bg-rose-50 border border-rose-100 p-3 rounded-md">
+                        <h4 className="text-xs font-bold text-rose-800 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                          <AlertTriangle className="h-3.5 w-3.5 text-rose-600" />
+                          Emergency / Critical Risk Information
+                        </h4>
+                        <p className="text-sm text-rose-700 font-medium">
+                          {testResult.emergency_information}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* List summary lengths */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2">
+                      <div className="bg-slate-50 border border-slate-100 p-3 rounded-md text-center">
+                        <div className="text-lg font-bold text-slate-800">{testResult.lab_reports_summary?.length || 0}</div>
+                        <div className="text-[10px] text-slate-400 uppercase font-semibold">Reports</div>
+                      </div>
+                      <div className="bg-slate-50 border border-slate-100 p-3 rounded-md text-center">
+                        <div className="text-lg font-bold text-slate-800">{testResult.appointments_summary?.length || 0}</div>
+                        <div className="text-[10px] text-slate-400 uppercase font-semibold">Appointments</div>
+                      </div>
+                      <div className="bg-slate-50 border border-slate-100 p-3 rounded-md text-center">
+                        <div className="text-lg font-bold text-slate-800">{testResult.consultations_summary?.length || 0}</div>
+                        <div className="text-[10px] text-slate-400 uppercase font-semibold">Consultations</div>
+                      </div>
+                      <div className="bg-slate-50 border border-slate-100 p-3 rounded-md text-center">
+                        <div className="text-lg font-bold text-slate-800">{testResult.prescriptions_summary?.length || 0}</div>
+                        <div className="text-[10px] text-slate-400 uppercase font-semibold">Prescriptions</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function AIPlaygroundContent() {
-  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector'>('llm')
+  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context'>('llm')
 
   return (
     <div className="space-y-6">
@@ -1015,8 +1484,10 @@ function AIPlaygroundContent() {
           <LLMHealthBadge />
         ) : activeTab === 'embeddings' ? (
           <EmbeddingHealthBadge />
-        ) : (
+        ) : activeTab === 'vector' ? (
           <VectorHealthBadge />
+        ) : (
+          <PatientContextHealthBadge />
         )}
       </div>
 
@@ -1055,14 +1526,27 @@ function AIPlaygroundContent() {
           <Database className="h-4 w-4" />
           Vector Database
         </button>
+        <button
+          onClick={() => setActiveTab('patient-context')}
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2 relative ${
+            activeTab === 'patient-context'
+              ? 'border-teal-600 text-teal-600 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Users className="h-4 w-4" />
+          Patient Context
+        </button>
       </div>
 
       {activeTab === 'llm' ? (
         <LLMPlaygroundView />
       ) : activeTab === 'embeddings' ? (
         <EmbeddingsPlaygroundView />
-      ) : (
+      ) : activeTab === 'vector' ? (
         <VectorPlaygroundView />
+      ) : (
+        <PatientContextPlaygroundView />
       )}
     </div>
   )

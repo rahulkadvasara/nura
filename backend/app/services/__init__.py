@@ -39,6 +39,7 @@ from app.services.ai_service import AIService, get_ai_service
 from app.services.embedding_service import EmbeddingService, get_embedding_service
 from app.services.vector_collection_service import VectorCollectionService, get_vector_collection_service
 from app.services.vector_service import VectorService, get_vector_service
+from app.services.patient_context_service import PatientContextService
 
 __all__ = [
     # Base service
@@ -105,4 +106,5 @@ __all__ = [
     "get_vector_collection_service",
     "VectorService",
     "get_vector_service",
+    "PatientContextService",
 ]

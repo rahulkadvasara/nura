@@ -12,7 +12,11 @@ from app.core.dependencies import (
     get_groq_service,
     get_embedding_service,
     get_vector_collection_service,
-    get_vector_service
+    get_vector_service,
+    get_patient_context_service,
+    require_exact_patient,
+    get_current_user,
+    get_doctor_profile_service
 )
 from app.models import UserRole, UserInDB
 from app.schemas.ai import AIHealthResponse, AITestRequest, AITestResponse, TokenUsage
@@ -24,11 +28,13 @@ from app.schemas.vector import (
     VectorTestResponse,
     VectorTestResultItem
 )
+from app.schemas.patient_context import PatientContextResponse
 from app.services.ai_service import AIService
 from app.services.groq_service import GroqService
 from app.services.embedding_service import EmbeddingService
 from app.services.vector_collection_service import VectorCollectionService
 from app.services.vector_service import VectorService
+from app.services.patient_context_service import PatientContextService
 
 router = APIRouter()
 
@@ -365,3 +371,69 @@ async def test_vector_pipeline(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Vector playground verification pipeline failed: {str(e)}"
         )
+
+
+@router.get(
+    "/context/me",
+    response_model=PatientContextResponse,
+    summary="Get Authenticated Patient Context",
+    description="Assembles the complete structured context profile for the logged-in patient user. Guarded: Patient Only.",
+)
+async def get_patient_context_me(
+    current_user: UserInDB = Depends(require_exact_patient),
+    context_service: PatientContextService = Depends(get_patient_context_service)
+) -> PatientContextResponse:
+    """Assembles patient context for the current active patient user"""
+    return await context_service.assemble_context(patient_id=current_user.id)
+
+
+@router.get(
+    "/context/{patient_id}",
+    response_model=PatientContextResponse,
+    summary="Get Patient Context by ID",
+    description="Assembles the complete structured context profile for the specified patient ID. Guarded: Admin, Verified Doctor. Verified Doctors are restricted to patients they have treated.",
+)
+async def get_patient_context_by_id(
+    patient_id: str,
+    current_user: UserInDB = Depends(get_current_user),
+    context_service: PatientContextService = Depends(get_patient_context_service),
+    doctor_profile_service = Depends(get_doctor_profile_service)
+) -> PatientContextResponse:
+    """Assembles patient context for a specified patient ID with strict authorization validation"""
+    # 1. Admin bypasses all checks
+    if current_user.role == UserRole.ADMIN:
+        return await context_service.assemble_context(patient_id=patient_id)
+        
+    # 2. Doctors validation
+    if current_user.role == UserRole.DOCTOR:
+        # Check verified status of doctor
+        from app.models.doctor import DoctorProfileStatus
+        profile = await doctor_profile_service.get_profile_by_user_id(current_user.id)
+        if not profile or profile.profile_status != DoctorProfileStatus.VERIFIED:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Doctor profile must be verified to retrieve patient context"
+            )
+            
+        # Verify doctor treated the patient (exists in appointments or consultations)
+        has_treated = await context_service.appointment_repository.exists({
+            "patient_id": patient_id,
+            "doctor_id": profile.id
+        }) or await context_service.consultation_repository.exists({
+            "patient_id": patient_id,
+            "doctor_id": profile.id
+        })
+        
+        if not has_treated:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Doctor has not treated this patient"
+            )
+            
+        return await context_service.assemble_context(patient_id=patient_id)
+        
+    # 3. Deny all other roles
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Insufficient permissions to access patient context"
+    )

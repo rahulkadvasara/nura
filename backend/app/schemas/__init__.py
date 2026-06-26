@@ -134,6 +134,11 @@ from app.schemas.system import (
     MaintenanceResponse,
 )
 
+from app.schemas.patient_context import (
+    PatientContextMetadata,
+    PatientContextResponse,
+)
+
 
 __all__ = [
     # Authentication schemas
@@ -253,4 +258,6 @@ __all__ = [
     "BackgroundJobItem",
     "BackgroundJobResponse",
     "MaintenanceResponse",
+    "PatientContextMetadata",
+    "PatientContextResponse",
 ]

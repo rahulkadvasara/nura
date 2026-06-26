@@ -132,6 +132,13 @@ from app.models.payment import (
     DoctorWalletInDB,
 )
 
+from app.models.patient_memory import (
+    PatientMemoryBase,
+    PatientMemoryCreate,
+    PatientMemoryUpdate,
+    PatientMemoryInDB,
+)
+
 from app.models.observability import (
     AgentLogStatus,
     AgentLogBase,
@@ -267,4 +274,10 @@ __all__ = [
     "AuditLogCreate",
     "AuditLogUpdate",
     "AuditLogInDB",
+
+    # Patient memory models
+    "PatientMemoryBase",
+    "PatientMemoryCreate",
+    "PatientMemoryUpdate",
+    "PatientMemoryInDB",
 ]

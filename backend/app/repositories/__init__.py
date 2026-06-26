@@ -25,6 +25,7 @@ from app.repositories.payment_repository import PaymentRepository
 from app.repositories.doctor_wallet_repository import DoctorWalletRepository
 from app.repositories.agent_log_repository import AgentLogRepository
 from app.repositories.audit_log_repository import AuditLogRepository
+from app.repositories.patient_memory_repository import PatientMemoryRepository
 
 __all__ = [
     # Base repository
@@ -64,4 +65,7 @@ __all__ = [
     # Observability and audit repositories
     "AgentLogRepository",
     "AuditLogRepository",
+
+    # Patient memory repositories
+    "PatientMemoryRepository",
 ]
