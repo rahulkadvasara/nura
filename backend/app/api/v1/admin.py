@@ -261,6 +261,11 @@ async def reject_doctor_application(
             detail="Failed to update doctor profile status"
         )
 
+    # 2. Update all pending verification documents to rejected
+    docs = await doctor_document_service.get_documents_by_doctor(doctor_profile_id)
+    for doc in docs:
+        await doctor_document_service.reject_document(doc.id, current_user.id)
+
     # 3. Create audit log
     audit_schema = AuditLogCreateSchema(
         user_id=current_user.id,

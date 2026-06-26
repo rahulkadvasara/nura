@@ -43,6 +43,8 @@ from app.services import (
     GroqService,
     AIService,
     EmbeddingService,
+    VectorCollectionService,
+    VectorService,
 )
 
 
@@ -576,6 +578,18 @@ def get_embedding_service() -> EmbeddingService:
     """Get EmbeddingService instance"""
     from app.services.embedding_service import get_embedding_service as get_embedding_service_impl
     return get_embedding_service_impl()
+
+
+def get_vector_collection_service() -> VectorCollectionService:
+    """Get VectorCollectionService instance"""
+    from app.services.vector_collection_service import get_vector_collection_service as get_vector_collection_service_impl
+    return get_vector_collection_service_impl()
+
+
+def get_vector_service() -> VectorService:
+    """Get VectorService instance"""
+    from app.services.vector_service import get_vector_service as get_vector_service_impl
+    return get_vector_service_impl()
 
 
 

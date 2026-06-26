@@ -3,15 +3,32 @@ Nura - AI API Router
 Endpoints for monitoring and testing the AI infrastructure
 """
 
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.core.dependencies import require_role, get_ai_service, get_groq_service, get_embedding_service
+from app.core.dependencies import (
+    require_role,
+    get_ai_service,
+    get_groq_service,
+    get_embedding_service,
+    get_vector_collection_service,
+    get_vector_service
+)
 from app.models import UserRole, UserInDB
 from app.schemas.ai import AIHealthResponse, AITestRequest, AITestResponse, TokenUsage
 from app.schemas.embedding import EmbeddingHealthResponse, EmbeddingTestRequest, EmbeddingTestResponse
+from app.schemas.vector import (
+    VectorHealthResponse,
+    VectorCollectionInfo,
+    VectorTestRequest,
+    VectorTestResponse,
+    VectorTestResultItem
+)
 from app.services.ai_service import AIService
 from app.services.groq_service import GroqService
 from app.services.embedding_service import EmbeddingService
+from app.services.vector_collection_service import VectorCollectionService
+from app.services.vector_service import VectorService
 
 router = APIRouter()
 
@@ -147,4 +164,204 @@ async def test_embedding_generation(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Embedding playground generation failed: {str(e)}"
+        )
+
+
+@router.get(
+    "/vector/health",
+    response_model=VectorHealthResponse,
+    summary="Check Vector Subsystem Health",
+    description="Calculates connection check latency and monitors status statistics of all 5 collections. Guarded: Admin Only.",
+)
+async def get_vector_health(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    vector_service: VectorService = Depends(get_vector_service),
+    collection_service: VectorCollectionService = Depends(get_vector_collection_service)
+) -> VectorHealthResponse:
+    """
+    Vector DB Connection and Collections health status dashboard API endpoint.
+    Admin authorized only.
+    """
+    import time
+    start_time = time.perf_counter()
+    try:
+        health_data = await vector_service.health()
+        latency = (time.perf_counter() - start_time) * 1000.0
+        
+        # Retrieve stats for the five collections
+        from app.core.constants import QDRANT_COLLECTIONS
+        collections_info = []
+        for col_name in QDRANT_COLLECTIONS.values():
+            try:
+                stats = await collection_service.get_collection_stats(col_name)
+                collections_info.append(
+                    VectorCollectionInfo(
+                        name=stats["name"],
+                        status=stats["status"],
+                        vector_count=stats["vector_count"],
+                        dimensions=stats["dimensions"],
+                        distance=stats["distance"],
+                        storage_bytes=stats["storage_bytes"]
+                    )
+                )
+            except Exception as ex:
+                # If stats query fails (e.g. collection not found/error), provide default offline values
+                collections_info.append(
+                    VectorCollectionInfo(
+                        name=col_name,
+                        status="unhealthy",
+                        vector_count=0,
+                        dimensions=vector_service.settings.QDRANT_DEFAULT_VECTOR_SIZE,
+                        distance=vector_service.settings.QDRANT_DEFAULT_DISTANCE.upper(),
+                        storage_bytes=0
+                    )
+                )
+                
+        return VectorHealthResponse(
+            connected=health_data.get("connected", False),
+            latency=health_data.get("latency", latency),
+            collections=collections_info
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Vector health query failed: {str(e)}"
+        )
+
+
+@router.get(
+    "/vector/collections",
+    response_model=List[VectorCollectionInfo],
+    summary="List Vector Database Collections configurations",
+    description="Returns configuration stats, point counts, dimensions, and distances parameters for all collections. Guarded: Admin Only.",
+)
+async def get_vector_collections(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    collection_service: VectorCollectionService = Depends(get_vector_collection_service)
+) -> List[VectorCollectionInfo]:
+    """
+    Retrieves list of collection specs configurations.
+    Admin authorized only.
+    """
+    from app.core.constants import QDRANT_COLLECTIONS
+    collections_info = []
+    for col_name in QDRANT_COLLECTIONS.values():
+        try:
+            stats = await collection_service.get_collection_stats(col_name)
+            collections_info.append(
+                VectorCollectionInfo(
+                    name=stats["name"],
+                    status=stats["status"],
+                    vector_count=stats["vector_count"],
+                    dimensions=stats["dimensions"],
+                    distance=stats["distance"],
+                    storage_bytes=stats["storage_bytes"]
+                )
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to query collections specs for '{col_name}': {str(e)}"
+            )
+    return collections_info
+
+
+@router.post(
+    "/vector/test",
+    response_model=VectorTestResponse,
+    summary="Verify Semantic Search Pipeline connectivity",
+    description="Generates embedding, upserts temporary test vector, executes near-neighbor search, and cleans up point. Guarded: Admin Only.",
+)
+async def test_vector_pipeline(
+    request_data: VectorTestRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    vector_service: VectorService = Depends(get_vector_service),
+    embedding_service: EmbeddingService = Depends(get_embedding_service)
+) -> VectorTestResponse:
+    """
+    E2E Vector database verification pipeline.
+    Admin authorized only.
+    """
+    import time
+    import uuid
+    from datetime import datetime, timezone
+    from app.utils.hash import generate_content_hash
+    
+    start_time = time.perf_counter()
+    point_id = str(uuid.uuid4())
+    
+    try:
+        # 1. Generate text embedding
+        vector = await embedding_service.embed(request_data.text)
+        
+        # 2. Map standard vector metadata payload
+        content_hash = generate_content_hash(request_data.text)
+        payload = {
+            "source_id": "vector_playground_test",
+            "patient_id": None,
+            "document_type": "admin_test",
+            "collection": request_data.collection,
+            "embedding_model": embedding_service.settings.EMBEDDING_MODEL,
+            "embedding_version": embedding_service.settings.EMBEDDING_VERSION,
+            "indexed_at": datetime.now(timezone.utc).isoformat(),
+            "content_hash": content_hash,
+            "tags": ["temp", "playground"],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        # 3. Upsert temporary test point
+        await vector_service.upsert(
+            collection_name=request_data.collection,
+            id=point_id,
+            vector=vector,
+            payload=payload
+        )
+        
+        # 4. Query nearest neighbors (limit to 5)
+        search_hits = await vector_service.search(
+            collection_name=request_data.collection,
+            query_vector=vector,
+            limit=5
+        )
+        
+        # 5. Cleanup the temporary point
+        await vector_service.delete(
+            collection_name=request_data.collection,
+            ids=[point_id]
+        )
+        
+        latency = (time.perf_counter() - start_time) * 1000.0
+        
+        # Format results items
+        result_items = [
+            VectorTestResultItem(
+                id=hit["id"],
+                score=hit["score"],
+                payload=hit["payload"]
+            )
+            for hit in search_hits
+        ]
+        
+        similarity_scores = [hit["score"] for hit in search_hits]
+        
+        return VectorTestResponse(
+            latency=latency,
+            search_results=result_items,
+            similarity_scores=similarity_scores
+        )
+        
+    except Exception as e:
+        # Attempt cleanup if query fails but point was created
+        try:
+            await vector_service.delete(
+                collection_name=request_data.collection,
+                ids=[point_id]
+            )
+        except Exception:
+            pass
+            
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Vector playground verification pipeline failed: {str(e)}"
         )

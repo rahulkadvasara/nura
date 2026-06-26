@@ -38,11 +38,13 @@ class QdrantConnection:
     async def connect(self) -> None:
         """Create Qdrant connection"""
         try:
+            from app.core.ai_config import ai_settings
+            
             # Handle empty API key for development
-            api_key = settings.QDRANT_API_KEY if settings.QDRANT_API_KEY else None
+            api_key = ai_settings.QDRANT_API_KEY if ai_settings.QDRANT_API_KEY else None
             
             self.client = QdrantClient(
-                url=settings.QDRANT_URL,
+                url=ai_settings.QDRANT_URL,
                 api_key=api_key,
                 timeout=30.0
             )
@@ -53,9 +55,6 @@ class QdrantConnection:
             logger.info("Qdrant connected successfully", extra={
                 "collections_count": len(collections.collections)
             })
-            
-            # Initialize collections if they don't exist
-            await self._initialize_collections()
             
         except Exception as e:
             logger.warning(f"Qdrant connection failed (this is OK for Phase 0): {e}")
@@ -83,59 +82,6 @@ class QdrantConnection:
         if not self.client:
             raise RuntimeError("Qdrant not connected")
         return self.client
-    
-    async def _initialize_collections(self) -> None:
-        """Initialize Qdrant collections if they don't exist"""
-        try:
-            existing_collections = self.client.get_collections()
-            existing_names = {col.name for col in existing_collections.collections}
-            
-            # Collection configurations
-            collections_config = {
-                QDRANT_COLLECTIONS["PATIENT_REPORTS"]: {
-                    "vectors_config": qdrant_models.VectorParams(
-                        size=384,  # BAAI/bge-small-en-v1.5 dimension
-                        distance=qdrant_models.Distance.COSINE
-                    )
-                },
-                QDRANT_COLLECTIONS["CHAT_MEMORY"]: {
-                    "vectors_config": qdrant_models.VectorParams(
-                        size=384,
-                        distance=qdrant_models.Distance.COSINE
-                    )
-                },
-                QDRANT_COLLECTIONS["MEDICAL_KNOWLEDGE"]: {
-                    "vectors_config": qdrant_models.VectorParams(
-                        size=384,
-                        distance=qdrant_models.Distance.COSINE
-                    )
-                },
-                QDRANT_COLLECTIONS["DRUG_INTERACTIONS"]: {
-                    "vectors_config": qdrant_models.VectorParams(
-                        size=384,
-                        distance=qdrant_models.Distance.COSINE
-                    )
-                },
-                QDRANT_COLLECTIONS["DOCTOR_KNOWLEDGE"]: {
-                    "vectors_config": qdrant_models.VectorParams(
-                        size=384,
-                        distance=qdrant_models.Distance.COSINE
-                    )
-                }
-            }
-            
-            # Create missing collections
-            for collection_name, config in collections_config.items():
-                if collection_name not in existing_names:
-                    self.client.create_collection(
-                        collection_name=collection_name,
-                        **config
-                    )
-                    logger.info(f"Created Qdrant collection: {collection_name}")
-            
-        except Exception as e:
-            logger.error(f"Failed to initialize Qdrant collections: {e}")
-            raise
 
 
 # Global Qdrant connection instance

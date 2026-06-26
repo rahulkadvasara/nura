@@ -9,7 +9,9 @@ import {
   useAIHealth, 
   useAIPlaygroundTest, 
   useEmbeddingHealth, 
-  useEmbeddingTest 
+  useEmbeddingTest,
+  useVectorHealth,
+  useVectorTest
 } from '@/hooks/use-ai'
 import { 
   Sparkles, 
@@ -664,8 +666,335 @@ function EmbeddingsPlaygroundView() {
   )
 }
 
+function VectorHealthBadge() {
+  const { 
+    data: health, 
+    isLoading: isHealthLoading, 
+    isError: isHealthError, 
+    refetch: refetchHealth 
+  } = useVectorHealth()
+
+  return (
+    <Card className="shadow-sm border-slate-200 bg-white px-4 py-2 flex items-center gap-3">
+      <div className="flex flex-col">
+        <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Vector DB Status</span>
+        {isHealthLoading ? (
+          <span className="text-sm font-medium text-slate-500 flex items-center gap-1.5 mt-0.5">
+            <RefreshCw className="h-3 w-3 animate-spin" />
+            Checking...
+          </span>
+        ) : isHealthError ? (
+          <span className="text-sm font-medium text-red-500 flex items-center gap-1.5 mt-0.5">
+            <AlertTriangle className="h-4 w-4" />
+            Connection Error
+          </span>
+        ) : health?.connected ? (
+          <span className="text-sm font-medium text-teal-600 flex items-center gap-1.5 mt-0.5">
+            <CheckCircle2 className="h-4 w-4 text-teal-500" />
+            Connected
+          </span>
+        ) : (
+          <span className="text-sm font-medium text-amber-500 flex items-center gap-1.5 mt-0.5">
+            <AlertTriangle className="h-4 w-4" />
+            Disconnected
+          </span>
+        )}
+      </div>
+      <Button 
+        variant="ghost" 
+        size="icon" 
+        onClick={() => refetchHealth()} 
+        disabled={isHealthLoading}
+        className="h-8 w-8 text-slate-400 hover:text-slate-600"
+      >
+        <RefreshCw className={`h-4 w-4 ${isHealthLoading ? 'animate-spin' : ''}`} />
+      </Button>
+    </Card>
+  )
+}
+
+function VectorPlaygroundView() {
+  const [text, setText] = useState('')
+  const [collection, setCollection] = useState('patient_reports')
+  const [testResult, setTestResult] = useState<any>(null)
+  
+  const { data: health, isLoading: isHealthLoading, refetch: refetchHealth } = useVectorHealth()
+  const testMutation = useVectorTest()
+
+  const handleRunTest = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!text.trim() || !collection) return
+
+    try {
+      const result = await testMutation.mutateAsync({ collection, text })
+      setTestResult(result)
+    } catch (err) {
+      setTestResult(null)
+    }
+  }
+
+  const collectionsList = health?.collections || [
+    { name: 'patient_reports', status: 'unknown', vector_count: 0, dimensions: 384, distance: 'COSINE' },
+    { name: 'chat_memory', status: 'unknown', vector_count: 0, dimensions: 384, distance: 'COSINE' },
+    { name: 'medical_knowledge', status: 'unknown', vector_count: 0, dimensions: 384, distance: 'COSINE' },
+    { name: 'drug_knowledge', status: 'unknown', vector_count: 0, dimensions: 384, distance: 'COSINE' },
+    { name: 'doctor_knowledge', status: 'unknown', vector_count: 0, dimensions: 384, distance: 'COSINE' },
+  ]
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
+      {/* Test Execution Console and Results (col-span-2) */}
+      <div className="lg:col-span-2 space-y-6">
+        <Card className="border-slate-200 shadow-md bg-white">
+          <CardHeader className="border-b border-slate-100 bg-slate-50/50">
+            <CardTitle className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+              <Terminal className="h-5 w-5 text-slate-500" />
+              Semantic Search Verification Console
+            </CardTitle>
+            <CardDescription>
+              Submit test text queries to generate a temporary embedding, run near-neighbor lookup, and measure semantic search latency.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <form onSubmit={handleRunTest} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label htmlFor="collection-select" className="text-sm font-medium text-slate-700">
+                    Target Collection
+                  </label>
+                  <select
+                    id="collection-select"
+                    value={collection}
+                    onChange={(e) => setCollection(e.target.value)}
+                    disabled={testMutation.isPending}
+                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  >
+                    <option value="patient_reports">Patient Reports (patient_reports)</option>
+                    <option value="chat_memory">Chat Memory (chat_memory)</option>
+                    <option value="medical_knowledge">Medical Knowledge (medical_knowledge)</option>
+                    <option value="drug_knowledge">Drug Knowledge (drug_knowledge)</option>
+                    <option value="doctor_knowledge">Doctor Knowledge (doctor_knowledge)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="vector-text" className="text-sm font-medium text-slate-700">
+                  Search Query Text
+                </label>
+                <Textarea
+                  id="vector-text"
+                  placeholder="Enter validation text to query the vector database (e.g. chronic hypertension symptoms)..."
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  rows={4}
+                  disabled={testMutation.isPending}
+                  className="border-slate-200 focus:border-teal-500 focus:ring-teal-500 resize-none font-sans"
+                />
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-slate-400">
+                  * Triggers temporary upsert, nearest-neighbor query, and clean-up.
+                </span>
+                <Button
+                  type="submit"
+                  disabled={!text.trim() || testMutation.isPending}
+                  className="bg-teal-600 hover:bg-teal-700 text-white font-semibold transition-all px-6"
+                >
+                  {testMutation.isPending ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Executing Pipeline...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="h-4 w-4 mr-2" />
+                      Verify Pipeline
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Loading and Error states */}
+        {testMutation.isPending && (
+          <Card className="border-slate-200 shadow-md bg-white">
+            <CardContent className="pt-6">
+              <div className="flex flex-col items-center justify-center py-12 text-slate-400 gap-3">
+                <RefreshCw className="h-8 w-8 animate-spin text-teal-500" />
+                <p className="text-sm font-medium animate-pulse text-slate-500">Executing semantic search roundtrip...</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {testMutation.isError && (
+          <Card className="border-slate-200 shadow-md bg-white">
+            <CardContent className="pt-6">
+              <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h4 className="font-semibold">Verification Pipeline Failed</h4>
+                  <p className="text-sm mt-1 text-red-600">
+                    {testMutation.error?.message || 'An unexpected error occurred during the verification pipeline.'}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Response Results Panel */}
+        {testResult && !testMutation.isPending && (
+          <div className="space-y-6">
+            <Card className="border-slate-200 shadow-md bg-white overflow-hidden">
+              <CardHeader className="border-b border-slate-100 bg-slate-50/50 py-4">
+                <CardTitle className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                  <Database className="h-5 w-5 text-teal-600" />
+                  Semantic Match Results ({testResult.search_results.length})
+                </CardTitle>
+                <CardDescription>
+                  List of nearest neighbor points matching the generated query vector.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-4">
+                {testResult.search_results.length === 0 ? (
+                  <p className="text-sm text-slate-500 py-6 text-center">No points found in collection (excluding clean-up temporary test point).</p>
+                ) : (
+                  testResult.search_results.map((hit: any, index: number) => (
+                    <div key={hit.id || index} className="rounded-lg border border-slate-100 bg-slate-50/50 p-4 space-y-3 hover:border-slate-200 transition-colors">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-slate-200 text-slate-700">Point {index + 1}</span>
+                          <span className="text-xs font-mono text-slate-400 truncate max-w-[150px] md:max-w-xs" title={hit.id}>{hit.id}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-slate-400 font-medium">Similarity Score:</span>
+                          <span className="text-xs font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-100">
+                            {hit.score.toFixed(4)}
+                          </span>
+                        </div>
+                      </div>
+                      <pre className="rounded border border-slate-100 bg-white p-3 font-mono text-xs text-slate-800 overflow-x-auto font-sans">
+                        {JSON.stringify(hit.payload, null, 2)}
+                      </pre>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
+
+      {/* Collection Stats Cards Column (col-span-1) */}
+      <div className="space-y-6">
+        {/* Latency card */}
+        {testResult && (
+          <Card className="border-slate-200 shadow bg-gradient-to-br from-teal-50 to-white hover:shadow-md transition-all">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Verification Latency</p>
+                  <h3 className="text-3xl font-extrabold text-teal-900 mt-1">
+                    {testResult.latency.toFixed(1)} <span className="text-lg font-semibold text-teal-600">ms</span>
+                  </h3>
+                </div>
+                <div className="p-3 rounded-full bg-teal-100 text-teal-700">
+                  <Clock className="h-6 w-6" />
+                </div>
+              </div>
+              <div className="mt-3 text-xs text-slate-400 flex items-center gap-1">
+                <Activity className="h-3 w-3 text-teal-500" />
+                Measured roundtrip embedding-to-qdrant search latency
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card className="border-slate-200 shadow bg-gradient-to-br from-blue-50 to-white hover:shadow-md transition-all">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Vector DB Latency</p>
+                <h3 className="text-3xl font-extrabold text-blue-900 mt-1">
+                  {health?.latency ? `${health.latency.toFixed(1)}` : 'N/A'} <span className="text-lg font-semibold text-blue-600">ms</span>
+                </h3>
+              </div>
+              <div className="p-3 rounded-full bg-blue-100 text-blue-700">
+                <Clock className="h-6 w-6" />
+              </div>
+            </div>
+            <div className="mt-3 text-xs text-slate-400 flex items-center gap-1">
+              <Activity className="h-3 w-3 text-blue-500" />
+              Ping latency to Qdrant server
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Collections Overview */}
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Registered Collections</h3>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => refetchHealth()}
+              disabled={isHealthLoading}
+              className="text-slate-500 hover:text-slate-700 text-xs gap-1"
+            >
+              <RefreshCw className={`h-3 w-3 ${isHealthLoading ? 'animate-spin' : ''}`} />
+              Refresh Stats
+            </Button>
+          </div>
+
+          {collectionsList.map((col: any) => (
+            <Card key={col.name} className="border-slate-200 shadow-sm bg-white overflow-hidden">
+              <div className="border-b border-slate-100 bg-slate-50/50 px-4 py-2 flex justify-between items-center">
+                <span className="text-xs font-bold text-slate-700 font-mono">{col.name}</span>
+                <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded-full ${
+                  col.status === 'green' || col.status === 'healthy'
+                    ? 'bg-teal-50 text-teal-700 border border-teal-100'
+                    : col.status === 'yellow'
+                    ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                    : 'bg-red-50 text-red-700 border border-red-100'
+                }`}>
+                  {col.status}
+                </span>
+              </div>
+              <CardContent className="p-4 space-y-2 text-xs">
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>Points Count:</span>
+                  <span className="font-semibold text-slate-800">{col.vector_count}</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>Dimensions:</span>
+                  <span className="font-medium text-slate-800">{col.dimensions}</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>Distance Metric:</span>
+                  <span className="font-mono text-slate-800">{col.distance}</span>
+                </div>
+                {col.storage_bytes !== undefined && col.storage_bytes > 0 && (
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Storage Size:</span>
+                    <span className="font-medium text-slate-800">{(col.storage_bytes / 1024).toFixed(1)} KB</span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function AIPlaygroundContent() {
-  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings'>('llm')
+  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector'>('llm')
 
   return (
     <div className="space-y-6">
@@ -684,8 +1013,10 @@ function AIPlaygroundContent() {
         {/* Dynamic Health Check Summary Badge based on active tab */}
         {activeTab === 'llm' ? (
           <LLMHealthBadge />
-        ) : (
+        ) : activeTab === 'embeddings' ? (
           <EmbeddingHealthBadge />
+        ) : (
+          <VectorHealthBadge />
         )}
       </div>
 
@@ -710,15 +1041,28 @@ function AIPlaygroundContent() {
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          <Database className="h-4 w-4" />
+          <FileText className="h-4 w-4" />
           Embeddings Pipeline
+        </button>
+        <button
+          onClick={() => setActiveTab('vector')}
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2 relative ${
+            activeTab === 'vector'
+              ? 'border-teal-600 text-teal-600 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Database className="h-4 w-4" />
+          Vector Database
         </button>
       </div>
 
       {activeTab === 'llm' ? (
         <LLMPlaygroundView />
-      ) : (
+      ) : activeTab === 'embeddings' ? (
         <EmbeddingsPlaygroundView />
+      ) : (
+        <VectorPlaygroundView />
       )}
     </div>
   )

@@ -35,6 +35,34 @@ export interface EmbeddingTestResponse {
   metadata: Record<string, any>
 }
 
+export interface VectorCollectionInfo {
+  name: string
+  status: string
+  vector_count: number
+  dimensions: number
+  distance: string
+  storage_bytes?: number
+  last_update_time?: string
+}
+
+export interface VectorHealthResponse {
+  connected: boolean
+  latency: number
+  collections: VectorCollectionInfo[]
+}
+
+export interface VectorTestResultItem {
+  id: string
+  score: number
+  payload: Record<string, any>
+}
+
+export interface VectorTestResponse {
+  latency: number
+  search_results: VectorTestResultItem[]
+  similarity_scores: number[]
+}
+
 export const aiService = {
   /**
    * Retrieves connectivity and latency details from the AI backend health check.
@@ -65,6 +93,30 @@ export const aiService = {
    */
   testEmbeddingPlayground: async (text: string): Promise<EmbeddingTestResponse> => {
     const response = await apiClient.post<EmbeddingTestResponse>('/ai/embeddings/test', { text })
+    return response.data
+  },
+
+  /**
+   * Retrieves overall vector health status and collection stats. Admin accounts only.
+   */
+  getVectorHealth: async (): Promise<VectorHealthResponse> => {
+    const response = await apiClient.get<VectorHealthResponse>('/ai/vector/health')
+    return response.data
+  },
+
+  /**
+   * Retrieves list of Qdrant collection specifications. Admin accounts only.
+   */
+  getVectorCollections: async (): Promise<VectorCollectionInfo[]> => {
+    const response = await apiClient.get<VectorCollectionInfo[]>('/ai/vector/collections')
+    return response.data
+  },
+
+  /**
+   * Executes a roundtrip semantic query verification test. Admin accounts only.
+   */
+  testVectorSearch: async (collection: string, text: string): Promise<VectorTestResponse> => {
+    const response = await apiClient.post<VectorTestResponse>('/ai/vector/test', { collection, text })
     return response.data
   }
 }

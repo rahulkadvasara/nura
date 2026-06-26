@@ -239,7 +239,7 @@ def test_approve_doctor_application_success(client, mocks, admin_user, patient_u
     
     # Verify audit log details
     audit_args = audit_svc.create_log.call_args[0][0]
-    assert audit_args.action == "doctor_approved"
+    assert audit_args.action == "DOCTOR_APPROVED"
     assert audit_args.user_id == admin_user.id
     assert audit_args.resource_id == sample_profile.id
 
@@ -267,7 +267,7 @@ def test_reject_doctor_application_success(client, mocks, admin_user, patient_us
     audit_svc.create_log.assert_called_once()
 
     audit_args = audit_svc.create_log.call_args[0][0]
-    assert audit_args.action == "doctor_rejected"
+    assert audit_args.action == "DOCTOR_REJECTED"
     assert audit_args.user_id == admin_user.id
     assert audit_args.resource_id == sample_profile.id
     assert audit_args.new_value["rejection_reason"] == "Missing diploma"

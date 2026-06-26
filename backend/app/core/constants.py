@@ -91,7 +91,7 @@ QDRANT_COLLECTIONS = {
     "PATIENT_REPORTS": "patient_reports",
     "CHAT_MEMORY": "chat_memory",
     "MEDICAL_KNOWLEDGE": "medical_knowledge",
-    "DRUG_INTERACTIONS": "drug_interactions",
+    "DRUG_KNOWLEDGE": "drug_knowledge",
     "DOCTOR_KNOWLEDGE": "doctor_knowledge"
 }
 

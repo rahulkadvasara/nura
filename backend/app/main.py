@@ -26,6 +26,15 @@ async def lifespan(app: FastAPI):
     await connect_to_mongodb()
     await connect_to_qdrant()
 
+    # Initialize Qdrant collections
+    try:
+        from app.services.vector_collection_service import get_vector_collection_service
+        collection_service = get_vector_collection_service()
+        await collection_service.initialize_all_collections()
+    except Exception as e:
+        import logging
+        logging.getLogger("nura.main").error(f"Failed to auto-initialize Qdrant collections: {e}")
+
     # Initialize collections and indexes (idempotent) and run admin bootstrap
     try:
         db = get_database()

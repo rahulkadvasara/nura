@@ -37,6 +37,8 @@ from app.services.payment_gateway_service import PaymentGatewayService
 from app.services.groq_service import GroqService, get_groq_service
 from app.services.ai_service import AIService, get_ai_service
 from app.services.embedding_service import EmbeddingService, get_embedding_service
+from app.services.vector_collection_service import VectorCollectionService, get_vector_collection_service
+from app.services.vector_service import VectorService, get_vector_service
 
 __all__ = [
     # Base service
@@ -99,4 +101,8 @@ __all__ = [
     "get_ai_service",
     "EmbeddingService",
     "get_embedding_service",
+    "VectorCollectionService",
+    "get_vector_collection_service",
+    "VectorService",
+    "get_vector_service",
 ]
