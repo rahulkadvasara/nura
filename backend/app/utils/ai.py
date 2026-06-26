@@ -167,3 +167,73 @@ class EmbeddingMetricsTracker:
 
 # Global embedding metrics tracker instance
 embedding_metrics = EmbeddingMetricsTracker()
+
+
+class AgentMetricsTracker:
+    """In-memory metrics tracker for monitoring AI agents performance"""
+    
+    def __init__(self):
+        self.executions: int = 0
+        self.failures: int = 0
+        self.total_latency_ms: float = 0.0
+        self.retries: int = 0
+        self.timeouts: int = 0
+        self.streaming_usages: int = 0
+        self.total_tokens: int = 0
+        self.model_usage: dict = {}
+        
+    def record_execution(
+        self,
+        latency_ms: float,
+        success: bool,
+        tokens: int = 0,
+        retries: int = 0,
+        timeout: bool = False,
+        streaming: bool = False,
+        model: str = None
+    ) -> None:
+        """Record telemetry of an agent execution"""
+        self.executions += 1
+        self.total_latency_ms += latency_ms
+        if not success:
+            self.failures += 1
+        if timeout:
+            self.timeouts += 1
+        self.retries += retries
+        if streaming:
+            self.streaming_usages += 1
+        self.total_tokens += tokens
+        if model:
+            self.model_usage[model] = self.model_usage.get(model, 0) + 1
+            
+    def get_metrics(self) -> dict:
+        """Summarize current agent performance metrics"""
+        successful = self.executions - self.failures
+        avg_latency = (self.total_latency_ms / self.executions) if self.executions > 0 else 0.0
+        avg_tokens = (self.total_tokens / successful) if successful > 0 else 0.0
+        return {
+            "executions": self.executions,
+            "failures": self.failures,
+            "avg_latency_ms": avg_latency,
+            "retries": self.retries,
+            "timeouts": self.timeouts,
+            "streaming_usages": self.streaming_usages,
+            "avg_tokens": avg_tokens,
+            "model_usage": self.model_usage
+        }
+        
+    def reset(self) -> None:
+        """Reset internal metric counters"""
+        self.executions = 0
+        self.failures = 0
+        self.total_latency_ms = 0.0
+        self.retries = 0
+        self.timeouts = 0
+        self.streaming_usages = 0
+        self.total_tokens = 0
+        self.model_usage = {}
+
+
+# Global agent metrics tracker instance
+agent_metrics = AgentMetricsTracker()
+

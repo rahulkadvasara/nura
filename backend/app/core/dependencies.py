@@ -48,6 +48,12 @@ from app.services import (
     VectorService,
     PatientContextService,
 )
+from app.agents import (
+    BaseAgent,
+    RetrievalAgent,
+    MemoryAgent,
+)
+
 
 
 
@@ -622,6 +628,29 @@ def get_patient_context_service() -> PatientContextService:
         health_insight_repository=HealthInsightRepository(database.health_insights),
         chat_session_repository=ChatSessionRepository(database.chat_sessions),
     )
+
+
+def get_base_agent() -> BaseAgent:
+    """Get BaseAgent instance (returns ConcreteBaseAgent placeholder)"""
+    from typing import Any, Optional
+    from app.agents.base.context import AgentContext
+
+    class ConcreteBaseAgent(BaseAgent):
+        async def execute(self, input_data: Any, context: Optional[AgentContext] = None) -> Any:
+            return f"Response to: {input_data}"
+
+    return ConcreteBaseAgent("Base Agent")
+
+
+def get_retrieval_agent() -> RetrievalAgent:
+    """Get RetrievalAgent instance"""
+    return RetrievalAgent("Retrieval Agent")
+
+
+def get_memory_agent() -> MemoryAgent:
+    """Get MemoryAgent instance"""
+    return MemoryAgent("Memory Agent")
+
 
 
 
