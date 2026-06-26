@@ -42,6 +42,7 @@ from app.services import (
     PaymentGatewayService,
     GroqService,
     AIService,
+    EmbeddingService,
 )
 
 
@@ -569,6 +570,12 @@ def get_ai_service(
     """Get AIService instance"""
     from app.services.ai_service import get_ai_service as get_ai_service_impl
     return get_ai_service_impl(groq_service)
+
+
+def get_embedding_service() -> EmbeddingService:
+    """Get EmbeddingService instance"""
+    from app.services.embedding_service import get_embedding_service as get_embedding_service_impl
+    return get_embedding_service_impl()
 
 
 

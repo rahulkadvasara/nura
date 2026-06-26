@@ -117,3 +117,53 @@ class AIMetricsTracker:
 
 # Global metrics tracker instance
 ai_metrics = AIMetricsTracker()
+
+
+class EmbeddingMetricsTracker:
+    """In-memory metrics tracker for monitoring AI embedding performance"""
+    
+    def __init__(self):
+        self.embeddings_generated: int = 0
+        self.total_latency_ms: float = 0.0
+        self.failed_embeddings: int = 0
+        self.batch_sizes: list = []
+        self.duplicate_chunks_skipped: int = 0
+        
+    def record_success(self, count: int, latency_ms: float, batch_size: int) -> None:
+        """Record successful embedding generations"""
+        self.embeddings_generated += count
+        self.total_latency_ms += latency_ms
+        if batch_size > 1:
+            self.batch_sizes.append(batch_size)
+            
+    def record_failure(self, count: int = 1) -> None:
+        """Record failed embedding requests"""
+        self.failed_embeddings += count
+        
+    def record_duplicate(self, count: int = 1) -> None:
+        """Record duplicate chunks skipped"""
+        self.duplicate_chunks_skipped += count
+        
+    def get_metrics(self) -> Dict[str, Any]:
+        """Summarize current embedding performance metrics"""
+        avg_latency = (self.total_latency_ms / self.embeddings_generated) if self.embeddings_generated > 0 else 0.0
+        avg_batch_size = (sum(self.batch_sizes) / len(self.batch_sizes)) if self.batch_sizes else 0.0
+        return {
+            "embeddings_generated": self.embeddings_generated,
+            "avg_latency_ms": avg_latency,
+            "failed_embeddings": self.failed_embeddings,
+            "avg_batch_size": avg_batch_size,
+            "duplicate_chunks_skipped": self.duplicate_chunks_skipped
+        }
+        
+    def reset(self) -> None:
+        """Reset internal metric counters"""
+        self.embeddings_generated = 0
+        self.total_latency_ms = 0.0
+        self.failed_embeddings = 0
+        self.batch_sizes = []
+        self.duplicate_chunks_skipped = 0
+
+
+# Global embedding metrics tracker instance
+embedding_metrics = EmbeddingMetricsTracker()

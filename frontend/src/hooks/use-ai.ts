@@ -1,5 +1,11 @@
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { aiService, AIHealthResponse, AITestResponse } from '@/services/ai.service'
+import { 
+  aiService, 
+  AIHealthResponse, 
+  AITestResponse, 
+  EmbeddingHealthResponse, 
+  EmbeddingTestResponse 
+} from '@/services/ai.service'
 
 /**
  * Custom hook to monitor backend AI status periodically.
@@ -21,6 +27,30 @@ export function useAIPlaygroundTest() {
   return useMutation<AITestResponse, Error, string>({
     mutationFn: async (prompt: string) => {
       return await aiService.testAIPlayground(prompt)
+    }
+  })
+}
+
+/**
+ * Custom hook to monitor backend embedding status periodically.
+ */
+export function useEmbeddingHealth() {
+  return useQuery<EmbeddingHealthResponse, Error>({
+    queryKey: ['admin', 'ai', 'embeddings', 'health'],
+    queryFn: async () => {
+      return await aiService.getEmbeddingHealth()
+    },
+    refetchInterval: 30000, // Refresh status check every 30 seconds
+  })
+}
+
+/**
+ * Custom hook to trigger text vectorization tests against the embedding console.
+ */
+export function useEmbeddingTest() {
+  return useMutation<EmbeddingTestResponse, Error, string>({
+    mutationFn: async (text: string) => {
+      return await aiService.testEmbeddingPlayground(text)
     }
   })
 }
