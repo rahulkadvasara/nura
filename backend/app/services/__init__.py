@@ -34,6 +34,8 @@ from app.services.admin_analytics_service import AdminAnalyticsService
 from app.services.doctor_patient_service import DoctorPatientService
 from app.services.doctor_earnings_service import DoctorEarningsService
 from app.services.payment_gateway_service import PaymentGatewayService
+from app.services.groq_service import GroqService, get_groq_service
+from app.services.ai_service import AIService, get_ai_service
 
 __all__ = [
     # Base service
@@ -88,4 +90,10 @@ __all__ = [
 
     # Doctor Earnings & Wallet service
     "DoctorEarningsService",
+
+    # AI services
+    "GroqService",
+    "get_groq_service",
+    "AIService",
+    "get_ai_service",
 ]

@@ -40,6 +40,8 @@ from app.services import (
     PrescriptionService,
     PaymentService,
     PaymentGatewayService,
+    GroqService,
+    AIService,
 )
 
 
@@ -553,6 +555,20 @@ def get_maintenance_service():
         notification_repository=NotificationRepository(database.notifications),
         audit_log_repository=AuditLogRepository(database.audit_logs),
     )
+
+
+def get_groq_service() -> GroqService:
+    """Get GroqService instance"""
+    from app.services.groq_service import get_groq_service as get_groq_service_impl
+    return get_groq_service_impl()
+
+
+def get_ai_service(
+    groq_service = Depends(get_groq_service)
+) -> AIService:
+    """Get AIService instance"""
+    from app.services.ai_service import get_ai_service as get_ai_service_impl
+    return get_ai_service_impl(groq_service)
 
 
 

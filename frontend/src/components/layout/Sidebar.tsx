@@ -57,6 +57,7 @@ export function Sidebar() {
         { name: 'Analytics', href: '/dashboard/admin/analytics', icon: BarChart3 },
         { name: 'System Logs', href: '/dashboard/admin/logs', icon: Activity },
         { name: 'System Health', href: '/dashboard/admin/system', icon: Cpu },
+        { name: 'AI Playground', href: '/dashboard/admin/ai', icon: Sparkles },
         { name: 'Settings', href: '/dashboard/settings/profile', icon: Settings },
       ]
     }
