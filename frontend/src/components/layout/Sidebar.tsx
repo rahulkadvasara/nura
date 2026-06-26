@@ -22,6 +22,7 @@ import {
   Lock,
   BarChart3,
   Cpu,
+  RefreshCw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -58,6 +59,7 @@ export function Sidebar() {
         { name: 'System Logs', href: '/dashboard/admin/logs', icon: Activity },
         { name: 'System Health', href: '/dashboard/admin/system', icon: Cpu },
         { name: 'AI Playground', href: '/dashboard/admin/ai', icon: Sparkles },
+        { name: 'RAG Sync', href: '/dashboard/admin/rag', icon: RefreshCw },
         { name: 'Settings', href: '/dashboard/settings/profile', icon: Settings },
       ]
     }

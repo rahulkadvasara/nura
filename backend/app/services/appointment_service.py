@@ -59,12 +59,23 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
         doctor_profile_repository: DoctorProfileRepository,
         user_repository: UserRepository,
         doctor_availability_repository: Optional[Any] = None,
+        event_dispatcher = None,
     ):
         super().__init__()
         self.appointment_repository = appointment_repository
         self.doctor_profile_repository = doctor_profile_repository
         self.user_repository = user_repository
         self.doctor_availability_repository = doctor_availability_repository
+        
+        # Lazy load or use injected event dispatcher to prevent circular imports
+        if event_dispatcher is None:
+            try:
+                from app.core.dependencies import get_event_dispatcher
+                self.event_dispatcher = get_event_dispatcher()
+            except ImportError:
+                self.event_dispatcher = None
+        else:
+            self.event_dispatcher = event_dispatcher
 
     async def create_appointment(
         self,
@@ -560,5 +571,19 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
             await audit_log_service.create_log(audit_schema)
         except Exception:
             pass
+
+        # Dispatch event
+        if self.event_dispatcher:
+            try:
+                from app.events.base import AppointmentCompletedEvent
+                event = AppointmentCompletedEvent(
+                    patient_id=appt.patient_id,
+                    appointment_id=appointment_id,
+                    doctor_id=doctor_profile_id
+                )
+                await self.event_dispatcher.dispatch(event)
+            except Exception as e:
+                import logging
+                logging.getLogger("nura.services.appointment").error(f"Failed to dispatch AppointmentCompletedEvent: {e}")
 
         return consultation

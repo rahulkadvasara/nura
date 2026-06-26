@@ -28,6 +28,8 @@ class PatientMemoryBase(BaseModel):
     recent_findings: List[str] = Field(default_factory=list, description="List of recent findings")
     lifestyle_notes: Optional[str] = Field(None, description="Lifestyle notes")
     timeline: List[Any] = Field(default_factory=list, description="Timeline of important historical events")
+    content_hash: Optional[str] = Field(None, description="Hash of patient memory sections for incremental updates")
+    summary_version: int = Field(default=1, description="Incremental version number of patient memory")
 
 
 class PatientMemoryCreate(PatientMemoryBase):
@@ -47,6 +49,8 @@ class PatientMemoryUpdate(BaseModel):
     recent_findings: Optional[List[str]] = None
     lifestyle_notes: Optional[str] = None
     timeline: Optional[List[Any]] = None
+    content_hash: Optional[str] = None
+    summary_version: Optional[int] = None
 
 
 class PatientMemoryInDB(PatientMemoryBase):

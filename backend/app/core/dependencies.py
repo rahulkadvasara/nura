@@ -55,7 +55,10 @@ from app.services import (
     ContextAssemblyService,
     IntentDetectionService,
     get_intent_detection_service,
+    PatientSummaryBuilder,
+    MemorySyncService,
 )
+from app.events import EventDispatcher, EventQueue
 from app.agents import (
     BaseAgent,
     RetrievalAgent,
@@ -712,6 +715,72 @@ def get_context_assembly_service() -> ContextAssemblyService:
     """Get ContextAssemblyService instance"""
     from app.services.context_assembly_service import get_context_assembly_service as get_context_assembly_service_impl
     return get_context_assembly_service_impl()
+
+
+# ---------------------------------------------------------------------------
+# Sync Pipeline & Event Dependencies
+# ---------------------------------------------------------------------------
+
+_event_dispatcher_instance = None
+_event_queue_instance = None
+
+
+def get_event_dispatcher() -> EventDispatcher:
+    """Get EventDispatcher singleton instance"""
+    global _event_dispatcher_instance
+    if _event_dispatcher_instance is None:
+        from app.events.dispatcher import EventDispatcher
+        _event_dispatcher_instance = EventDispatcher()
+    return _event_dispatcher_instance
+
+
+def get_event_queue() -> EventQueue:
+    """Get EventQueue background worker singleton instance"""
+    global _event_queue_instance
+    if _event_queue_instance is None:
+        from app.events.queue import EventQueue
+        _event_queue_instance = EventQueue()
+    return _event_queue_instance
+
+
+def get_patient_summary_builder() -> PatientSummaryBuilder:
+    """Get PatientSummaryBuilder instance"""
+    database = get_database()
+    from app.repositories.report_repository import ReportRepository
+    from app.repositories.consultation_repository import ConsultationRepository
+    from app.repositories.prescription_repository import PrescriptionRepository
+    from app.repositories.health_insight_repository import HealthInsightRepository
+    
+    return PatientSummaryBuilder(
+        user_repository=get_user_repository(),
+        report_repository=ReportRepository(database.reports),
+        consultation_repository=ConsultationRepository(database.consultations),
+        prescription_repository=PrescriptionRepository(database.prescriptions),
+        health_insight_repository=HealthInsightRepository(database.health_insights),
+        appointment_repository=get_appointment_repository()
+    )
+
+
+def get_memory_sync_service(
+    patient_memory_repository: PatientMemoryRepository = Depends(get_patient_memory_repository),
+    user_repository: UserRepository = Depends(get_user_repository),
+    patient_summary_builder: PatientSummaryBuilder = Depends(get_patient_summary_builder),
+    embedding_service: EmbeddingService = Depends(get_embedding_service),
+    vector_service: VectorService = Depends(get_vector_service),
+    index_version_service: IndexVersionService = Depends(get_index_version_service),
+    audit_log_service = Depends(get_audit_log_service),
+) -> MemorySyncService:
+    """Get MemorySyncService instance"""
+    return MemorySyncService(
+        patient_memory_repository=patient_memory_repository,
+        user_repository=user_repository,
+        patient_summary_builder=patient_summary_builder,
+        embedding_service=embedding_service,
+        vector_service=vector_service,
+        index_version_service=index_version_service,
+        audit_log_service=audit_log_service
+    )
+
 
 
 

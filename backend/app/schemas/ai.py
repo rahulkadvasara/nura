@@ -135,6 +135,43 @@ class IndexDeletionResponse(BaseModel):
     message: Optional[str] = Field(None, description="Detailed explanation of the outcome")
 
 
+class SyncStatusResponse(BaseModel):
+    """Active queue status monitoring telemetry details"""
+    running: bool = Field(..., description="Queue worker thread pool execution status")
+    queue_size: int = Field(..., description="Number of items currently queued in memory")
+    dlq_count: int = Field(..., description="Total size count of dead-letter jobs failures")
+
+
+class SyncPatientResponse(BaseModel):
+    """Outcomes detailed report generated from individual patient rebuild execution"""
+    success: bool = Field(..., description="Whether synchronization was completed successfully")
+    patient_id: str = Field(..., description="Target patient ID context")
+    rebuilt_mongodb: bool = Field(..., description="Indicates if MongoDB patient summary was recalculated and updated")
+    regenerated_qdrant: bool = Field(..., description="Indicates if vectors were recalculated and upserted to Qdrant")
+    summary_version: int = Field(..., description="The summary version number mapped to this synchronization run")
+    latency_ms: float = Field(..., description="Computed execution duration time in milliseconds")
+
+
+class SyncRebuildResponse(BaseModel):
+    """Consolidated report metrics of triggering background full platform synchronization rebuild"""
+    success: bool = Field(..., description="Trigger status of global synchronization rebuild pipeline")
+    triggered_count: int = Field(..., description="Total number of active patient summaries queued for background update")
+    patient_ids: List[str] = Field(..., description="List of target patient user IDs queued for processing")
+
+
+class SyncStatisticsResponse(BaseModel):
+    """Response mapping telemetry metrics matching MemorySyncMetricsTracker"""
+    sync_count: int = Field(..., description="Total completed synchronization runs count")
+    failures: int = Field(..., description="Total counted sync task failures")
+    retries: int = Field(..., description="Number of task execution retry attempts")
+    dead_letters: int = Field(..., description="Total number of jobs transferred to dead-letter queue")
+    avg_latency_ms: float = Field(..., description="Average processing runtime duration in milliseconds")
+    rebuilt_summaries: int = Field(..., description="Count of updated MongoDB summary documents")
+    vectors_regenerated: int = Field(..., description="Count of updated/regenerated collections vectors")
+    vectors_skipped: int = Field(..., description="Count of skips utilizing content hash matches")
+
+
+
 
 
 

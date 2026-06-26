@@ -585,6 +585,73 @@ class RetrievalAgentMetricsTracker:
 retrieval_agent_metrics = RetrievalAgentMetricsTracker()
 
 
+class MemorySyncMetricsTracker:
+    """In-memory metrics tracker for monitoring Patient Memory Sync Pipeline performance"""
+
+    def __init__(self):
+        self.sync_count: int = 0
+        self.failures: int = 0
+        self.retries: int = 0
+        self.dead_letters: int = 0
+        self.total_latency_ms: float = 0.0
+        self.rebuilt_summaries: int = 0
+        self.vectors_regenerated: int = 0
+        self.vectors_skipped: int = 0
+
+    def record_sync(self, latency_ms: float, rebuilt: bool, regenerated: bool) -> None:
+        """Record successful patient memory sync operation"""
+        self.sync_count += 1
+        self.total_latency_ms += latency_ms
+        if rebuilt:
+            self.rebuilt_summaries += 1
+        if regenerated:
+            self.vectors_regenerated += 1
+        else:
+            self.vectors_skipped += 1
+
+    def record_failure(self) -> None:
+        """Record a sync operation failure"""
+        self.failures += 1
+
+    def record_retry(self) -> None:
+        """Record a sync retry attempt"""
+        self.retries += 1
+
+    def record_dead_letter(self) -> None:
+        """Record an event pushed to DLQ"""
+        self.dead_letters += 1
+
+    def get_metrics(self) -> dict:
+        """Summarize current memory sync performance metrics"""
+        avg_latency = (self.total_latency_ms / self.sync_count) if self.sync_count > 0 else 0.0
+        return {
+            "sync_count": self.sync_count,
+            "failures": self.failures,
+            "retries": self.retries,
+            "dead_letters": self.dead_letters,
+            "avg_latency_ms": avg_latency,
+            "rebuilt_summaries": self.rebuilt_summaries,
+            "vectors_regenerated": self.vectors_regenerated,
+            "vectors_skipped": self.vectors_skipped
+        }
+
+    def reset(self) -> None:
+        """Reset internal metrics counters"""
+        self.sync_count = 0
+        self.failures = 0
+        self.retries = 0
+        self.dead_letters = 0
+        self.total_latency_ms = 0.0
+        self.rebuilt_summaries = 0
+        self.vectors_regenerated = 0
+        self.vectors_skipped = 0
+
+
+# Global memory sync metrics tracker instance
+memory_sync_metrics = MemorySyncMetricsTracker()
+
+
+
 
 
 

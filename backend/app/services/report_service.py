@@ -53,10 +53,21 @@ class ReportService(BaseService[ReportInDB, ReportCreate, ReportUpdate]):
         self,
         report_repository: ReportRepository,
         user_repository: UserRepository,
+        event_dispatcher = None,
     ):
         super().__init__()
         self.report_repository = report_repository
         self.user_repository = user_repository
+        
+        # Lazy load or use injected event dispatcher to prevent circular imports
+        if event_dispatcher is None:
+            try:
+                from app.core.dependencies import get_event_dispatcher
+                self.event_dispatcher = get_event_dispatcher()
+            except ImportError:
+                self.event_dispatcher = None
+        else:
+            self.event_dispatcher = event_dispatcher
 
     async def create_report(
         self,
@@ -95,7 +106,24 @@ class ReportService(BaseService[ReportInDB, ReportCreate, ReportUpdate]):
         created = await self.report_repository.collection.find_one({"_id": result.inserted_id})
         if created is None:
             raise RuntimeError("Report was inserted but could not be retrieved")
-        return ReportInDB.from_mongo(created)
+            
+        report_obj = ReportInDB.from_mongo(created)
+        
+        # Dispatch event
+        if self.event_dispatcher:
+            try:
+                from app.events.base import ReportUploadedEvent
+                event = ReportUploadedEvent(
+                    patient_id=report_obj.patient_id,
+                    report_id=report_obj.id,
+                    uploaded_by=report_obj.uploaded_by
+                )
+                await self.event_dispatcher.dispatch(event)
+            except Exception as e:
+                import logging
+                logging.getLogger("nura.services.report").error(f"Failed to dispatch ReportUploadedEvent: {e}")
+
+        return report_obj
 
     async def get_report_by_id(self, report_id: str) -> Optional[ReportInDB]:
         """Fetch a report by its ID"""
@@ -121,7 +149,23 @@ class ReportService(BaseService[ReportInDB, ReportCreate, ReportUpdate]):
     ) -> Optional[ReportInDB]:
         """Update an existing report record"""
         update = ReportUpdate(**schema.model_dump(exclude_unset=True))
-        return await self.report_repository.update(report_id, update)
+        updated_report = await self.report_repository.update(report_id, update)
+        
+        # Dispatch event on status transition or update
+        if updated_report and self.event_dispatcher:
+            try:
+                from app.events.base import ReportUploadedEvent
+                event = ReportUploadedEvent(
+                    patient_id=updated_report.patient_id,
+                    report_id=updated_report.id,
+                    uploaded_by=updated_report.uploaded_by
+                )
+                await self.event_dispatcher.dispatch(event)
+            except Exception as e:
+                import logging
+                logging.getLogger("nura.services.report").error(f"Failed to dispatch ReportUploadedEvent on update: {e}")
+                
+        return updated_report
 
     async def delete_report(self, report_id: str) -> bool:
         """Permanently delete a report record"""

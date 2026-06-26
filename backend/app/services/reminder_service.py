@@ -51,10 +51,21 @@ class ReminderService(BaseService[ReminderInDB, ReminderCreate, ReminderUpdate])
         self,
         reminder_repository: ReminderRepository,
         user_repository: UserRepository,
+        event_dispatcher = None,
     ):
         super().__init__()
         self.reminder_repository = reminder_repository
         self.user_repository = user_repository
+        
+        # Lazy load or use injected event dispatcher to prevent circular imports
+        if event_dispatcher is None:
+            try:
+                from app.core.dependencies import get_event_dispatcher
+                self.event_dispatcher = get_event_dispatcher()
+            except ImportError:
+                self.event_dispatcher = None
+        else:
+            self.event_dispatcher = event_dispatcher
 
     async def create_reminder(
         self,
@@ -87,7 +98,23 @@ class ReminderService(BaseService[ReminderInDB, ReminderCreate, ReminderUpdate])
         created = await self.reminder_repository.collection.find_one({"_id": result.inserted_id})
         if created is None:
             raise RuntimeError("Reminder was inserted but could not be retrieved")
-        return ReminderInDB.from_mongo(created)
+            
+        reminder_obj = ReminderInDB.from_mongo(created)
+        
+        # Dispatch event
+        if self.event_dispatcher:
+            try:
+                from app.events.base import ReminderCreatedEvent
+                event = ReminderCreatedEvent(
+                    patient_id=reminder_obj.patient_id,
+                    reminder_id=reminder_obj.id
+                )
+                await self.event_dispatcher.dispatch(event)
+            except Exception as e:
+                import logging
+                logging.getLogger("nura.services.reminder").error(f"Failed to dispatch ReminderCreatedEvent: {e}")
+
+        return reminder_obj
 
     async def get_reminder_by_id(self, reminder_id: str) -> Optional[ReminderInDB]:
         """Fetch a reminder by its ID"""
@@ -122,7 +149,22 @@ class ReminderService(BaseService[ReminderInDB, ReminderCreate, ReminderUpdate])
     ) -> Optional[ReminderInDB]:
         """Update an existing reminder record"""
         update = ReminderUpdate(**schema.model_dump(exclude_unset=True))
-        return await self.reminder_repository.update(reminder_id, update)
+        updated_reminder = await self.reminder_repository.update(reminder_id, update)
+        
+        # Dispatch event
+        if updated_reminder and self.event_dispatcher:
+            try:
+                from app.events.base import ReminderUpdatedEvent
+                event = ReminderUpdatedEvent(
+                    patient_id=updated_reminder.patient_id,
+                    reminder_id=updated_reminder.id
+                )
+                await self.event_dispatcher.dispatch(event)
+            except Exception as e:
+                import logging
+                logging.getLogger("nura.services.reminder").error(f"Failed to dispatch ReminderUpdatedEvent: {e}")
+                
+        return updated_reminder
 
     async def delete_reminder(self, reminder_id: str) -> bool:
         """Permanently delete a reminder record"""

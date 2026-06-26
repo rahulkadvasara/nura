@@ -54,7 +54,36 @@ async def lifespan(app: FastAPI):
         # MongoDB not connected (e.g. dev without DB) — skip index setup
         pass
     
+    # Initialize background EventQueue and register handlers
+    try:
+        from app.core.dependencies import get_event_queue, get_event_dispatcher, get_memory_sync_service
+        event_queue = get_event_queue()
+        event_dispatcher = get_event_dispatcher()
+        memory_sync_service = get_memory_sync_service()
+        
+        event_queue.set_sync_service(memory_sync_service)
+        event_queue.start()
+        
+        # Wildcard event handler to route all events to background EventQueue
+        async def background_queue_pusher(event):
+            event_queue.push(event)
+            
+        event_dispatcher.register_handler("*", background_queue_pusher)
+        
+    except Exception as e:
+        import logging
+        logging.getLogger("nura.main").error(f"Failed to start EventQueue background worker: {e}")
+
     yield
+    
+    # Shutdown background EventQueue worker
+    try:
+        from app.core.dependencies import get_event_queue
+        event_queue = get_event_queue()
+        await event_queue.stop()
+    except Exception as e:
+        import logging
+        logging.getLogger("nura.main").error(f"Failed to stop EventQueue background worker: {e}")
     
     # Shutdown
     await close_mongodb_connection()

@@ -48,10 +48,21 @@ class ConsultationService(BaseService[ConsultationInDB, ConsultationCreate, Cons
         self,
         consultation_repository: ConsultationRepository,
         appointment_repository: AppointmentRepository,
+        event_dispatcher = None,
     ):
         super().__init__()
         self.consultation_repository = consultation_repository
         self.appointment_repository = appointment_repository
+        
+        # Lazy load or use injected event dispatcher to prevent circular imports
+        if event_dispatcher is None:
+            try:
+                from app.core.dependencies import get_event_dispatcher
+                self.event_dispatcher = get_event_dispatcher()
+            except ImportError:
+                self.event_dispatcher = None
+        else:
+            self.event_dispatcher = event_dispatcher
 
     async def create_consultation(
         self,
@@ -83,7 +94,25 @@ class ConsultationService(BaseService[ConsultationInDB, ConsultationCreate, Cons
         created = await self.consultation_repository.collection.find_one({"_id": result.inserted_id})
         if created is None:
             raise RuntimeError("Consultation was inserted but could not be retrieved")
-        return ConsultationInDB.from_mongo(created)
+            
+        consult_obj = ConsultationInDB.from_mongo(created)
+        
+        # Dispatch event
+        if self.event_dispatcher:
+            try:
+                from app.events.base import ConsultationCompletedEvent
+                event = ConsultationCompletedEvent(
+                    patient_id=consult_obj.patient_id,
+                    consultation_id=consult_obj.id,
+                    doctor_id=consult_obj.doctor_id,
+                    appointment_id=consult_obj.appointment_id
+                )
+                await self.event_dispatcher.dispatch(event)
+            except Exception as e:
+                import logging
+                logging.getLogger("nura.services.consultation").error(f"Failed to dispatch ConsultationCompletedEvent: {e}")
+
+        return consult_obj
 
     async def get_consultation_by_id(self, consultation_id: str) -> Optional[ConsultationInDB]:
         """Fetch consultation by its ID"""
@@ -122,7 +151,27 @@ class ConsultationService(BaseService[ConsultationInDB, ConsultationCreate, Cons
     ) -> Optional[ConsultationInDB]:
         """Update an existing consultation"""
         update = ConsultationUpdate(**schema.model_dump(exclude_unset=True))
-        return await self.consultation_repository.update(consultation_id, update)
+        updated_consult = await self.consultation_repository.update(consultation_id, update)
+        
+        # Dispatch event if notes updated
+        if updated_consult and self.event_dispatcher and schema.consultation_notes is not None:
+            try:
+                from app.events.base import DoctorNotesUpdatedEvent
+                event = DoctorNotesUpdatedEvent(
+                    patient_id=updated_consult.patient_id,
+                    consultation_id=updated_consult.id,
+                    doctor_id=updated_consult.doctor_id
+                )
+                await self.event_dispatcher.dispatch(event)
+            except Exception as e:
+                import logging
+                logging.getLogger("nura.services.consultation").error(f"Failed to dispatch DoctorNotesUpdatedEvent: {e}")
+                
+        return updated_consult
+
+    async def delete_consultation(self, consultation_id: str) -> bool:
+        """Permanently delete a consultation"""
+        return await self.consultation_repository.delete(consultation_id)
 
     async def delete_consultation(self, consultation_id: str) -> bool:
         """Permanently delete a consultation"""

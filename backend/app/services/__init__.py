@@ -47,6 +47,8 @@ from app.services.document_indexing_service import DocumentIndexingService, get_
 from app.services.retrieval_service import RetrievalService, get_retrieval_service
 from app.services.context_assembly_service import ContextAssemblyService, get_context_assembly_service
 from app.services.intent_detection_service import IntentDetectionService, get_intent_detection_service
+from app.services.patient_summary_builder import PatientSummaryBuilder
+from app.services.memory_sync_service import MemorySyncService
 
 
 __all__ = [
@@ -79,8 +81,8 @@ __all__ = [
     "NotificationService",
 
     # Chat session and message services
-    "ChatSessionService",
     "ChatMessageService",
+    "ChatSessionService",
 
     # Payment and doctor wallet services
     "PaymentService",
@@ -128,4 +130,8 @@ __all__ = [
     "get_context_assembly_service",
     "IntentDetectionService",
     "get_intent_detection_service",
+    
+    # Synchronization pipeline services
+    "PatientSummaryBuilder",
+    "MemorySyncService",
 ]

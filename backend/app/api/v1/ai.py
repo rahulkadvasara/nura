@@ -22,7 +22,9 @@ from app.core.dependencies import (
     get_retrieval_service,
     get_context_assembly_service,
     get_retrieval_agent,
-    get_intent_detection_service
+    get_intent_detection_service,
+    get_event_queue,
+    get_memory_sync_service,
 )
 from app.models import UserRole, UserInDB
 from app.schemas.ai import (
@@ -38,11 +40,15 @@ from app.schemas.ai import (
     BatchDocumentIndexRequest,
     BatchDocumentIndexResponse,
     IndexingStatisticsResponse,
-    IndexDeletionResponse
+    IndexDeletionResponse,
+    SyncStatusResponse,
+    SyncPatientResponse,
+    SyncRebuildResponse,
+    SyncStatisticsResponse,
 )
 from app.schemas.retrieval import RetrievalRequest, RetrievalResponse, RetrievalStatisticsResponse, RetrievalPackage, RetrievalAgentStatisticsResponse
 from app.schemas.context_assembly import ContextAssemblyRequest, ContextAssemblyResponse, ContextAssemblyStatisticsResponse
-from app.utils.ai import retrieval_metrics, context_assembly_metrics, retrieval_agent_metrics
+from app.utils.ai import retrieval_metrics, context_assembly_metrics, retrieval_agent_metrics, memory_sync_metrics
 from app.services.ai_orchestrator import AIOrchestrator
 from app.agents import RetrievalAgent
 from app.schemas.embedding import EmbeddingHealthResponse, EmbeddingTestRequest, EmbeddingTestResponse
@@ -873,6 +879,91 @@ async def get_retrieval_statistics(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch retrieval statistics: {str(e)}"
         )
+
+
+@router.get(
+    "/sync/status",
+    response_model=SyncStatusResponse,
+    summary="Get patient memory synchronization queue status",
+    description="Returns active status, queue size, and dead-letter queue failure counts. Guarded: Admin Only.",
+)
+async def get_sync_status(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    event_queue = Depends(get_event_queue),
+) -> SyncStatusResponse:
+    try:
+        dlq_jobs = await event_queue.get_dlq_jobs()
+        return SyncStatusResponse(
+            running=event_queue._running,
+            queue_size=event_queue.qsize(),
+            dlq_count=len(dlq_jobs)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch sync status: {str(e)}"
+        )
+
+
+@router.post(
+    "/sync/patient/{patient_id}",
+    response_model=SyncPatientResponse,
+    summary="Manually trigger synchronization for a patient",
+    description="Runs immediate longitudinal recalculation and indexes to MongoDB and Qdrant. Guarded: Admin Only.",
+)
+async def sync_patient(
+    patient_id: str,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    memory_sync_service = Depends(get_memory_sync_service),
+) -> SyncPatientResponse:
+    try:
+        res = await memory_sync_service.sync_patient(patient_id)
+        return SyncPatientResponse(**res)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Patient synchronization failed: {str(e)}"
+        )
+
+
+@router.post(
+    "/sync/rebuild",
+    response_model=SyncRebuildResponse,
+    summary="Manually trigger synchronization rebuild for all patients",
+    description="Enqueues background synchronization rebuild jobs for all active patients. Guarded: Admin Only.",
+)
+async def rebuild_sync(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    memory_sync_service = Depends(get_memory_sync_service),
+) -> SyncRebuildResponse:
+    try:
+        res = await memory_sync_service.sync_all_patients()
+        return SyncRebuildResponse(**res)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to trigger sync rebuild: {str(e)}"
+        )
+
+
+@router.get(
+    "/sync/statistics",
+    response_model=SyncStatisticsResponse,
+    summary="Get patient memory synchronization telemetry statistics",
+    description="Returns telemetry metrics, counts, latency averages, and skip ratios for sync pipeline. Guarded: Admin Only.",
+)
+async def get_sync_statistics(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+) -> SyncStatisticsResponse:
+    try:
+        stats = memory_sync_metrics.get_metrics()
+        return SyncStatisticsResponse(**stats)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch sync statistics: {str(e)}"
+        )
+
 
 
 

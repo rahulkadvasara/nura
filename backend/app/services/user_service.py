@@ -41,9 +41,19 @@ _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 class UserService(BaseService[UserInDB, UserCreate, UserUpdate]):
     """User service — owns all password hashing and user lifecycle logic."""
 
-    def __init__(self, user_repository: UserRepository):
+    def __init__(self, user_repository: UserRepository, event_dispatcher = None):
         super().__init__()
         self.user_repository = user_repository
+        
+        # Lazy load or use injected event dispatcher to prevent circular imports
+        if event_dispatcher is None:
+            try:
+                from app.core.dependencies import get_event_dispatcher
+                self.event_dispatcher = get_event_dispatcher()
+            except ImportError:
+                self.event_dispatcher = None
+        else:
+            self.event_dispatcher = event_dispatcher
 
     # ------------------------------------------------------------------
     # Password helpers
@@ -96,7 +106,17 @@ class UserService(BaseService[UserInDB, UserCreate, UserUpdate]):
         return await self.user_repository.get_by_email(email)
 
     async def update_user(self, user_id: str, user_update: UserUpdate) -> Optional[UserInDB]:
-        return await self.user_repository.update(user_id, user_update)
+        updated = await self.user_repository.update(user_id, user_update)
+        if updated and updated.role == UserRole.PATIENT:
+            if self.event_dispatcher:
+                try:
+                    from app.events.base import PatientProfileUpdatedEvent, MedicalHistoryUpdatedEvent
+                    await self.event_dispatcher.dispatch(PatientProfileUpdatedEvent(patient_id=user_id))
+                    await self.event_dispatcher.dispatch(MedicalHistoryUpdatedEvent(patient_id=user_id))
+                except Exception as e:
+                    import logging
+                    logging.getLogger("nura.services.user").error(f"Failed to dispatch profile update events: {e}")
+        return updated
 
     async def verify_user_email(self, user_id: str) -> Optional[UserInDB]:
         return await self.user_repository.verify_email(user_id)

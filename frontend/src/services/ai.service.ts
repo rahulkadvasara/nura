@@ -264,6 +264,26 @@ export const aiService = {
   getContextAssemblyStatistics: async (): Promise<ContextAssemblyStatisticsResponse> => {
     const response = await apiClient.get<ContextAssemblyStatisticsResponse>('/ai/context/statistics')
     return response.data
+  },
+
+  getSyncStatus: async (): Promise<SyncStatusResponse> => {
+    const response = await apiClient.get<SyncStatusResponse>('/ai/sync/status')
+    return response.data
+  },
+
+  syncPatient: async (patientId: string): Promise<SyncPatientResponse> => {
+    const response = await apiClient.post<SyncPatientResponse>(`/ai/sync/patient/${patientId}`)
+    return response.data
+  },
+
+  rebuildSync: async (): Promise<SyncRebuildResponse> => {
+    const response = await apiClient.post<SyncRebuildResponse>('/ai/sync/rebuild')
+    return response.data
+  },
+
+  getSyncStatistics: async (): Promise<SyncStatisticsResponse> => {
+    const response = await apiClient.get<SyncStatisticsResponse>('/ai/sync/statistics')
+    return response.data
   }
 }
 
@@ -460,6 +480,38 @@ export interface ContextAssemblyStatisticsResponse {
   total_original_chunks: number
   total_removed_chunks: number
   section_counts: Record<string, number>
+}
+
+export interface SyncStatusResponse {
+  running: boolean
+  queue_size: number
+  dlq_count: number
+}
+
+export interface SyncPatientResponse {
+  success: boolean
+  patient_id: string
+  rebuilt_mongodb: boolean
+  regenerated_qdrant: boolean
+  summary_version: number
+  latency_ms: number
+}
+
+export interface SyncRebuildResponse {
+  success: boolean
+  triggered_count: number
+  patient_ids: string[]
+}
+
+export interface SyncStatisticsResponse {
+  sync_count: number
+  failures: number
+  retries: number
+  dead_letters: number
+  avg_latency_ms: number
+  rebuilt_summaries: number
+  vectors_regenerated: number
+  vectors_skipped: number
 }
 
 

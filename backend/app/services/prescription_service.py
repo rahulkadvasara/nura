@@ -60,10 +60,21 @@ class PrescriptionService(BaseService[PrescriptionInDB, PrescriptionCreate, Pres
         self,
         prescription_repository: PrescriptionRepository,
         consultation_repository: ConsultationRepository,
+        event_dispatcher = None,
     ):
         super().__init__()
         self.prescription_repository = prescription_repository
         self.consultation_repository = consultation_repository
+        
+        # Lazy load or use injected event dispatcher to prevent circular imports
+        if event_dispatcher is None:
+            try:
+                from app.core.dependencies import get_event_dispatcher
+                self.event_dispatcher = get_event_dispatcher()
+            except ImportError:
+                self.event_dispatcher = None
+        else:
+            self.event_dispatcher = event_dispatcher
 
     async def create_prescription(
         self,
@@ -157,6 +168,20 @@ class PrescriptionService(BaseService[PrescriptionInDB, PrescriptionCreate, Pres
             await audit_log_service.create_log(audit_schema)
         except Exception:
             pass
+
+        # Dispatch event
+        if self.event_dispatcher:
+            try:
+                from app.events.base import PrescriptionCreatedEvent
+                event = PrescriptionCreatedEvent(
+                    patient_id=prescription.patient_id,
+                    prescription_id=prescription.id,
+                    doctor_id=prescription.doctor_id
+                )
+                await self.event_dispatcher.dispatch(event)
+            except Exception as e:
+                import logging
+                logging.getLogger("nura.services.prescription").error(f"Failed to dispatch PrescriptionCreatedEvent: {e}")
 
         return prescription
 
@@ -264,6 +289,20 @@ class PrescriptionService(BaseService[PrescriptionInDB, PrescriptionCreate, Pres
             await audit_log_service.create_log(audit_schema)
         except Exception:
             pass
+
+        # Dispatch event
+        if updated and self.event_dispatcher:
+            try:
+                from app.events.base import PrescriptionUpdatedEvent
+                event = PrescriptionUpdatedEvent(
+                    patient_id=updated.patient_id,
+                    prescription_id=updated.id,
+                    doctor_id=updated.doctor_id
+                )
+                await self.event_dispatcher.dispatch(event)
+            except Exception as e:
+                import logging
+                logging.getLogger("nura.services.prescription").error(f"Failed to dispatch PrescriptionUpdatedEvent: {e}")
 
         return updated
 
