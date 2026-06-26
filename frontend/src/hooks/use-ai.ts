@@ -1,4 +1,4 @@
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { 
   aiService, 
   AIHealthResponse, 
@@ -11,7 +11,13 @@ import {
   PatientContextResponse,
   AIPlaygroundHealthResponse,
   AIPlaygroundChatResponse,
-  AIPlaygroundChatRequest
+  AIPlaygroundChatRequest,
+  DocumentIndexRequest,
+  DocumentIndexResponse,
+  BatchDocumentIndexRequest,
+  BatchDocumentIndexResponse,
+  IndexingStatisticsResponse,
+  IndexDeletionResponse
 } from '@/services/ai.service'
 
 /**
@@ -129,6 +135,94 @@ export function useAIPlaygroundChat() {
   return useMutation<AIPlaygroundChatResponse, Error, AIPlaygroundChatRequest>({
     mutationFn: async (request: AIPlaygroundChatRequest) => {
       return await aiService.testAIPlaygroundChat(request)
+    }
+  })
+}
+
+/**
+ * Custom hook to fetch document indexing pipeline statistics.
+ */
+export function useIndexStatistics() {
+  return useQuery<IndexingStatisticsResponse, Error>({
+    queryKey: ['admin', 'ai', 'indexing', 'statistics'],
+    queryFn: async () => {
+      return await aiService.getIndexStatistics()
+    },
+    refetchInterval: 15000, // Refresh metrics every 15 seconds
+  })
+}
+
+/**
+ * Custom hook to trigger single document indexing.
+ */
+export function useIndexDocument() {
+  const queryClient = useQueryClient()
+  return useMutation<DocumentIndexResponse, Error, DocumentIndexRequest>({
+    mutationFn: async (request: DocumentIndexRequest) => {
+      return await aiService.indexDocument(request)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'indexing', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to trigger batch document indexing.
+ */
+export function useBatchIndexDocuments() {
+  const queryClient = useQueryClient()
+  return useMutation<BatchDocumentIndexResponse, Error, BatchDocumentIndexRequest>({
+    mutationFn: async (request: BatchDocumentIndexRequest) => {
+      return await aiService.batchIndexDocuments(request)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'indexing', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to trigger document reindexing.
+ */
+export function useReindexDocument() {
+  const queryClient = useQueryClient()
+  return useMutation<DocumentIndexResponse, Error, DocumentIndexRequest>({
+    mutationFn: async (request: DocumentIndexRequest) => {
+      return await aiService.reindexDocument(request)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'indexing', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to delete a specific document vector.
+ */
+export function useDeleteDocument() {
+  const queryClient = useQueryClient()
+  return useMutation<IndexDeletionResponse, Error, { documentId: string; documentType: string }>({
+    mutationFn: async ({ documentId, documentType }) => {
+      return await aiService.deleteDocument(documentId, documentType)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'indexing', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to delete all patient reports vectors.
+ */
+export function useDeletePatientDocuments() {
+  const queryClient = useQueryClient()
+  return useMutation<IndexDeletionResponse, Error, string>({
+    mutationFn: async (patientId: string) => {
+      return await aiService.deletePatientDocuments(patientId)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'indexing', 'statistics'] })
     }
   })
 }

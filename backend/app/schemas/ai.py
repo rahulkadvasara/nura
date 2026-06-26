@@ -79,5 +79,62 @@ class AIPlaygroundHealthResponse(BaseModel):
     context_builder: Dict[str, Any] = Field(..., description="Context compiler DB connectivity details")
 
 
+class DocumentIndexRequest(BaseModel):
+    """Request model for indexing a document"""
+    document_id: str = Field(..., description="MongoDB ID of the parent document")
+    document_type: str = Field(..., description="String category (e.g. REPORT, MEDICAL_ARTICLE, DRUG_DATASET, DOCTOR_PROFILE, CHAT_MEMORY)")
+    content: str = Field(..., min_length=1, description="Raw text content of the document")
+    chunking_strategy: Optional[str] = Field("fixed", description="Chunking strategy: fixed, paragraph, sliding_window")
+    chunk_size: Optional[int] = Field(1000, description="Chunk characters size limit")
+    overlap: Optional[int] = Field(100, description="Overlap characters size limit")
+    patient_id: Optional[str] = Field(None, description="Patient user ID link")
+    report_id: Optional[str] = Field(None, description="Report ID link")
+    page_number: Optional[int] = Field(1, description="Page number of document chunk")
+    section: Optional[str] = Field("content", description="Section label of chunk")
+    source: Optional[str] = Field("mongodb", description="Source system identifier")
+    language: Optional[str] = Field("en", description="Locale language label")
+    created_by: Optional[str] = Field("system", description="Identifier of creation agent")
+
+
+class DocumentIndexResponse(BaseModel):
+    """Response model representing indexing outcome of a document"""
+    success: bool = Field(..., description="Indicates if indexing was successful or skipped")
+    document_id: str = Field(..., description="The ID of the indexed document")
+    status: str = Field(..., description="The outcome status: 'indexed', 'skipped', or 'failed'")
+    chunks_count: int = Field(..., description="Number of chunks successfully indexed in Qdrant")
+    skipped_count: Optional[int] = Field(0, description="Number of chunks skipped due to duplicates")
+    latency_ms: Optional[float] = Field(0.0, description="Processing duration in milliseconds")
+    message: Optional[str] = Field(None, description="Detailed explanation of the outcome")
+    error: Optional[str] = Field(None, description="Error message if status is 'failed'")
+
+
+class BatchDocumentIndexRequest(BaseModel):
+    """Request model for indexing multiple documents in a batch"""
+    documents: List[DocumentIndexRequest] = Field(..., description="List of documents to index")
+
+
+class BatchDocumentIndexResponse(BaseModel):
+    """Response model containing batch outcomes"""
+    results: List[DocumentIndexResponse] = Field(..., description="Outcomes for all documents processed in batch")
+
+
+class IndexingStatisticsResponse(BaseModel):
+    """Response model containing metrics of the indexing pipeline"""
+    indexed_documents: int = Field(..., description="Total count of successfully indexed documents")
+    indexed_chunks: int = Field(..., description="Total count of vectorized chunks in vector store")
+    duplicate_documents_skipped: int = Field(..., description="Count of duplicate documents skipped")
+    avg_chunk_size: float = Field(..., description="Average character count of generated text chunks")
+    embedding_version: str = Field(..., description="Currently active embedding model configuration version")
+    index_version: int = Field(..., description="Currently active vector index structure version")
+    schema_version: int = Field(..., description="Currently active collection database schema layout version")
+
+
+class IndexDeletionResponse(BaseModel):
+    """Response model indicating completion of a deletion operation"""
+    success: bool = Field(..., description="Indicates if the delete operation completed successfully")
+    message: Optional[str] = Field(None, description="Detailed explanation of the outcome")
+
+
+
 
 

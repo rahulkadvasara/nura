@@ -41,6 +41,9 @@ from app.services.vector_collection_service import VectorCollectionService, get_
 from app.services.vector_service import VectorService, get_vector_service
 from app.services.patient_context_service import PatientContextService
 from app.services.ai_orchestrator import AIOrchestrator
+from app.services.index_version_service import IndexVersionService, get_index_version_service
+from app.services.document_metadata_service import DocumentMetadataService, get_document_metadata_service
+from app.services.document_indexing_service import DocumentIndexingService, get_document_indexing_service
 
 
 __all__ = [
@@ -110,4 +113,10 @@ __all__ = [
     "get_vector_service",
     "PatientContextService",
     "AIOrchestrator",
+    "IndexVersionService",
+    "get_index_version_service",
+    "DocumentMetadataService",
+    "get_document_metadata_service",
+    "DocumentIndexingService",
+    "get_document_indexing_service",
 ]

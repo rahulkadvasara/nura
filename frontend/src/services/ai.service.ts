@@ -172,6 +172,58 @@ export const aiService = {
   testAIPlaygroundChat: async (request: AIPlaygroundChatRequest): Promise<AIPlaygroundChatResponse> => {
     const response = await apiClient.post<AIPlaygroundChatResponse>('/ai/playground/chat', request)
     return response.data
+  },
+
+  /**
+   * Index a single document. Admin accounts only.
+   */
+  indexDocument: async (request: DocumentIndexRequest): Promise<DocumentIndexResponse> => {
+    const response = await apiClient.post<DocumentIndexResponse>('/ai/index', request)
+    return response.data
+  },
+
+  /**
+   * Index multiple documents in a batch. Admin accounts only.
+   */
+  batchIndexDocuments: async (request: BatchDocumentIndexRequest): Promise<BatchDocumentIndexResponse> => {
+    const response = await apiClient.post<BatchDocumentIndexResponse>('/ai/batch-index', request)
+    return response.data
+  },
+
+  /**
+   * Reindex an existing document. Admin accounts only.
+   */
+  reindexDocument: async (request: DocumentIndexRequest): Promise<DocumentIndexResponse> => {
+    const response = await apiClient.post<DocumentIndexResponse>('/ai/reindex', request)
+    return response.data
+  },
+
+  /**
+   * Remove a specific document from vector space. Admin accounts only.
+   */
+  deleteDocument: async (documentId: string, documentType: string): Promise<IndexDeletionResponse> => {
+    const response = await apiClient.delete<IndexDeletionResponse>('/ai/document', {
+      params: { document_id: documentId, document_type: documentType }
+    })
+    return response.data
+  },
+
+  /**
+   * Remove all vectors for patient reports matching patient ID. Admin accounts only.
+   */
+  deletePatientDocuments: async (patientId: string): Promise<IndexDeletionResponse> => {
+    const response = await apiClient.delete<IndexDeletionResponse>('/ai/patient', {
+      params: { patient_id: patientId }
+    })
+    return response.data
+  },
+
+  /**
+   * Retrieves overall document indexing statistics and model versions. Admin accounts only.
+   */
+  getIndexStatistics: async (): Promise<IndexingStatisticsResponse> => {
+    const response = await apiClient.get<IndexingStatisticsResponse>('/ai/index/statistics')
+    return response.data
   }
 }
 
@@ -211,4 +263,55 @@ export interface AIPlaygroundHealthResponse {
   prompt_registry: Record<string, any>
   context_builder: Record<string, any>
 }
+
+export interface DocumentIndexRequest {
+  document_id: string
+  document_type: string
+  content: string
+  chunking_strategy?: string
+  chunk_size?: number
+  overlap?: number
+  patient_id?: string
+  report_id?: string
+  page_number?: number
+  section?: string
+  source?: string
+  language?: string
+  created_by?: string
+}
+
+export interface DocumentIndexResponse {
+  success: boolean
+  document_id: string
+  status: string
+  chunks_count: number
+  skipped_count?: number
+  latency_ms?: number
+  message?: string
+  error?: string
+}
+
+export interface BatchDocumentIndexRequest {
+  documents: DocumentIndexRequest[]
+}
+
+export interface BatchDocumentIndexResponse {
+  results: DocumentIndexResponse[]
+}
+
+export interface IndexingStatisticsResponse {
+  indexed_documents: number
+  indexed_chunks: number
+  duplicate_documents_skipped: number
+  avg_chunk_size: number
+  embedding_version: string
+  index_version: number
+  schema_version: number
+}
+
+export interface IndexDeletionResponse {
+  success: boolean
+  message?: string
+}
+
 

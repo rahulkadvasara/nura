@@ -17,7 +17,8 @@ from app.core.dependencies import (
     require_exact_patient,
     get_current_user,
     get_doctor_profile_service,
-    get_ai_orchestrator
+    get_ai_orchestrator,
+    get_document_indexing_service
 )
 from app.models import UserRole, UserInDB
 from app.schemas.ai import (
@@ -27,7 +28,13 @@ from app.schemas.ai import (
     TokenUsage,
     AIPlaygroundChatRequest,
     AIPlaygroundChatResponse,
-    AIPlaygroundHealthResponse
+    AIPlaygroundHealthResponse,
+    DocumentIndexRequest,
+    DocumentIndexResponse,
+    BatchDocumentIndexRequest,
+    BatchDocumentIndexResponse,
+    IndexingStatisticsResponse,
+    IndexDeletionResponse
 )
 from app.services.ai_orchestrator import AIOrchestrator
 from app.schemas.embedding import EmbeddingHealthResponse, EmbeddingTestRequest, EmbeddingTestResponse
@@ -45,6 +52,7 @@ from app.services.embedding_service import EmbeddingService
 from app.services.vector_collection_service import VectorCollectionService
 from app.services.vector_service import VectorService
 from app.services.patient_context_service import PatientContextService
+from app.services.document_indexing_service import DocumentIndexingService
 
 router = APIRouter()
 
@@ -477,4 +485,139 @@ async def playground_health(
     """Consolidated status ping checks for AI playground panel"""
     health_results = await orchestrator.health_check()
     return AIPlaygroundHealthResponse(**health_results)
+
+
+@router.post(
+    "/index",
+    response_model=DocumentIndexResponse,
+    summary="Index a single document",
+    description="Chunks a document, computes embeddings, and records in Qdrant with standardized metadata. Guarded: Admin Only.",
+)
+async def index_document(
+    request_data: DocumentIndexRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    indexing_service: DocumentIndexingService = Depends(get_document_indexing_service)
+) -> DocumentIndexResponse:
+    try:
+        res = await indexing_service.index_document(request_data.model_dump())
+        return DocumentIndexResponse(**res)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to index document: {str(e)}"
+        )
+
+
+@router.post(
+    "/batch-index",
+    response_model=BatchDocumentIndexResponse,
+    summary="Index multiple documents in a batch",
+    description="Runs async document vectorization in parallel. Returns individual document outcomes. Guarded: Admin Only.",
+)
+async def batch_index_documents(
+    request_data: BatchDocumentIndexRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    indexing_service: DocumentIndexingService = Depends(get_document_indexing_service)
+) -> BatchDocumentIndexResponse:
+    try:
+        doc_payloads = [doc.model_dump() for doc in request_data.documents]
+        res = await indexing_service.index_documents(doc_payloads)
+        return BatchDocumentIndexResponse(
+            results=[DocumentIndexResponse(**item) for item in res]
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to execute batch document indexing: {str(e)}"
+        )
+
+
+@router.post(
+    "/reindex",
+    response_model=DocumentIndexResponse,
+    summary="Reindex a document",
+    description="Deletes existing document chunks and re-runs the indexing process. Guarded: Admin Only.",
+)
+async def reindex_document(
+    request_data: DocumentIndexRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    indexing_service: DocumentIndexingService = Depends(get_document_indexing_service)
+) -> DocumentIndexResponse:
+    try:
+        res = await indexing_service.reindex_document(request_data.model_dump())
+        return DocumentIndexResponse(**res)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reindex document: {str(e)}"
+        )
+
+
+@router.delete(
+    "/document",
+    response_model=IndexDeletionResponse,
+    summary="Remove a document from vector space",
+    description="Removes all vector chunks belonging to the specified document ID from Qdrant. Guarded: Admin Only.",
+)
+async def delete_document(
+    document_id: str,
+    document_type: str,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    indexing_service: DocumentIndexingService = Depends(get_document_indexing_service)
+) -> IndexDeletionResponse:
+    try:
+        success = await indexing_service.delete_document(document_id, document_type)
+        return IndexDeletionResponse(
+            success=success,
+            message=f"Document '{document_id}' successfully removed from vector collection" if success else f"Document '{document_id}' not found or deletion failed"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete document from vector space: {str(e)}"
+        )
+
+
+@router.delete(
+    "/patient",
+    response_model=IndexDeletionResponse,
+    summary="Remove patient documents from vector space",
+    description="Removes all report vector chunks matching the patient ID. Guarded: Admin Only.",
+)
+async def delete_patient_documents(
+    patient_id: str,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    indexing_service: DocumentIndexingService = Depends(get_document_indexing_service)
+) -> IndexDeletionResponse:
+    try:
+        success = await indexing_service.delete_patient_documents(patient_id)
+        return IndexDeletionResponse(
+            success=success,
+            message=f"All vector chunks for patient '{patient_id}' reports deleted successfully" if success else "No records deleted or operation failed"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete patient vectors: {str(e)}"
+        )
+
+
+@router.get(
+    "/index/statistics",
+    response_model=IndexingStatisticsResponse,
+    summary="Get indexing pipeline statistics",
+    description="Returns aggregated indexing counts, duplicates skipped, and configuration versions. Guarded: Admin Only.",
+)
+async def get_indexing_statistics(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    indexing_service: DocumentIndexingService = Depends(get_document_indexing_service)
+) -> IndexingStatisticsResponse:
+    try:
+        stats = indexing_service.compute_statistics()
+        return IndexingStatisticsResponse(**stats)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to compute indexing statistics: {str(e)}"
+        )
 

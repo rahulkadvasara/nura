@@ -16,7 +16,13 @@ import {
   useVectorTest,
   usePatientContext,
   useAIPlaygroundHealth,
-  useAIPlaygroundChat
+  useAIPlaygroundChat,
+  useIndexStatistics,
+  useIndexDocument,
+  useBatchIndexDocuments,
+  useReindexDocument,
+  useDeleteDocument,
+  useDeletePatientDocuments
 } from '@/hooks/use-ai'
 import { 
   Sparkles, 
@@ -36,7 +42,9 @@ import {
   Users,
   Search,
   Sliders,
-  Settings
+  Settings,
+  Trash2,
+  Layers
 } from 'lucide-react'
 
 
@@ -2209,8 +2217,765 @@ function IntegrationPlaygroundView() {
   )
 }
 
+function IndexingHealthBadge() {
+  const { 
+    data: stats, 
+    isLoading, 
+    isError, 
+    refetch 
+  } = useIndexStatistics()
+
+  return (
+    <Card className="shadow-sm border-slate-200 bg-white px-4 py-2 flex items-center gap-3">
+      <div className="flex flex-col">
+        <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Indexing Pipeline</span>
+        {isLoading ? (
+          <span className="text-sm font-medium text-slate-500 flex items-center gap-1.5 mt-0.5">
+            <RefreshCw className="h-3 w-3 animate-spin" />
+            Loading...
+          </span>
+        ) : isError ? (
+          <span className="text-sm font-medium text-red-500 flex items-center gap-1.5 mt-0.5">
+            <AlertTriangle className="h-4 w-4" />
+            Error Loading Stats
+          </span>
+        ) : (
+          <span className="text-sm font-medium text-teal-600 flex items-center gap-1.5 mt-0.5">
+            <CheckCircle2 className="h-4 w-4 text-teal-500" />
+            Active ({stats?.embedding_version || 'v1'})
+          </span>
+        )}
+      </div>
+      <Button 
+        variant="ghost" 
+        size="icon" 
+        onClick={() => refetch()} 
+        disabled={isLoading}
+        className="h-8 w-8 text-slate-400 hover:text-slate-600"
+      >
+        <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+      </Button>
+    </Card>
+  )
+}
+
+function IndexingPlaygroundView() {
+  const { data: stats, isLoading: isStatsLoading, refetch: refetchStats } = useIndexStatistics()
+  
+  const indexDocMutation = useIndexDocument()
+  const reindexDocMutation = useReindexDocument()
+  const batchIndexDocMutation = useBatchIndexDocuments()
+  const deleteDocMutation = useDeleteDocument()
+  const deletePatientMutation = useDeletePatientDocuments()
+
+  // Single test console state
+  const [docId, setDocId] = useState('doc_test_' + Math.floor(Math.random() * 10000))
+  const [docType, setDocType] = useState('REPORT')
+  const [content, setContent] = useState('Patient displays high blood pressure of 145/95 mmHg. Recommended regular exercise and sodium-restricted diet.')
+  const [strategy, setStrategy] = useState('fixed')
+  const [chunkSize, setChunkSize] = useState(200)
+  const [overlap, setOverlap] = useState(20)
+  const [patientId, setPatientId] = useState('pat_123')
+  const [reportId, setReportId] = useState('rep_456')
+  const [pageNumber, setPageNumber] = useState(1)
+  const [section, setSection] = useState('diagnosis')
+  const [source, setSource] = useState('mongodb')
+  const [language, setLanguage] = useState('en')
+  
+  const [singleResult, setSingleResult] = useState<any>(null)
+  const [isReindexing, setIsReindexing] = useState(false)
+
+  // Batch simulator state
+  const [batchRawText, setBatchRawText] = useState(
+    JSON.stringify([
+      {
+        document_id: "batch_doc_1",
+        document_type: "REPORT",
+        content: "Patient diagnosed with stage 1 chronic kidney disease. Plan to review serum creatinine in 3 months.",
+        patient_id: "pat_789",
+        report_id: "rep_001"
+      },
+      {
+        document_id: "batch_doc_2",
+        document_type: "MEDICAL_ARTICLE",
+        content: "Metformin remains the primary first-line pharmacotherapeutic agent for type 2 diabetes mellitus mellitus care.",
+        section: "introduction"
+      }
+    ], null, 2)
+  )
+  const [batchResult, setBatchResult] = useState<any>(null)
+  const [batchError, setBatchError] = useState<string | null>(null)
+
+  // Deletion tool state
+  const [delDocId, setDelDocId] = useState('')
+  const [delDocType, setDelDocType] = useState('REPORT')
+  const [delPatientId, setDelPatientId] = useState('')
+  const [deletionResult, setDeletionResult] = useState<string | null>(null)
+
+  // single index submit handler
+  const handleSingleIndexSubmit = async (e: React.FormEvent, reindex = false) => {
+    e.preventDefault()
+    if (!docId.trim() || !content.trim()) return
+
+    setSingleResult(null)
+    const payload = {
+      document_id: docId,
+      document_type: docType,
+      content: content,
+      chunking_strategy: strategy,
+      chunk_size: chunkSize,
+      overlap: overlap,
+      patient_id: patientId || undefined,
+      report_id: reportId || undefined,
+      page_number: pageNumber,
+      section: section || undefined,
+      source: source || undefined,
+      language: language || undefined,
+      created_by: 'admin_playground'
+    }
+
+    try {
+      let res
+      if (reindex) {
+        setIsReindexing(true)
+        res = await reindexDocMutation.mutateAsync(payload)
+      } else {
+        setIsReindexing(false)
+        res = await indexDocMutation.mutateAsync(payload)
+      }
+      setSingleResult(res)
+      refetchStats()
+    } catch (err: any) {
+      setSingleResult({ success: false, error: err.message || 'Indexing failed' })
+    }
+  }
+
+  // batch index submit handler
+  const handleBatchIndexSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setBatchResult(null)
+    setBatchError(null)
+    try {
+      const parsedDocs = JSON.parse(batchRawText)
+      if (!Array.isArray(parsedDocs)) {
+        throw new Error("Input must be a JSON array of document objects")
+      }
+      
+      const payload = {
+        documents: parsedDocs.map((doc: any, index: number) => ({
+          document_id: doc.document_id || `batch_doc_${index}_${Math.floor(Math.random() * 1000)}`,
+          document_type: doc.document_type || 'REPORT',
+          content: doc.content || '',
+          chunking_strategy: doc.chunking_strategy || strategy,
+          chunk_size: doc.chunk_size || chunkSize,
+          overlap: doc.overlap || overlap,
+          patient_id: doc.patient_id,
+          report_id: doc.report_id,
+          page_number: doc.page_number || 1,
+          section: doc.section || 'content',
+          source: doc.source || 'mongodb',
+          language: doc.language || 'en',
+          created_by: 'admin_playground_batch'
+        }))
+      }
+
+      const res = await batchIndexDocMutation.mutateAsync(payload)
+      setBatchResult(res)
+      refetchStats()
+    } catch (err: any) {
+      setBatchError(err.message || "Failed to process batch payload. Check JSON format validity.")
+    }
+  }
+
+  // document deletion handler
+  const handleDeleteDoc = async () => {
+    if (!delDocId.trim()) return
+    setDeletionResult(null)
+    try {
+      const res = await deleteDocMutation.mutateAsync({ documentId: delDocId, documentType: delDocType })
+      setDeletionResult(res.message || (res.success ? "Document deleted successfully" : "Deletion failed"))
+      refetchStats()
+    } catch (err: any) {
+      setDeletionResult(`Error: ${err.message || 'Deletion failed'}`)
+    }
+  }
+
+  // patient reports deletion handler
+  const handleDeletePatientDocs = async () => {
+    if (!delPatientId.trim()) return
+    setDeletionResult(null)
+    try {
+      const res = await deletePatientMutation.mutateAsync(delPatientId)
+      setDeletionResult(res.message || (res.success ? "Patient documents deleted successfully" : "Deletion failed"))
+      refetchStats()
+    } catch (err: any) {
+      setDeletionResult(`Error: ${err.message || 'Deletion failed'}`)
+    }
+  }
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-350">
+      
+      {/* 1. Statistics Cards Panel */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="border-slate-200 shadow bg-gradient-to-br from-teal-50 to-white hover:shadow-md transition-all">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Indexed Documents</p>
+              <h3 className="text-3xl font-extrabold text-teal-900 mt-1">
+                {isStatsLoading ? '...' : stats?.indexed_documents ?? 0}
+              </h3>
+              <p className="text-[10px] text-slate-400 mt-2">MongoDB documents vectorized in Qdrant</p>
+            </div>
+            <div className="p-3 rounded-full bg-teal-100 text-teal-700">
+              <FileText className="h-6 w-6" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow bg-gradient-to-br from-blue-50 to-white hover:shadow-md transition-all">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Vector Chunks Count</p>
+              <h3 className="text-3xl font-extrabold text-blue-900 mt-1">
+                {isStatsLoading ? '...' : stats?.indexed_chunks ?? 0}
+              </h3>
+              <p className="text-[10px] text-slate-400 mt-2">Total active chunks in vector storage</p>
+            </div>
+            <div className="p-3 rounded-full bg-blue-100 text-blue-700">
+              <Database className="h-6 w-6" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow bg-gradient-to-br from-amber-50 to-white hover:shadow-md transition-all">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Duplicate Skipped Chunks</p>
+              <h3 className="text-3xl font-extrabold text-amber-900 mt-1">
+                {isStatsLoading ? '...' : stats?.duplicate_documents_skipped ?? 0}
+              </h3>
+              <p className="text-[10px] text-slate-400 mt-2">Skipped using hash duplication check</p>
+            </div>
+            <div className="p-3 rounded-full bg-amber-100 text-amber-700">
+              <AlertTriangle className="h-6 w-6" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow bg-gradient-to-br from-indigo-50 to-white hover:shadow-md transition-all">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Avg Chunk Size</p>
+              <h3 className="text-2xl font-extrabold text-indigo-900 mt-1">
+                {isStatsLoading ? '...' : Math.round(stats?.avg_chunk_size ?? 0)}{' '}
+                <span className="text-xs font-semibold text-slate-500">chars</span>
+              </h3>
+              <p className="text-[10px] text-slate-400 mt-2">Average character length of indexed chunks</p>
+            </div>
+            <div className="p-3 rounded-full bg-indigo-100 text-indigo-700">
+              <Activity className="h-6 w-6" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Versioning and configuration metadata audit info */}
+      {!isStatsLoading && stats && (
+        <div className="p-3 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-600 flex flex-wrap gap-x-6 gap-y-2">
+          <div><span className="font-semibold text-slate-500">Embedding Schema:</span> {stats.embedding_version}</div>
+          <div><span className="font-semibold text-slate-500">Index Form Version:</span> v{stats.index_version}</div>
+          <div><span className="font-semibold text-slate-500">Schema Version:</span> v{stats.schema_version}</div>
+          <div className="ml-auto text-slate-400 italic">Centralized pipeline models mapping automatically loaded</div>
+        </div>
+      )}
+
+      {/* 2. Double Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Single Test Console & Batch Simulator (col-span-2) */}
+        <div className="lg:col-span-2 space-y-6">
+          
+          {/* Single Test Console */}
+          <Card className="border-slate-200 shadow-md bg-white">
+            <CardHeader className="border-b border-slate-100 bg-slate-50/50">
+              <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <Terminal className="h-4 w-4 text-slate-500" />
+                Single Document Index Console
+              </CardTitle>
+              <CardDescription>
+                Test chunking, embedding generation, hash lookup, and Qdrant ingestion for a single record.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <form className="space-y-4">
+                
+                {/* Document details grid */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label htmlFor="index-doc-id" className="text-xs font-bold text-slate-600 uppercase">Document ID</label>
+                    <input 
+                      id="index-doc-id"
+                      type="text" 
+                      value={docId} 
+                      onChange={(e) => setDocId(e.target.value)}
+                      className="w-full rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="index-doc-type" className="text-xs font-bold text-slate-600 uppercase">Document Type</label>
+                    <select 
+                      id="index-doc-type"
+                      value={docType} 
+                      onChange={(e) => setDocType(e.target.value)}
+                      className="w-full rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500"
+                    >
+                      <option value="REPORT">REPORT (patient_reports)</option>
+                      <option value="MEDICAL_ARTICLE">MEDICAL_ARTICLE (medical_knowledge)</option>
+                      <option value="DRUG_DATASET">DRUG_DATASET (drug_knowledge)</option>
+                      <option value="DOCTOR_PROFILE">DOCTOR_PROFILE (doctor_knowledge)</option>
+                      <option value="CHAT_MEMORY">CHAT_MEMORY (chat_memory)</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="index-strategy" className="text-xs font-bold text-slate-600 uppercase">Chunking Strategy</label>
+                    <select 
+                      id="index-strategy"
+                      value={strategy} 
+                      onChange={(e) => setStrategy(e.target.value)}
+                      className="w-full rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500"
+                    >
+                      <option value="fixed">Fixed Character Limit</option>
+                      <option value="paragraph">Paragraph Breaks</option>
+                      <option value="sliding_window">Sliding Window</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="space-y-1.5">
+                    <label htmlFor="index-chunk-size" className="text-xs font-bold text-slate-600 uppercase">Chunk Size</label>
+                    <input 
+                      id="index-chunk-size"
+                      type="number" 
+                      value={chunkSize} 
+                      onChange={(e) => setChunkSize(parseInt(e.target.value))}
+                      className="w-full rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="index-overlap" className="text-xs font-bold text-slate-600 uppercase">Overlap</label>
+                    <input 
+                      id="index-overlap"
+                      type="number" 
+                      value={overlap} 
+                      onChange={(e) => setOverlap(parseInt(e.target.value))}
+                      className="w-full rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="index-patient-id" className="text-xs font-bold text-slate-600 uppercase">Patient ID</label>
+                    <input 
+                      id="index-patient-id"
+                      type="text" 
+                      value={patientId} 
+                      onChange={(e) => setPatientId(e.target.value)}
+                      className="w-full rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="index-report-id" className="text-xs font-bold text-slate-600 uppercase">Report ID</label>
+                    <input 
+                      id="index-report-id"
+                      type="text" 
+                      value={reportId} 
+                      onChange={(e) => setReportId(e.target.value)}
+                      className="w-full rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="space-y-1.5">
+                    <label htmlFor="index-page" className="text-xs font-bold text-slate-600 uppercase">Page No.</label>
+                    <input 
+                      id="index-page"
+                      type="number" 
+                      value={pageNumber} 
+                      onChange={(e) => setPageNumber(parseInt(e.target.value))}
+                      className="w-full rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="index-section" className="text-xs font-bold text-slate-600 uppercase">Section</label>
+                    <input 
+                      id="index-section"
+                      type="text" 
+                      value={section} 
+                      onChange={(e) => setSection(e.target.value)}
+                      className="w-full rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="index-source" className="text-xs font-bold text-slate-600 uppercase">Source</label>
+                    <input 
+                      id="index-source"
+                      type="text" 
+                      value={source} 
+                      onChange={(e) => setSource(e.target.value)}
+                      className="w-full rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="index-lang" className="text-xs font-bold text-slate-600 uppercase">Language</label>
+                    <input 
+                      id="index-lang"
+                      type="text" 
+                      value={language} 
+                      onChange={(e) => setLanguage(e.target.value)}
+                      className="w-full rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="index-content" className="text-xs font-bold text-slate-600 uppercase">Document Content Text</label>
+                  <Textarea 
+                    id="index-content"
+                    value={content} 
+                    onChange={(e) => setContent(e.target.value)}
+                    rows={4}
+                    className="text-xs border-slate-200 resize-none font-sans"
+                    placeholder="Paste medical record text content here..."
+                  />
+                </div>
+
+                <div className="flex gap-4 justify-end pt-2">
+                  <Button
+                    type="button"
+                    onClick={(e) => handleSingleIndexSubmit(e, true)}
+                    disabled={!content.trim() || indexDocMutation.isPending || reindexDocMutation.isPending}
+                    variant="outline"
+                    className="border-slate-200 text-slate-700 font-semibold"
+                  >
+                    {reindexDocMutation.isPending && isReindexing ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Reindexing...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Reindex Document
+                      </>
+                    )}
+                  </Button>
+
+                  <Button
+                    type="button"
+                    onClick={(e) => handleSingleIndexSubmit(e, false)}
+                    disabled={!content.trim() || indexDocMutation.isPending || reindexDocMutation.isPending}
+                    className="bg-teal-600 hover:bg-teal-700 text-white font-semibold"
+                  >
+                    {indexDocMutation.isPending && !isReindexing ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Vectorizing...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="h-4 w-4 mr-2" />
+                        Index Document
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* Single Test Console Result Panel */}
+          {singleResult && (
+            <Card className="border-slate-200 shadow bg-white overflow-hidden animate-in fade-in duration-350">
+              <CardHeader className="border-b border-slate-100 bg-slate-50/50 py-3">
+                <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                  {singleResult.success ? (
+                    <CheckCircle2 className="h-4 w-4 text-teal-500" />
+                  ) : (
+                    <AlertTriangle className="h-4 w-4 text-red-500" />
+                  )}
+                  Single Document Outcome Traces
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 space-y-3 text-xs">
+                {singleResult.success ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+                    <div className="bg-slate-50 border border-slate-100 rounded p-2">
+                      <div className="font-bold text-slate-800 capitalize">{singleResult.status}</div>
+                      <div className="text-[10px] text-slate-400 uppercase">Outcome Status</div>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-100 rounded p-2">
+                      <div className="font-bold text-slate-800">{singleResult.chunks_count}</div>
+                      <div className="text-[10px] text-slate-400 uppercase">Chunks Indexed</div>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-100 rounded p-2">
+                      <div className="font-bold text-slate-800">{singleResult.skipped_count ?? 0}</div>
+                      <div className="text-[10px] text-slate-400 uppercase">Duplicate Skipped</div>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-100 rounded p-2">
+                      <div className="font-bold text-slate-800">
+                        {singleResult.latency_ms ? `${singleResult.latency_ms.toFixed(0)} ms` : 'N/A'}
+                      </div>
+                      <div className="text-[10px] text-slate-400 uppercase">Execution Time</div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-rose-50 border border-rose-100 rounded text-rose-700 font-medium">
+                    {singleResult.error}
+                  </div>
+                )}
+                {singleResult.message && (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded font-mono text-[10px] text-slate-600 whitespace-pre-wrap">
+                    {singleResult.message}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Batch Simulator Console */}
+          <Card className="border-slate-200 shadow-md bg-white">
+            <CardHeader className="border-b border-slate-100 bg-slate-50/50">
+              <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <Layers className="h-4 w-4 text-slate-500" />
+                Batch Document Indexing Simulator
+              </CardTitle>
+              <CardDescription>
+                Index multiple documents in parallel using standard settings. Provide input as a JSON array of documents.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <form onSubmit={handleBatchIndexSubmit} className="space-y-4">
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label htmlFor="batch-json" className="text-xs font-bold text-slate-600 uppercase">Batch JSON DTO List</label>
+                    <span className="text-[10px] text-slate-400">Array mapping required fields: document_id, document_type, content</span>
+                  </div>
+                  <Textarea 
+                    id="batch-json"
+                    value={batchRawText}
+                    onChange={(e) => setBatchRawText(e.target.value)}
+                    rows={8}
+                    className="font-mono text-xs border-slate-200 focus:border-teal-500"
+                  />
+                </div>
+
+                <div className="flex justify-end">
+                  <Button
+                    type="submit"
+                    disabled={!batchRawText.trim() || batchIndexDocMutation.isPending}
+                    className="bg-teal-600 hover:bg-teal-700 text-white font-semibold"
+                  >
+                    {batchIndexDocMutation.isPending ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Processing Async Batch...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="h-4 w-4 mr-2" />
+                        Execute Batch Index
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* Batch Simulator Output */}
+          {batchError && (
+            <div className="p-4 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+              {batchError}
+            </div>
+          )}
+
+          {batchResult && (
+            <Card className="border-slate-200 shadow bg-white overflow-hidden animate-in fade-in duration-350">
+              <CardHeader className="border-b border-slate-100 bg-slate-50/50 py-3">
+                <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                  <CheckCircle2 className="h-4 w-4 text-teal-500" />
+                  Batch Process Run Results ({batchResult.results?.length ?? 0} docs)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 space-y-3 text-xs">
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {batchResult.results?.map((res: any, idx: number) => (
+                    <div key={idx} className="flex justify-between items-center p-2 rounded border border-slate-100 bg-slate-50/30">
+                      <div>
+                        <span className="font-mono text-[10px] bg-slate-200 text-slate-700 px-1 rounded mr-2">{res.document_id}</span>
+                        {res.message && <span className="text-slate-500 text-[10px]">{res.message}</span>}
+                        {res.error && <span className="text-red-500 font-semibold">{res.error}</span>}
+                      </div>
+                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                        res.status === 'indexed' ? 'bg-teal-50 text-teal-700 border border-teal-100' :
+                        res.status === 'skipped' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                        'bg-red-50 text-red-700 border border-red-100'
+                      }`}>
+                        {res.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+        </div>
+
+        {/* Administration Tools and Collection Actions (col-span-1) */}
+        <div className="space-y-6">
+          
+          <Card className="border-slate-200 shadow-md bg-white">
+            <CardHeader className="border-b border-slate-100 bg-slate-50/50">
+              <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <Trash2 className="h-4 w-4 text-slate-500" />
+                Index Removal Tools
+              </CardTitle>
+              <CardDescription>
+                Perform administrative deletions of specific document vectors or patient contextual reports from the Qdrant collections.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-4">
+              
+              {/* Delete specific document */}
+              <div className="space-y-2 border-b border-slate-100 pb-4">
+                <h4 className="text-xs font-bold text-slate-700 uppercase">Document Vector Purge</h4>
+                <div className="grid grid-cols-1 gap-2">
+                  <div className="space-y-1">
+                    <label htmlFor="del-doc-id" className="text-[10px] text-slate-400 font-semibold uppercase">Document ID</label>
+                    <input 
+                      id="del-doc-id"
+                      type="text" 
+                      placeholder="e.g. report_123"
+                      value={delDocId} 
+                      onChange={(e) => setDelDocId(e.target.value)}
+                      className="w-full rounded border border-slate-200 px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor="del-doc-type" className="text-[10px] text-slate-400 font-semibold uppercase">Document Type</label>
+                    <select 
+                      id="del-doc-type"
+                      value={delDocType} 
+                      onChange={(e) => setDelDocType(e.target.value)}
+                      className="w-full rounded border border-slate-200 px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none"
+                    >
+                      <option value="REPORT">REPORT (patient_reports)</option>
+                      <option value="MEDICAL_ARTICLE">MEDICAL_ARTICLE (medical_knowledge)</option>
+                      <option value="DRUG_DATASET">DRUG_DATASET (drug_knowledge)</option>
+                      <option value="DOCTOR_PROFILE">DOCTOR_PROFILE (doctor_knowledge)</option>
+                      <option value="CHAT_MEMORY">CHAT_MEMORY (chat_memory)</option>
+                    </select>
+                  </div>
+                  <Button 
+                    onClick={handleDeleteDoc}
+                    disabled={!delDocId.trim() || deleteDocMutation.isPending}
+                    variant="destructive"
+                    className="w-full font-semibold text-xs mt-1"
+                  >
+                    {deleteDocMutation.isPending ? (
+                      <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                    )}
+                    Purge Document Vectors
+                  </Button>
+                </div>
+              </div>
+
+              {/* Delete Patient reports */}
+              <div className="space-y-2 pb-2">
+                <h4 className="text-xs font-bold text-slate-700 uppercase">Patient Reports Purge</h4>
+                <div className="space-y-1">
+                  <label htmlFor="del-patient-id" className="text-[10px] text-slate-400 font-semibold uppercase">Patient ID</label>
+                  <input 
+                    id="del-patient-id"
+                    type="text" 
+                    placeholder="e.g. pat_abc"
+                    value={delPatientId} 
+                    onChange={(e) => setDelPatientId(e.target.value)}
+                    className="w-full rounded border border-slate-200 px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500"
+                  />
+                </div>
+                <Button 
+                  onClick={handleDeletePatientDocs}
+                  disabled={!delPatientId.trim() || deletePatientMutation.isPending}
+                  variant="destructive"
+                  className="w-full font-semibold text-xs mt-1"
+                >
+                  {deletePatientMutation.isPending ? (
+                    <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                  )}
+                  Purge Patient Reports Chunks
+                </Button>
+              </div>
+
+              {/* Deletion output status info */}
+              {deletionResult && (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded font-mono text-[10px] text-slate-600 whitespace-pre-wrap leading-tight shadow-inner">
+                  {deletionResult}
+                </div>
+              )}
+
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200 shadow-md bg-white">
+            <CardHeader className="border-b border-slate-100 bg-slate-50/50">
+              <CardTitle className="text-sm font-bold text-slate-800">Qdrant Collections Specs Mapping</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 text-xs space-y-3">
+              <p className="text-slate-500 leading-normal text-[11px]">
+                Nura uses exact collection schemas targeting distinct domains. MongoDB remains the single System of Record. Vector configurations are synced dynamically:
+              </p>
+              <div className="space-y-1 font-mono text-[10px]">
+                <div className="flex justify-between border-b border-slate-100 pb-1">
+                  <span className="text-slate-400">Reports</span>
+                  <span className="text-slate-700 font-bold">patient_reports</span>
+                </div>
+                <div className="flex justify-between border-b border-slate-100 pb-1">
+                  <span className="text-slate-400">Knowledge Base</span>
+                  <span className="text-slate-700 font-bold">medical_knowledge</span>
+                </div>
+                <div className="flex justify-between border-b border-slate-100 pb-1">
+                  <span className="text-slate-400">Drugs Dataset</span>
+                  <span className="text-slate-700 font-bold">drug_knowledge</span>
+                </div>
+                <div className="flex justify-between border-b border-slate-100 pb-1">
+                  <span className="text-slate-400">Doctors</span>
+                  <span className="text-slate-700 font-bold">doctor_knowledge</span>
+                </div>
+                <div className="flex justify-between pb-1">
+                  <span className="text-slate-400">Chat History</span>
+                  <span className="text-slate-700 font-bold">chat_memory</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+        </div>
+
+      </div>
+
+    </div>
+  )
+}
+
 function AIPlaygroundContent() {
-  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration'>('llm')
+  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing'>('llm')
 
   return (
     <div className="space-y-6">
@@ -2235,16 +3000,18 @@ function AIPlaygroundContent() {
           <VectorHealthBadge />
         ) : activeTab === 'patient-context' ? (
           <PatientContextHealthBadge />
+        ) : activeTab === 'indexing' ? (
+          <IndexingHealthBadge />
         ) : (
           <IntegrationHealthSummaryBadge />
         )}
       </div>
 
       {/* Tabs list */}
-      <div className="flex border-b border-slate-200 gap-6">
+      <div className="flex border-b border-slate-200 gap-6 overflow-x-auto">
         <button
           onClick={() => setActiveTab('llm')}
-          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2 relative ${
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2 relative flex-shrink-0 ${
             activeTab === 'llm'
               ? 'border-teal-600 text-teal-600 font-bold'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -2255,7 +3022,7 @@ function AIPlaygroundContent() {
         </button>
         <button
           onClick={() => setActiveTab('embeddings')}
-          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2 relative ${
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2 relative flex-shrink-0 ${
             activeTab === 'embeddings'
               ? 'border-teal-600 text-teal-600 font-bold'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -2266,7 +3033,7 @@ function AIPlaygroundContent() {
         </button>
         <button
           onClick={() => setActiveTab('vector')}
-          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2 relative ${
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2 relative flex-shrink-0 ${
             activeTab === 'vector'
               ? 'border-teal-600 text-teal-600 font-bold'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -2277,7 +3044,7 @@ function AIPlaygroundContent() {
         </button>
         <button
           onClick={() => setActiveTab('patient-context')}
-          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2 relative ${
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2 relative flex-shrink-0 ${
             activeTab === 'patient-context'
               ? 'border-teal-600 text-teal-600 font-bold'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -2287,8 +3054,19 @@ function AIPlaygroundContent() {
           Patient Context
         </button>
         <button
+          onClick={() => setActiveTab('indexing')}
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2 relative flex-shrink-0 ${
+            activeTab === 'indexing'
+              ? 'border-teal-600 text-teal-600 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Database className="h-4 w-4" />
+          Indexing Pipeline
+        </button>
+        <button
           onClick={() => setActiveTab('integration')}
-          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2 relative ${
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex items-center gap-2 relative flex-shrink-0 ${
             activeTab === 'integration'
               ? 'border-teal-600 text-teal-600 font-bold'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -2307,6 +3085,8 @@ function AIPlaygroundContent() {
         <VectorPlaygroundView />
       ) : activeTab === 'patient-context' ? (
         <PatientContextPlaygroundView />
+      ) : activeTab === 'indexing' ? (
+        <IndexingPlaygroundView />
       ) : (
         <IntegrationPlaygroundView />
       )}

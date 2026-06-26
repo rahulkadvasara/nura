@@ -48,6 +48,9 @@ from app.services import (
     VectorService,
     PatientContextService,
     AIOrchestrator,
+    IndexVersionService,
+    DocumentMetadataService,
+    DocumentIndexingService,
 )
 from app.agents import (
     BaseAgent,
@@ -664,6 +667,24 @@ def get_ai_orchestrator() -> AIOrchestrator:
         patient_context_service=get_patient_context_service(),
         prompt_loader=PromptLoader()
     )
+
+
+def get_index_version_service() -> IndexVersionService:
+    """Get IndexVersionService instance"""
+    from app.services.index_version_service import get_index_version_service as get_index_version_service_impl
+    return get_index_version_service_impl()
+
+
+def get_document_metadata_service() -> DocumentMetadataService:
+    """Get DocumentMetadataService instance"""
+    from app.services.document_metadata_service import get_document_metadata_service as get_document_metadata_service_impl
+    return get_document_metadata_service_impl()
+
+
+def get_document_indexing_service() -> DocumentIndexingService:
+    """Get DocumentIndexingService instance"""
+    from app.services.document_indexing_service import get_document_indexing_service as get_document_indexing_service_impl
+    return get_document_indexing_service_impl()
 
 
 

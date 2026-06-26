@@ -43,6 +43,8 @@ class AISettings(BaseSettings):
     )
     EMBEDDING_BATCH_SIZE: int = Field(default=32, description="Batch size for embedding generation")
     EMBEDDING_VERSION: str = Field(default="v1", description="Version of the embedding scheme")
+    INDEX_VERSION: int = Field(default=3, description="Active index schema version")
+    SCHEMA_VERSION: int = Field(default=2, description="Active collection schema version")
 
     # Qdrant configurations
     QDRANT_URL: str = Field(default="http://localhost:6333", description="Qdrant database URL")

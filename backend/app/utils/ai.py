@@ -316,3 +316,52 @@ class OrchestratorMetricsTracker:
 orchestrator_metrics = OrchestratorMetricsTracker()
 
 
+class IndexingMetricsTracker:
+    """In-memory metrics tracker for monitoring AI document indexing pipeline performance"""
+
+    def __init__(self):
+        self.indexed_documents: int = 0
+        self.indexed_chunks: int = 0
+        self.duplicate_documents_skipped: int = 0
+        self.total_chunk_size_chars: int = 0
+        self.total_chunks_processed_for_size: int = 0
+
+    def record_indexing(self, chunks_count: int, total_chars: int) -> None:
+        """Record successful document indexing event"""
+        self.indexed_documents += 1
+        self.indexed_chunks += chunks_count
+        self.total_chunk_size_chars += total_chars
+        self.total_chunks_processed_for_size += chunks_count
+
+    def record_duplicate_skip(self) -> None:
+        """Record a skipped duplicate document event"""
+        self.duplicate_documents_skipped += 1
+
+    def get_metrics(self) -> dict:
+        """Summarize current indexing performance metrics"""
+        avg_chunk_size = (
+            self.total_chunk_size_chars / self.total_chunks_processed_for_size
+            if self.total_chunks_processed_for_size > 0
+            else 0.0
+        )
+        return {
+            "indexed_documents": self.indexed_documents,
+            "indexed_chunks": self.indexed_chunks,
+            "duplicate_documents_skipped": self.duplicate_documents_skipped,
+            "avg_chunk_size": avg_chunk_size
+        }
+
+    def reset(self) -> None:
+        """Reset internal metrics counters"""
+        self.indexed_documents = 0
+        self.indexed_chunks = 0
+        self.duplicate_documents_skipped = 0
+        self.total_chunk_size_chars = 0
+        self.total_chunks_processed_for_size = 0
+
+
+# Global indexing metrics tracker instance
+indexing_metrics = IndexingMetricsTracker()
+
+
+
