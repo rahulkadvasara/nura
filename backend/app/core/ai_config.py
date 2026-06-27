@@ -64,6 +64,13 @@ class AISettings(BaseSettings):
     GRAPH_STREAMING_ENABLED: bool = Field(default=True, description="Enables streaming state updates during execution")
     GRAPH_TRACE_ENABLED: bool = Field(default=True, description="Enables path traversal tracing in the finalized state")
 
+    # Router configurations
+    ROUTER_CONFIDENCE_HIGH: float = Field(default=0.7, description="High confidence threshold for routing")
+    ROUTER_CONFIDENCE_MEDIUM: float = Field(default=0.4, description="Medium confidence threshold for routing")
+    ROUTER_ENABLE_REGEX: bool = Field(default=True, description="Enables regex matching in intent classifier")
+    ROUTER_ENABLE_KEYWORDS: bool = Field(default=True, description="Enables keyword matching in intent classifier")
+    ROUTER_DEBUG: bool = Field(default=False, description="Enables verbose routing debug log messages")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -113,6 +120,14 @@ class AISettings(BaseSettings):
             raise AIConfigurationError("GRAPH_TIMEOUT must be a positive number")
         if self.GRAPH_MAX_RETRIES < 0:
             raise AIConfigurationError("GRAPH_MAX_RETRIES must be a non-negative integer")
+
+        # Validate Router configurations
+        if not (0.0 <= self.ROUTER_CONFIDENCE_HIGH <= 1.0):
+            raise AIConfigurationError("ROUTER_CONFIDENCE_HIGH must be between 0.0 and 1.0")
+        if not (0.0 <= self.ROUTER_CONFIDENCE_MEDIUM <= 1.0):
+            raise AIConfigurationError("ROUTER_CONFIDENCE_MEDIUM must be between 0.0 and 1.0")
+        if self.ROUTER_CONFIDENCE_HIGH < self.ROUTER_CONFIDENCE_MEDIUM:
+            raise AIConfigurationError("ROUTER_CONFIDENCE_HIGH must be greater than or equal to ROUTER_CONFIDENCE_MEDIUM")
 
 
 # Singleton instance

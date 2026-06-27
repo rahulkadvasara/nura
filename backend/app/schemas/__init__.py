@@ -164,6 +164,15 @@ from app.schemas.graph import (
     GraphStatisticsResponse,
 )
 
+from app.schemas.router import (
+    RouterIntentsResponse,
+    RouterClassifyRequest,
+    RouterClassifyResponse,
+    RouterTestRequest,
+    RouterTestResponse,
+    RouterStatisticsResponse,
+)
+
 
 
 __all__ = [
@@ -304,4 +313,12 @@ __all__ = [
     "GraphTestRunRequest",
     "GraphTestRunResponse",
     "GraphStatisticsResponse",
+
+    # Router schemas
+    "RouterIntentsResponse",
+    "RouterClassifyRequest",
+    "RouterClassifyResponse",
+    "RouterTestRequest",
+    "RouterTestResponse",
+    "RouterStatisticsResponse",
 ]

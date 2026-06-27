@@ -346,6 +346,26 @@ export const aiService = {
   testGraphExecution: async (request: GraphTestRunRequest): Promise<GraphTestRunResponse> => {
     const response = await apiClient.post<GraphTestRunResponse>('/ai/graph/test', request)
     return response.data
+  },
+
+  getRouterIntents: async (): Promise<RouterIntentsResponse> => {
+    const response = await apiClient.get<RouterIntentsResponse>('/ai/router/intents')
+    return response.data
+  },
+
+  classifyRouterQuery: async (request: RouterClassifyRequest): Promise<RouterClassifyResponse> => {
+    const response = await apiClient.post<RouterClassifyResponse>('/ai/router/classify', request)
+    return response.data
+  },
+
+  testRouterPipeline: async (request: RouterTestRequest): Promise<RouterTestResponse> => {
+    const response = await apiClient.post<RouterTestResponse>('/ai/router/test', request)
+    return response.data
+  },
+
+  getRouterStatistics: async (): Promise<RouterStatisticsResponse> => {
+    const response = await apiClient.get<RouterStatisticsResponse>('/ai/router/statistics')
+    return response.data
   }
 }
 
@@ -770,6 +790,57 @@ export interface GraphStatisticsResponse {
   graph_version: string
   node_execution_count: Record<string, number>
   transition_count: Record<string, number>
+}
+
+export interface RouterIntentsResponse {
+  supported_intents: string[]
+  registered_agents: Record<string, string>
+  routing_rules: {
+    ROUTER_CONFIDENCE_HIGH: number
+    ROUTER_CONFIDENCE_MEDIUM: number
+    ROUTER_ENABLE_REGEX: boolean
+    ROUTER_ENABLE_KEYWORDS: boolean
+    ROUTER_DEBUG: boolean
+  }
+}
+
+export interface RouterClassifyRequest {
+  query: string
+}
+
+export interface RouterClassifyResponse {
+  detected_intent: string
+  confidence: number
+  matched_rules: string[]
+  selected_agent: string
+}
+
+export interface RouterTestRequest {
+  query: string
+  patient_id?: string
+  debug_mode?: boolean
+  metadata?: Record<string, any>
+}
+
+export interface RouterTestResponse {
+  graph_trace: string[]
+  routing_trace: string[]
+  detected_intent: string
+  selected_agent: string
+  confidence: number
+  latency_ms: number
+}
+
+export interface RouterStatisticsResponse {
+  total_routed_requests: number
+  average_routing_latency_ms: number
+  confidence_distribution: Record<string, number>
+  intent_distribution: Record<string, number>
+  unknown_queries_count: number
+  unknown_percentage: number
+  fallback_count: number
+  fallback_percentage: number
+  routing_failures_count: number
 }
 
 

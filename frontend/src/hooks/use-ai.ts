@@ -30,7 +30,13 @@ import {
   GraphNodesResponse,
   GraphTestRunRequest,
   GraphTestRunResponse,
-  GraphStatisticsResponse
+  GraphStatisticsResponse,
+  RouterIntentsResponse,
+  RouterClassifyRequest,
+  RouterClassifyResponse,
+  RouterTestRequest,
+  RouterTestResponse,
+  RouterStatisticsResponse
 } from '@/services/ai.service'
 
 /**
@@ -407,4 +413,56 @@ export function useGraphTestRun() {
     }
   })
 }
+
+/**
+ * Custom hook to fetch router mappings and active scoring rules configurations.
+ */
+export function useRouterIntents() {
+  return useQuery<RouterIntentsResponse, Error>({
+    queryKey: ['admin', 'ai', 'router', 'intents'],
+    queryFn: async () => {
+      return await aiService.getRouterIntents()
+    }
+  })
+}
+
+/**
+ * Custom hook to run direct queries classification tests.
+ */
+export function useRouterClassify() {
+  return useMutation<RouterClassifyResponse, Error, RouterClassifyRequest>({
+    mutationFn: async (request: RouterClassifyRequest) => {
+      return await aiService.classifyRouterQuery(request)
+    }
+  })
+}
+
+/**
+ * Custom hook to run full state-graph routing roundtrip tests.
+ */
+export function useRouterTest() {
+  const queryClient = useQueryClient()
+  return useMutation<RouterTestResponse, Error, RouterTestRequest>({
+    mutationFn: async (request: RouterTestRequest) => {
+      return await aiService.testRouterPipeline(request)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'router', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to retrieve router statistics telemetry periodically.
+ */
+export function useRouterStatistics() {
+  return useQuery<RouterStatisticsResponse, Error>({
+    queryKey: ['admin', 'ai', 'router', 'statistics'],
+    queryFn: async () => {
+      return await aiService.getRouterStatistics()
+    },
+    refetchInterval: 10000, // Refresh stats check every 10 seconds
+  })
+}
+
 

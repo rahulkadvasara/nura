@@ -11,7 +11,7 @@ from app.core.ai_config import ai_settings
 from app.graph.registry import NodeRegistry
 from app.graph.transitions import TransitionManager
 from app.graph.state import GraphState
-from app.graph.constants import START_NODE, INIT_STATE_NODE, ROUTER_PLACEHOLDER_NODE, FINISH_NODE
+from app.graph.constants import START_NODE, INIT_STATE_NODE, ROUTER_AGENT_NODE, FINISH_NODE
 from app.graph.telemetry import GraphTelemetryTracker, get_graph_telemetry
 
 logger = logging.getLogger("nura.graph.engine")
@@ -210,7 +210,7 @@ def get_graph_engine() -> LangGraphEngine:
         builder = get_graph_builder()
         
         # Proactively load/bootstrap default infrastructure nodes and transitions
-        from app.graph.nodes import StartNode, InitializeStateNode, RouterPlaceholderNode, FinishNode
+        from app.graph.nodes import StartNode, InitializeStateNode, RouterAgentNode, FinishNode
         
         # Register standard nodes to builder registry if not already present
         registered_nodes = builder.registry.list_nodes()
@@ -218,16 +218,16 @@ def get_graph_engine() -> LangGraphEngine:
             builder.add_node(START_NODE, StartNode())
         if INIT_STATE_NODE not in registered_nodes:
             builder.add_node(INIT_STATE_NODE, InitializeStateNode())
-        if ROUTER_PLACEHOLDER_NODE not in registered_nodes:
-            builder.add_node(ROUTER_PLACEHOLDER_NODE, RouterPlaceholderNode())
+        if ROUTER_AGENT_NODE not in registered_nodes:
+            builder.add_node(ROUTER_AGENT_NODE, RouterAgentNode())
         if FINISH_NODE not in registered_nodes:
             builder.add_node(FINISH_NODE, FinishNode())
         
         # Reset transition list to avoid duplicate paths stacking
         builder.transitions.clear()
         builder.add_transition(START_NODE, INIT_STATE_NODE)
-        builder.add_transition(INIT_STATE_NODE, ROUTER_PLACEHOLDER_NODE)
-        builder.add_transition(ROUTER_PLACEHOLDER_NODE, FINISH_NODE)
+        builder.add_transition(INIT_STATE_NODE, ROUTER_AGENT_NODE)
+        builder.add_transition(ROUTER_AGENT_NODE, FINISH_NODE)
         
         # Compile engine
         _engine_instance = builder.compile()

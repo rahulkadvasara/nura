@@ -7,7 +7,7 @@ import time
 import uuid
 from typing import Dict, Any
 from app.graph.state import GraphState
-from app.graph.constants import START_NODE, INIT_STATE_NODE, ROUTER_PLACEHOLDER_NODE, FINISH_NODE
+from app.graph.constants import START_NODE, INIT_STATE_NODE, ROUTER_AGENT_NODE, FINISH_NODE
 
 
 class StartNode:
@@ -50,16 +50,30 @@ class InitializeStateNode:
         return updates
 
 
-class RouterPlaceholderNode:
-    """Acts as a workflow router placeholder, immediately passing execution forward"""
+class RouterAgentNode:
+    """Executes Router Agent to classify user query intent and choose target agent"""
 
     async def __call__(self, state: GraphState) -> Dict[str, Any]:
+        from app.core.dependencies import get_router_agent
+        router_agent = get_router_agent()
+        
+        # Execute routing classification
+        decision = await router_agent.run_routing(state.query or "")
+        
         trace = list(state.execution_trace) if state.execution_trace else []
-        trace.append(ROUTER_PLACEHOLDER_NODE)
+        trace.append(ROUTER_AGENT_NODE)
+        
+        meta = dict(state.metadata or {})
+        meta["routing_confidence"] = decision.confidence
+        meta["matched_rules"] = decision.matched_rules
+        
         return {
-            "current_node": ROUTER_PLACEHOLDER_NODE,
+            "current_node": ROUTER_AGENT_NODE,
             "previous_node": state.current_node,
-            "execution_trace": trace
+            "detected_intent": decision.detected_intent,
+            "selected_agent": decision.selected_agent,
+            "execution_trace": trace,
+            "metadata": meta
         }
 
 

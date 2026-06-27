@@ -34,7 +34,11 @@ import {
   useGraphHealth,
   useGraphNodes,
   useGraphStatistics,
-  useGraphTestRun
+  useGraphTestRun,
+  useRouterIntents,
+  useRouterClassify,
+  useRouterTest,
+  useRouterStatistics
 } from '@/hooks/use-ai'
 import { 
   Sparkles, 
@@ -4647,6 +4651,376 @@ function GraphHealthSummaryBadge() {
   )
 }
 
+function RouterAgentView() {
+  const { data: intents, isLoading: isIntentsLoading } = useRouterIntents()
+  const { data: stats, isLoading: isStatsLoading, refetch: refetchStats } = useRouterStatistics()
+  
+  const classifyMutation = useRouterClassify()
+  const testMutation = useRouterTest()
+  
+  const [queryInput, setQueryInput] = useState('My patient has high blood sugar and a headache. recommend a specialist.')
+  const [patientIdInput, setPatientIdInput] = useState('')
+  const [debugMode, setDebugMode] = useState(false)
+  const [activeViewTab, setActiveViewTab] = useState<'classification' | 'pipeline'>('classification')
+  
+  const handleClassifyOnly = () => {
+    classifyMutation.mutate({ query: queryInput })
+  }
+  
+  const handleTestPipeline = () => {
+    testMutation.mutate({
+      query: queryInput,
+      patient_id: patientIdInput || undefined,
+      debug_mode: debugMode
+    })
+  }
+
+  const handleRefresh = () => {
+    refetchStats()
+  }
+
+  const isLoading = isIntentsLoading || isStatsLoading
+
+  return (
+    <div className="space-y-6">
+      {/* Action Bar */}
+      <div className="flex justify-between items-center bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl shadow-sm">
+        <div className="flex items-center gap-2.5">
+          <Sparkles className="h-5 w-5 text-teal-600 animate-pulse" />
+          <span className="font-semibold text-slate-800 text-sm">Router Agent Console & Analytics</span>
+        </div>
+        <Button
+          onClick={handleRefresh}
+          disabled={isLoading}
+          variant="outline"
+          size="sm"
+          className="h-8 text-xs flex items-center gap-1.5 hover:bg-slate-100"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+          Refresh Stats
+        </Button>
+      </div>
+
+      {/* Telemetry Metrics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="shadow-sm border-slate-200 bg-white">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Routed Requests</span>
+              <Activity className="h-4 w-4 text-teal-500" />
+            </div>
+            <div className="mt-2.5 flex items-baseline gap-2">
+              <span className="text-2xl font-bold text-slate-900">{stats?.total_routed_requests ?? 0}</span>
+            </div>
+            <p className="mt-1 text-xs text-slate-400">Cumulative router entrypoint runs</p>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm border-slate-200 bg-white">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Average Latency</span>
+              <Clock className="h-4 w-4 text-teal-500" />
+            </div>
+            <div className="mt-2.5 flex items-baseline gap-2">
+              <span className="text-2xl font-bold text-slate-900">{stats?.average_routing_latency_ms ?? 0} ms</span>
+            </div>
+            <p className="mt-1 text-xs text-slate-400">Mean query evaluation latency</p>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm border-slate-200 bg-white">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Fallback Rate</span>
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+            </div>
+            <div className="mt-2.5 flex items-baseline gap-2">
+              <span className="text-2xl font-bold text-slate-900">{stats?.fallback_percentage ?? 0}%</span>
+              <span className="text-xs font-semibold text-slate-400">({stats?.fallback_count ?? 0} runs)</span>
+            </div>
+            <p className="mt-1 text-xs text-slate-400">Queries matching low confidence</p>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm border-slate-200 bg-white">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Unknown Rate</span>
+              <AlertTriangle className="h-4 w-4 text-red-500" />
+            </div>
+            <div className="mt-2.5 flex items-baseline gap-2">
+              <span className="text-2xl font-bold text-slate-900">{stats?.unknown_percentage ?? 0}%</span>
+              <span className="text-xs font-semibold text-slate-400">({stats?.unknown_queries_count ?? 0} queries)</span>
+            </div>
+            <p className="mt-1 text-xs text-slate-400">Queries resolved as UNKNOWN</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main Workspace Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left column: Tester sandbox */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card className="shadow-sm border-slate-200 bg-white">
+            <CardHeader className="border-b border-slate-100">
+              <CardTitle className="text-slate-800 text-base font-bold flex items-center gap-2">
+                <Terminal className="h-4 w-4 text-teal-600" />
+                Deterministic Query Classifier Sandbox
+              </CardTitle>
+              <CardDescription>
+                Input text prompts to test confidence ratios matching and target agent routing decisions.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-6">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">User Query Prompt</label>
+                <Textarea
+                  value={queryInput}
+                  onChange={(e) => setQueryInput(e.target.value)}
+                  placeholder="Type symptoms, medical questions, drug side-effects, or lab reports to route..."
+                  className="min-h-[100px] text-slate-800 text-sm border-slate-200 focus:border-teal-500 focus:ring-teal-500 rounded-xl"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Patient ID (Optional)</label>
+                  <input
+                    type="text"
+                    value={patientIdInput}
+                    onChange={(e) => setPatientIdInput(e.target.value)}
+                    placeholder="MongoDB reference ID"
+                    className="w-full text-slate-800 text-sm px-3.5 py-2 border border-slate-200 focus:border-teal-500 focus:ring-teal-500 rounded-xl"
+                  />
+                </div>
+                <div className="flex items-center gap-2 pt-6">
+                  <input
+                    type="checkbox"
+                    id="router-debug-mode"
+                    checked={debugMode}
+                    onChange={(e) => setDebugMode(e.target.checked)}
+                    className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-slate-200 rounded"
+                  />
+                  <label htmlFor="router-debug-mode" className="text-sm font-semibold text-slate-700 select-none">
+                    Enable Graph Tracing Mode
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button
+                  onClick={handleClassifyOnly}
+                  disabled={classifyMutation.isPending || !queryInput.trim()}
+                  className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl px-4 text-sm"
+                >
+                  {classifyMutation.isPending ? 'Classifying...' : 'Classify Intent Only'}
+                </Button>
+                <Button
+                  onClick={handleTestPipeline}
+                  disabled={testMutation.isPending || !queryInput.trim()}
+                  variant="outline"
+                  className="border-slate-200 hover:bg-slate-50 rounded-xl px-4 text-sm flex items-center gap-1.5"
+                >
+                  {testMutation.isPending ? 'Running Pipeline...' : 'Run Stateful Graph Pipeline'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Classification / Run result panels */}
+          {(classifyMutation.data || testMutation.data) && (
+            <Card className="shadow-sm border-slate-200 bg-white">
+              <CardHeader className="border-b border-slate-100 flex flex-row items-center justify-between py-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-teal-500 animate-pulse" />
+                  <CardTitle className="text-slate-800 text-sm font-bold uppercase tracking-wide">
+                    Routing Engine Outputs
+                  </CardTitle>
+                </div>
+                <div className="flex border border-slate-200 rounded-lg p-0.5 bg-slate-50">
+                  <button
+                    onClick={() => setActiveViewTab('classification')}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                      activeViewTab === 'classification'
+                        ? 'bg-white shadow-sm text-teal-600'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Scoring Details
+                  </button>
+                  <button
+                    onClick={() => setActiveViewTab('pipeline')}
+                    disabled={!testMutation.data}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all disabled:opacity-50 ${
+                      activeViewTab === 'pipeline'
+                        ? 'bg-white shadow-sm text-teal-600'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    State Graph Trace
+                  </button>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-6">
+                {activeViewTab === 'classification' ? (
+                  <div className="space-y-5">
+                    {/* Winner layout */}
+                    {(() => {
+                      const data = classifyMutation.data || testMutation.data
+                      if (!data) return null
+                      const confPercent = Math.round(data.confidence * 100)
+                      return (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 border border-slate-100 p-4 rounded-xl">
+                          <div>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Detected Intent</span>
+                            <span className="text-base font-bold text-slate-800 block mt-0.5">{data.detected_intent}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Confidence Rating</span>
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="flex-1 bg-slate-200 h-2 rounded-full overflow-hidden">
+                                <div className="bg-teal-500 h-full rounded-full" style={{ width: `${confPercent}%` }} />
+                              </div>
+                              <span className="text-xs font-bold text-teal-600">{confPercent}%</span>
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Target Destination Agent</span>
+                            <span className="text-xs font-bold bg-teal-50 text-teal-700 border border-teal-200 rounded-md px-2 py-0.5 inline-block mt-1">
+                              {data.selected_agent}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })()}
+
+                    {/* Matched rules logs */}
+                    <div>
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Matched Logic Rules Logs</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(() => {
+                          const data = classifyMutation.data || testMutation.data
+                          const rules = classifyMutation.data ? classifyMutation.data.matched_rules : (testMutation.data?.routing_trace || [])
+                          if (!rules || rules.length === 0) {
+                            return <span className="text-xs text-slate-400 italic">No direct keyword or regex patterns matched. Resolving fallback.</span>
+                          }
+                          return rules.map((rule, idx) => (
+                            <span 
+                              key={idx} 
+                              className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${
+                                rule.startsWith('regex') 
+                                  ? 'bg-purple-50 text-purple-700 border-purple-200' 
+                                  : rule.startsWith('keyword') 
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200' 
+                                  : 'bg-amber-50 text-amber-700 border-amber-200'
+                              }`}
+                            >
+                              {rule}
+                            </span>
+                          ))
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {testMutation.data && (
+                      <>
+                        <div className="flex justify-between items-center text-xs border-b border-slate-100 pb-2">
+                          <span className="font-semibold text-slate-500">Routing Latency Performance:</span>
+                          <span className="font-bold text-teal-600">{testMutation.data.latency_ms.toFixed(2)} ms</span>
+                        </div>
+                        <div className="space-y-2.5">
+                          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Graph Nodes Trace Order</span>
+                          <div className="flex flex-col gap-2 pl-4 border-l-2 border-slate-100">
+                            {testMutation.data.graph_trace.map((node, idx) => (
+                              <div key={idx} className="flex items-center gap-2 text-xs">
+                                <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 flex items-center justify-center text-[8px] font-bold text-white ${
+                                  node === '__start__' ? 'bg-slate-400' : node === '__finish__' ? 'bg-slate-950' : 'bg-teal-500'
+                                }`}>
+                                  {idx + 1}
+                                </div>
+                                <span className={node === 'router_agent' ? 'font-bold text-teal-600' : 'text-slate-600'}>
+                                  {node}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Right column: Intent registry & Active settings */}
+        <div className="space-y-6">
+          {/* Active Settings card */}
+          <Card className="shadow-sm border-slate-200 bg-white">
+            <CardHeader className="border-b border-slate-100 py-4">
+              <CardTitle className="text-slate-800 text-sm font-bold flex items-center gap-2">
+                <Sparkles className="h-4.5 w-4.5 text-teal-600" />
+                Routing Settings
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 text-xs space-y-3">
+              <div className="flex justify-between py-1 border-b border-slate-50">
+                <span className="text-slate-500 font-medium">High Threshold:</span>
+                <span className="font-bold text-slate-800">{intents?.routing_rules.ROUTER_CONFIDENCE_HIGH ?? 0.7}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-50">
+                <span className="text-slate-500 font-medium">Medium Threshold:</span>
+                <span className="font-bold text-slate-800">{intents?.routing_rules.ROUTER_CONFIDENCE_MEDIUM ?? 0.4}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-50">
+                <span className="text-slate-500 font-medium">Regex Checks:</span>
+                <span className={`font-bold ${intents?.routing_rules.ROUTER_ENABLE_REGEX ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  {intents?.routing_rules.ROUTER_ENABLE_REGEX ? 'Enabled' : 'Disabled'}
+                </span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-50">
+                <span className="text-slate-500 font-medium">Keyword Checks:</span>
+                <span className={`font-bold ${intents?.routing_rules.ROUTER_ENABLE_KEYWORDS ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  {intents?.routing_rules.ROUTER_ENABLE_KEYWORDS ? 'Enabled' : 'Disabled'}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Mappings directory card */}
+          <Card className="shadow-sm border-slate-200 bg-white">
+            <CardHeader className="border-b border-slate-100 py-4">
+              <CardTitle className="text-slate-800 text-sm font-bold flex items-center gap-2">
+                <Database className="h-4.5 w-4.5 text-teal-600" />
+                Active Mappings Registry
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 p-0 max-h-[350px] overflow-y-auto">
+              <div className="divide-y divide-slate-100">
+                {intents ? (
+                  Object.entries(intents.registered_agents).map(([intent, agent]) => (
+                    <div key={intent} className="px-4 py-2.5 flex flex-col gap-0.5 hover:bg-slate-50 transition-colors">
+                      <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">{intent}</span>
+                      <span className="text-xs font-semibold text-slate-700">{agent}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-4 text-xs text-slate-400 italic text-center">Loading mappings...</div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
 function WorkflowEngineView() {
   const { data: health, isLoading: isHealthLoading, refetch: refetchHealth } = useGraphHealth()
   const { data: stats, isLoading: isStatsLoading, refetch: refetchStats } = useGraphStatistics()
@@ -5087,7 +5461,7 @@ function WorkflowEngineView() {
 }
 
 function AIPlaygroundContent() {
-  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent' | 'workflow-engine'>('llm')
+  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent' | 'workflow-engine' | 'router-agent'>('llm')
 
   return (
     <div className="space-y-6">
@@ -5121,6 +5495,8 @@ function AIPlaygroundContent() {
         ) : activeTab === 'retrieval-agent' ? (
           <RetrievalAgentHealthBadge />
         ) : activeTab === 'workflow-engine' ? (
+          <GraphHealthSummaryBadge />
+        ) : activeTab === 'router-agent' ? (
           <GraphHealthSummaryBadge />
         ) : (
           <IntegrationHealthSummaryBadge />
@@ -5229,6 +5605,17 @@ function AIPlaygroundContent() {
           Workflow Engine
         </button>
         <button
+          onClick={() => setActiveTab('router-agent')}
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
+            activeTab === 'router-agent'
+              ? 'border-teal-600 text-teal-600 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Sparkles className="h-4 w-4" />
+          Router Agent
+        </button>
+        <button
           onClick={() => setActiveTab('integration')}
           className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
             activeTab === 'integration'
@@ -5259,6 +5646,8 @@ function AIPlaygroundContent() {
         <RetrievalAgentPlaygroundView />
       ) : activeTab === 'workflow-engine' ? (
         <WorkflowEngineView />
+      ) : activeTab === 'router-agent' ? (
+        <RouterAgentView />
       ) : (
         <IntegrationPlaygroundView />
       )}

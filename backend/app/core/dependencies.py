@@ -824,6 +824,18 @@ def get_graph_engine():
     return get_engine_impl()
 
 
+_router_instance = None
+
+
+def get_router_agent():
+    """Retrieve singleton instance of RouterAgent"""
+    global _router_instance
+    if _router_instance is None:
+        from app.agents.router import RouterAgent
+        _router_instance = RouterAgent()
+    return _router_instance
+
+
 
 
 

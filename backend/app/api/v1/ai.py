@@ -60,6 +60,14 @@ from app.schemas.graph import (
     GraphTestRunResponse,
     GraphStatisticsResponse,
 )
+from app.schemas.router import (
+    RouterIntentsResponse,
+    RouterClassifyRequest,
+    RouterClassifyResponse,
+    RouterTestRequest,
+    RouterTestResponse,
+    RouterStatisticsResponse,
+)
 from app.schemas.retrieval import RetrievalRequest, RetrievalResponse, RetrievalStatisticsResponse, RetrievalPackage, RetrievalAgentStatisticsResponse
 from app.schemas.context_assembly import ContextAssemblyRequest, ContextAssemblyResponse, ContextAssemblyStatisticsResponse
 from app.utils.ai import retrieval_metrics, context_assembly_metrics, retrieval_agent_metrics, memory_sync_metrics
@@ -1221,6 +1229,140 @@ async def get_graph_statistics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch graph statistics: {str(e)}"
+        )
+
+
+@router.get(
+    "/router/intents",
+    response_model=RouterIntentsResponse,
+    summary="Get Router Mappings & Settings. Guarded: Admin Only.",
+)
+async def get_router_intents(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+):
+    try:
+        from app.agents.router import get_intent_registry
+        from app.core.ai_config import ai_settings
+        registry = get_intent_registry()
+        
+        return RouterIntentsResponse(
+            supported_intents=[
+                "GREETING", "GENERAL_CHAT", "MEDICAL_QUESTION", "SYMPTOM_ANALYSIS",
+                "REPORT_ANALYSIS", "DRUG_INTERACTION", "DOCTOR_RECOMMENDATION",
+                "REMINDER", "APPOINTMENT", "CONVERSATION_RECALL", "UNKNOWN"
+            ],
+            registered_agents=registry.list_mappings(),
+            routing_rules={
+                "ROUTER_CONFIDENCE_HIGH": ai_settings.ROUTER_CONFIDENCE_HIGH,
+                "ROUTER_CONFIDENCE_MEDIUM": ai_settings.ROUTER_CONFIDENCE_MEDIUM,
+                "ROUTER_ENABLE_REGEX": ai_settings.ROUTER_ENABLE_REGEX,
+                "ROUTER_ENABLE_KEYWORDS": ai_settings.ROUTER_ENABLE_KEYWORDS,
+                "ROUTER_DEBUG": ai_settings.ROUTER_DEBUG,
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch router intents config: {str(e)}"
+        )
+
+
+@router.post(
+    "/router/classify",
+    response_model=RouterClassifyResponse,
+    summary="Classify query intent. Guarded: Admin Only.",
+)
+async def post_router_classify(
+    payload: RouterClassifyRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+):
+    try:
+        from app.core.dependencies import get_router_agent
+        router_agent = get_router_agent()
+        decision = await router_agent.run_routing(payload.query)
+        
+        return RouterClassifyResponse(
+            detected_intent=decision.detected_intent,
+            confidence=decision.confidence,
+            matched_rules=decision.matched_rules,
+            selected_agent=decision.selected_agent
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Query classification failed: {str(e)}"
+        )
+
+
+@router.post(
+    "/router/test",
+    response_model=RouterTestResponse,
+    summary="Run query through routing pipeline. Guarded: Admin Only.",
+)
+async def post_router_test(
+    payload: RouterTestRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+):
+    try:
+        # Runs the complete state graph execution run (which now routes through RouterAgentNode)
+        from app.core.dependencies import get_graph_engine
+        from app.graph.state import GraphState
+        import time
+        
+        engine = get_graph_engine()
+        
+        start_time = time.perf_counter()
+        
+        # Execute the graph synchronously
+        state_dict = {
+            "query": payload.query,
+            "patient_id": payload.patient_id,
+            "metadata": {
+                **(payload.metadata or {}),
+                "debug_mode": payload.debug_mode
+            }
+        }
+        
+        final_state_dict = await engine.execute_async(state_dict)
+        final_state = GraphState.from_dict(final_state_dict)
+        
+        latency = (time.perf_counter() - start_time) * 1000.0
+        
+        # Resolve trace metadata
+        routing_confidence = (final_state.metadata or {}).get("routing_confidence", 0.0)
+        matched_rules = (final_state.metadata or {}).get("matched_rules", [])
+        
+        return RouterTestResponse(
+            graph_trace=final_state.execution_trace or [],
+            routing_trace=matched_rules,
+            detected_intent=final_state.detected_intent or "UNKNOWN",
+            selected_agent=final_state.selected_agent or "UnknownAgent",
+            confidence=routing_confidence,
+            latency_ms=latency
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Routing pipeline test run failed: {str(e)}"
+        )
+
+
+@router.get(
+    "/router/statistics",
+    response_model=RouterStatisticsResponse,
+    summary="Retrieve cumulative router telemetry. Guarded: Admin Only.",
+)
+async def get_router_statistics(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+):
+    try:
+        from app.agents.router import get_router_telemetry
+        stats = get_router_telemetry().get_statistics()
+        return RouterStatisticsResponse(**stats)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch router statistics: {str(e)}"
         )
 
 
