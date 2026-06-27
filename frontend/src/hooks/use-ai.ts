@@ -39,7 +39,10 @@ import {
   RouterStatisticsResponse,
   MedicalKnowledgeAgentResponse,
   SymptomAgentResponse,
-  MemoryAgentResponse
+  MemoryAgentResponse,
+  ReportAnalysisAgentResponse,
+  DrugInteractionAgentResponse,
+  DoctorRecommendationAgentResponse
 } from '@/services/ai.service'
 
 /**
@@ -521,6 +524,64 @@ export function useCoreAgentsStatistics() {
     queryKey: ['admin', 'ai', 'core-agents', 'statistics'],
     queryFn: async () => {
       return await aiService.getCoreAgentsStatistics()
+    },
+    refetchInterval: 10000, // Refresh metrics every 10 seconds
+  })
+}
+
+/**
+ * Custom hook to test the ReportAnalysisAgent.
+ */
+export function useReportAgentTest() {
+  const queryClient = useQueryClient()
+  return useMutation<ReportAnalysisAgentResponse, Error, RouterTestRequest>({
+    mutationFn: async (request: RouterTestRequest) => {
+      return await aiService.testReportAnalysisAgent(request)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'healthcare-agents', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to test the DrugInteractionAgent.
+ */
+export function useDrugAgentTest() {
+  const queryClient = useQueryClient()
+  return useMutation<DrugInteractionAgentResponse, Error, RouterTestRequest>({
+    mutationFn: async (request: RouterTestRequest) => {
+      return await aiService.testDrugInteractionAgent(request)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'healthcare-agents', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to test the DoctorRecommendationAgent.
+ */
+export function useDoctorAgentTest() {
+  const queryClient = useQueryClient()
+  return useMutation<DoctorRecommendationAgentResponse, Error, RouterTestRequest>({
+    mutationFn: async (request: RouterTestRequest) => {
+      return await aiService.testDoctorRecommendationAgent(request)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'healthcare-agents', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to fetch healthcare agents statistics periodically.
+ */
+export function useHealthcareAgentsStatistics() {
+  return useQuery<Record<string, any>, Error>({
+    queryKey: ['admin', 'ai', 'healthcare-agents', 'statistics'],
+    queryFn: async () => {
+      return await aiService.getHealthcareAgentsStatistics()
     },
     refetchInterval: 10000, // Refresh metrics every 10 seconds
   })

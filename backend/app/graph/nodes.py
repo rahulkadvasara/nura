@@ -253,3 +253,143 @@ class UnknownAgentNode:
             "response": "I'm sorry, I could not classify your query's clinical intent. Please try rephrasing your symptoms or question."
         }
 
+
+class ReportAnalysisAgentNode:
+    """Executes ReportAnalysisAgent to explain findings from medical reports"""
+
+    async def __call__(self, state: GraphState) -> Dict[str, Any]:
+        from app.core.dependencies import get_report_analysis_agent
+        from app.agents.base.context import AgentContext
+        
+        agent = get_report_analysis_agent()
+        ctx = AgentContext(
+            request_id=state.request_id,
+            session_id=state.session_id,
+            conversation_id=state.conversation_id,
+            patient_id=state.patient_id,
+            doctor_id=state.doctor_id,
+            user_id=state.user_id,
+            role=state.role,
+            metadata=dict(state.metadata or {})
+        )
+        
+        res = await agent.run(state.query, ctx)
+        trace = list(state.execution_trace) if state.execution_trace else []
+        trace.append("ReportAnalysisAgent")
+        
+        if not res.success:
+            return {
+                "current_node": "ReportAnalysisAgent",
+                "previous_node": state.current_node,
+                "execution_trace": trace,
+                "error": res.message
+            }
+            
+        meta = dict(state.metadata or {})
+        meta.update(res.metadata or {})
+        report_data = res.response
+        meta["report_analysis"] = report_data.model_dump() if hasattr(report_data, "model_dump") else report_data
+        
+        return {
+            "current_node": "ReportAnalysisAgent",
+            "previous_node": state.current_node,
+            "execution_trace": trace,
+            "response": report_data.summary if hasattr(report_data, "summary") else str(report_data),
+            "citations": getattr(report_data, "citations", []),
+            "metadata": meta,
+            "token_usage": getattr(report_data, "usage", {})
+        }
+
+
+class DrugInteractionAgentNode:
+    """Executes DrugInteractionAgent to validate safety of medications"""
+
+    async def __call__(self, state: GraphState) -> Dict[str, Any]:
+        from app.core.dependencies import get_drug_interaction_agent
+        from app.agents.base.context import AgentContext
+        
+        agent = get_drug_interaction_agent()
+        ctx = AgentContext(
+            request_id=state.request_id,
+            session_id=state.session_id,
+            conversation_id=state.conversation_id,
+            patient_id=state.patient_id,
+            doctor_id=state.doctor_id,
+            user_id=state.user_id,
+            role=state.role,
+            metadata=dict(state.metadata or {})
+        )
+        
+        res = await agent.run(state.query, ctx)
+        trace = list(state.execution_trace) if state.execution_trace else []
+        trace.append("DrugInteractionAgent")
+        
+        if not res.success:
+            return {
+                "current_node": "DrugInteractionAgent",
+                "previous_node": state.current_node,
+                "execution_trace": trace,
+                "error": res.message
+            }
+            
+        meta = dict(state.metadata or {})
+        meta.update(res.metadata or {})
+        drug_data = res.response
+        meta["drug_interaction_analysis"] = drug_data.model_dump() if hasattr(drug_data, "model_dump") else drug_data
+        
+        return {
+            "current_node": "DrugInteractionAgent",
+            "previous_node": state.current_node,
+            "execution_trace": trace,
+            "response": drug_data.interaction_summary if hasattr(drug_data, "interaction_summary") else str(drug_data),
+            "citations": getattr(drug_data, "citations", []),
+            "metadata": meta,
+            "token_usage": getattr(drug_data, "usage", {})
+        }
+
+
+class DoctorRecommendationAgentNode:
+    """Executes DoctorRecommendationAgent to find suitable doctors"""
+
+    async def __call__(self, state: GraphState) -> Dict[str, Any]:
+        from app.core.dependencies import get_doctor_recommendation_agent
+        from app.agents.base.context import AgentContext
+        
+        agent = get_doctor_recommendation_agent()
+        ctx = AgentContext(
+            request_id=state.request_id,
+            session_id=state.session_id,
+            conversation_id=state.conversation_id,
+            patient_id=state.patient_id,
+            doctor_id=state.doctor_id,
+            user_id=state.user_id,
+            role=state.role,
+            metadata=dict(state.metadata or {})
+        )
+        
+        res = await agent.run(state.query, ctx)
+        trace = list(state.execution_trace) if state.execution_trace else []
+        trace.append("DoctorRecommendationAgent")
+        
+        if not res.success:
+            return {
+                "current_node": "DoctorRecommendationAgent",
+                "previous_node": state.current_node,
+                "execution_trace": trace,
+                "error": res.message
+            }
+            
+        meta = dict(state.metadata or {})
+        meta.update(res.metadata or {})
+        doctor_data = res.response
+        meta["doctor_recommendations_analysis"] = doctor_data.model_dump() if hasattr(doctor_data, "model_dump") else doctor_data
+        
+        return {
+            "current_node": "DoctorRecommendationAgent",
+            "previous_node": state.current_node,
+            "execution_trace": trace,
+            "response": doctor_data.reasoning if hasattr(doctor_data, "reasoning") else str(doctor_data),
+            "metadata": meta,
+            "token_usage": getattr(doctor_data, "usage", {})
+        }
+

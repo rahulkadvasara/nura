@@ -386,6 +386,26 @@ export const aiService = {
   getCoreAgentsStatistics: async (): Promise<Record<string, any>> => {
     const response = await apiClient.get<Record<string, any>>('/ai/agents/statistics')
     return response.data
+  },
+
+  testReportAnalysisAgent: async (request: RouterTestRequest): Promise<ReportAnalysisAgentResponse> => {
+    const response = await apiClient.post<ReportAnalysisAgentResponse>('/ai/agents/report/test', request)
+    return response.data
+  },
+
+  testDrugInteractionAgent: async (request: RouterTestRequest): Promise<DrugInteractionAgentResponse> => {
+    const response = await apiClient.post<DrugInteractionAgentResponse>('/ai/agents/drug/test', request)
+    return response.data
+  },
+
+  testDoctorRecommendationAgent: async (request: RouterTestRequest): Promise<DoctorRecommendationAgentResponse> => {
+    const response = await apiClient.post<DoctorRecommendationAgentResponse>('/ai/agents/doctor/test', request)
+    return response.data
+  },
+
+  getHealthcareAgentsStatistics: async (): Promise<Record<string, any>> => {
+    const response = await apiClient.get<Record<string, any>>('/ai/agents/healthcare/statistics')
+    return response.data
   }
 }
 
@@ -889,6 +909,37 @@ export interface MemoryAgentResponse {
   patient_summary: string
   relevant_context: Record<string, any>[]
   metadata: Record<string, any>
+}
+
+export interface ReportAnalysisAgentResponse {
+  summary: string
+  key_findings: string[]
+  abnormal_values: Record<string, any>[]
+  trend_analysis: string[]
+  recommendations: string[]
+  citations: Record<string, any>[]
+  metadata: Record<string, any>
+  usage: Record<string, number>
+}
+
+export interface DrugInteractionAgentResponse {
+  interaction_found: boolean
+  severity: string
+  interaction_summary: string
+  warnings: string[]
+  alternatives: string[]
+  citations: Record<string, any>[]
+  metadata: Record<string, any>
+  usage: Record<string, number>
+}
+
+export interface DoctorRecommendationAgentResponse {
+  recommended_doctors: Record<string, any>[]
+  reasoning: string
+  matching_specialization: string
+  confidence: number
+  metadata: Record<string, any>
+  usage: Record<string, number>
 }
 
 

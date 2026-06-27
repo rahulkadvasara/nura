@@ -26,6 +26,12 @@ class PromptLoader:
             "symptom_analysis_system": "1.0.0",
             "symptom_analysis_user": "1.0.0",
             "memory_retrieval_system": "1.0.0",
+            "report_analysis_system": "1.0.0",
+            "report_analysis_user": "1.0.0",
+            "drug_interaction_system": "1.0.0",
+            "drug_interaction_user": "1.0.0",
+            "doctor_recommendation_system": "1.0.0",
+            "doctor_recommendation_user": "1.0.0",
         }
 
     def get_template(self, name: str, is_system: bool = False) -> str:

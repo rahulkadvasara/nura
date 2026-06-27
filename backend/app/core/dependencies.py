@@ -26,6 +26,7 @@ from app.repositories import (
     PaymentRepository,
     DoctorWalletRepository,
     PatientMemoryRepository,
+    ReportRepository,
 )
 from app.services import (
     UserService,
@@ -65,6 +66,9 @@ from app.agents import (
     MemoryAgent,
     MedicalKnowledgeAgent,
     SymptomAgent,
+    ReportAnalysisAgent,
+    DrugInteractionAgent,
+    DoctorRecommendationAgent,
 )
 
 
@@ -674,6 +678,53 @@ def get_retrieval_agent() -> RetrievalAgent:
 _medical_knowledge_agent_instance = None
 _symptom_agent_instance = None
 _memory_agent_instance = None
+_report_analysis_agent_instance = None
+_drug_interaction_agent_instance = None
+_doctor_recommendation_agent_instance = None
+
+
+def get_report_repository() -> ReportRepository:
+    """Get ReportRepository instance"""
+    database = get_database()
+    return ReportRepository(database.reports)
+
+
+def get_report_analysis_agent() -> ReportAnalysisAgent:
+    """Get singleton ReportAnalysisAgent instance"""
+    global _report_analysis_agent_instance
+    if _report_analysis_agent_instance is None:
+        _report_analysis_agent_instance = ReportAnalysisAgent(
+            retrieval_agent=get_retrieval_agent(),
+            patient_context_service=get_patient_context_service(),
+            report_repository=get_report_repository(),
+            ai_service=get_ai_service()
+        )
+    return _report_analysis_agent_instance
+
+
+def get_drug_interaction_agent() -> DrugInteractionAgent:
+    """Get singleton DrugInteractionAgent instance"""
+    global _drug_interaction_agent_instance
+    if _drug_interaction_agent_instance is None:
+        _drug_interaction_agent_instance = DrugInteractionAgent(
+            retrieval_agent=get_retrieval_agent(),
+            patient_memory_repository=get_patient_memory_repository(),
+            ai_service=get_ai_service()
+        )
+    return _drug_interaction_agent_instance
+
+
+def get_doctor_recommendation_agent() -> DoctorRecommendationAgent:
+    """Get singleton DoctorRecommendationAgent instance"""
+    global _doctor_recommendation_agent_instance
+    if _doctor_recommendation_agent_instance is None:
+        _doctor_recommendation_agent_instance = DoctorRecommendationAgent(
+            retrieval_agent=get_retrieval_agent(),
+            patient_context_service=get_patient_context_service(),
+            doctor_availability_repository=get_doctor_availability_repository(),
+            ai_service=get_ai_service()
+        )
+    return _doctor_recommendation_agent_instance
 
 
 def get_medical_knowledge_agent() -> MedicalKnowledgeAgent:

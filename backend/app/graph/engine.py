@@ -233,6 +233,15 @@ def get_graph_engine() -> LangGraphEngine:
         if "MemoryAgent" not in registered_nodes:
             from app.graph.nodes import MemoryAgentNode
             builder.add_node("MemoryAgent", MemoryAgentNode())
+        if "ReportAnalysisAgent" not in registered_nodes:
+            from app.graph.nodes import ReportAnalysisAgentNode
+            builder.add_node("ReportAnalysisAgent", ReportAnalysisAgentNode())
+        if "DrugInteractionAgent" not in registered_nodes:
+            from app.graph.nodes import DrugInteractionAgentNode
+            builder.add_node("DrugInteractionAgent", DrugInteractionAgentNode())
+        if "DoctorRecommendationAgent" not in registered_nodes:
+            from app.graph.nodes import DoctorRecommendationAgentNode
+            builder.add_node("DoctorRecommendationAgent", DoctorRecommendationAgentNode())
         if "UnknownAgent" not in registered_nodes:
             from app.graph.nodes import UnknownAgentNode
             builder.add_node("UnknownAgent", UnknownAgentNode())
@@ -250,6 +259,9 @@ def get_graph_engine() -> LangGraphEngine:
                 "MedicalKnowledgeAgent": "MedicalKnowledgeAgent",
                 "SymptomAgent": "SymptomAgent",
                 "MemoryAgent": "MemoryAgent",
+                "ReportAnalysisAgent": "ReportAnalysisAgent",
+                "DrugInteractionAgent": "DrugInteractionAgent",
+                "DoctorRecommendationAgent": "DoctorRecommendationAgent",
                 "UnknownAgent": "UnknownAgent"
             }
         )
@@ -258,6 +270,9 @@ def get_graph_engine() -> LangGraphEngine:
         builder.add_transition("MedicalKnowledgeAgent", FINISH_NODE)
         builder.add_transition("SymptomAgent", FINISH_NODE)
         builder.add_transition("MemoryAgent", FINISH_NODE)
+        builder.add_transition("ReportAnalysisAgent", FINISH_NODE)
+        builder.add_transition("DrugInteractionAgent", FINISH_NODE)
+        builder.add_transition("DoctorRecommendationAgent", FINISH_NODE)
         builder.add_transition("UnknownAgent", FINISH_NODE)
         
         # Compile engine

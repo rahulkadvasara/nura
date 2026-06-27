@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { adminUserService } from '@/services/admin-user.service'
 import { 
@@ -42,8 +43,13 @@ import {
   useMedicalAgentTest,
   useSymptomAgentTest,
   useMemoryAgentTest,
-  useCoreAgentsStatistics
+  useCoreAgentsStatistics,
+  useReportAgentTest,
+  useDrugAgentTest,
+  useDoctorAgentTest,
+  useHealthcareAgentsStatistics
 } from '@/hooks/use-ai'
+import { HealthcareAgentsView } from './healthcare_agents_view'
 import { 
   Sparkles, 
   Cpu, 
@@ -64,7 +70,8 @@ import {
   Sliders,
   Settings,
   Trash2,
-  Layers
+  Layers,
+  Brain
 } from 'lucide-react'
 
 
@@ -4883,7 +4890,7 @@ function CoreAgentsView() {
                                 <span className="font-bold text-teal-800">[{c.source}]</span>
                                 <span className="text-[10px] font-mono text-slate-400">Score: {(c.score * 100).toFixed(0)}%</span>
                               </div>
-                              <p className="text-slate-600 font-sans italic">"{c.text}"</p>
+                              <p className="text-slate-600 font-sans italic">&ldquo;{c.text}&rdquo;</p>
                             </div>
                           ))}
                         </div>
@@ -5067,7 +5074,7 @@ function CoreAgentsView() {
                         <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
                           {memoryMutation.data.relevant_context.map((m, i) => (
                             <div key={i} className="p-2 bg-slate-50 border border-slate-200 rounded text-xs leading-normal">
-                              <p className="text-slate-600 italic">"{m.content || m.text}"</p>
+                              <p className="text-slate-600 italic">&ldquo;{m.content || m.text}&rdquo;</p>
                             </div>
                           ))}
                         </div>
@@ -5919,7 +5926,7 @@ function WorkflowEngineView() {
 }
 
 function AIPlaygroundContent() {
-  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent' | 'workflow-engine' | 'router-agent' | 'core-agents'>('llm')
+  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent' | 'workflow-engine' | 'router-agent' | 'core-agents' | 'healthcare-agents'>('llm')
 
   return (
     <div className="space-y-6">
@@ -6085,6 +6092,17 @@ function AIPlaygroundContent() {
           Core Agents
         </button>
         <button
+          onClick={() => setActiveTab('healthcare-agents')}
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
+            activeTab === 'healthcare-agents'
+              ? 'border-teal-600 text-teal-600 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Activity className="h-4 w-4" />
+          Healthcare Agents
+        </button>
+        <button
           onClick={() => setActiveTab('integration')}
           className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
             activeTab === 'integration'
@@ -6119,6 +6137,8 @@ function AIPlaygroundContent() {
         <RouterAgentView />
       ) : activeTab === 'core-agents' ? (
         <CoreAgentsView />
+      ) : activeTab === 'healthcare-agents' ? (
+        <HealthcareAgentsView />
       ) : (
         <IntegrationPlaygroundView />
       )}

@@ -174,6 +174,9 @@ from app.schemas.router import (
     MedicalKnowledgeAgentResponse,
     SymptomAgentResponse,
     MemoryAgentResponse,
+    ReportAnalysisAgentResponse,
+    DrugInteractionAgentResponse,
+    DoctorRecommendationAgentResponse,
 )
 
 
@@ -327,4 +330,7 @@ __all__ = [
     "MedicalKnowledgeAgentResponse",
     "SymptomAgentResponse",
     "MemoryAgentResponse",
+    "ReportAnalysisAgentResponse",
+    "DrugInteractionAgentResponse",
+    "DoctorRecommendationAgentResponse",
 ]
