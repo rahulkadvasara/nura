@@ -222,12 +222,43 @@ def get_graph_engine() -> LangGraphEngine:
             builder.add_node(ROUTER_AGENT_NODE, RouterAgentNode())
         if FINISH_NODE not in registered_nodes:
             builder.add_node(FINISH_NODE, FinishNode())
+            
+        # Core Knowledge Agent nodes registration
+        if "MedicalKnowledgeAgent" not in registered_nodes:
+            from app.graph.nodes import MedicalKnowledgeAgentNode
+            builder.add_node("MedicalKnowledgeAgent", MedicalKnowledgeAgentNode())
+        if "SymptomAgent" not in registered_nodes:
+            from app.graph.nodes import SymptomAgentNode
+            builder.add_node("SymptomAgent", SymptomAgentNode())
+        if "MemoryAgent" not in registered_nodes:
+            from app.graph.nodes import MemoryAgentNode
+            builder.add_node("MemoryAgent", MemoryAgentNode())
+        if "UnknownAgent" not in registered_nodes:
+            from app.graph.nodes import UnknownAgentNode
+            builder.add_node("UnknownAgent", UnknownAgentNode())
         
         # Reset transition list to avoid duplicate paths stacking
         builder.transitions.clear()
         builder.add_transition(START_NODE, INIT_STATE_NODE)
         builder.add_transition(INIT_STATE_NODE, ROUTER_AGENT_NODE)
-        builder.add_transition(ROUTER_AGENT_NODE, FINISH_NODE)
+        
+        # Dynamic dispatch transition from Router based on state.selected_agent
+        builder.add_conditional_transition(
+            source=ROUTER_AGENT_NODE,
+            condition_func=lambda state: state.selected_agent or "UnknownAgent",
+            mapping={
+                "MedicalKnowledgeAgent": "MedicalKnowledgeAgent",
+                "SymptomAgent": "SymptomAgent",
+                "MemoryAgent": "MemoryAgent",
+                "UnknownAgent": "UnknownAgent"
+            }
+        )
+        
+        # Finalize execution transitions from agent executors to Finish node
+        builder.add_transition("MedicalKnowledgeAgent", FINISH_NODE)
+        builder.add_transition("SymptomAgent", FINISH_NODE)
+        builder.add_transition("MemoryAgent", FINISH_NODE)
+        builder.add_transition("UnknownAgent", FINISH_NODE)
         
         # Compile engine
         _engine_instance = builder.compile()

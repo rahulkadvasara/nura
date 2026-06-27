@@ -366,6 +366,26 @@ export const aiService = {
   getRouterStatistics: async (): Promise<RouterStatisticsResponse> => {
     const response = await apiClient.get<RouterStatisticsResponse>('/ai/router/statistics')
     return response.data
+  },
+
+  testMedicalAgent: async (request: RouterTestRequest): Promise<MedicalKnowledgeAgentResponse> => {
+    const response = await apiClient.post<MedicalKnowledgeAgentResponse>('/ai/agents/medical/test', request)
+    return response.data
+  },
+
+  testSymptomAgent: async (request: RouterTestRequest): Promise<SymptomAgentResponse> => {
+    const response = await apiClient.post<SymptomAgentResponse>('/ai/agents/symptom/test', request)
+    return response.data
+  },
+
+  testMemoryAgent: async (request: RouterTestRequest): Promise<MemoryAgentResponse> => {
+    const response = await apiClient.post<MemoryAgentResponse>('/ai/agents/memory/test', request)
+    return response.data
+  },
+
+  getCoreAgentsStatistics: async (): Promise<Record<string, any>> => {
+    const response = await apiClient.get<Record<string, any>>('/ai/agents/statistics')
+    return response.data
   }
 }
 
@@ -842,6 +862,35 @@ export interface RouterStatisticsResponse {
   fallback_percentage: number
   routing_failures_count: number
 }
+
+export interface MedicalKnowledgeAgentResponse {
+  answer: string
+  citations: Record<string, any>[]
+  confidence: number
+  sources: string[]
+  metadata: Record<string, any>
+  usage: Record<string, number>
+}
+
+export interface SymptomAgentResponse {
+  summary: string
+  possible_causes: string[]
+  red_flags: string[]
+  recommended_action: string
+  emergency: boolean
+  citations: Record<string, any>[]
+  metadata: Record<string, any>
+  usage: Record<string, number>
+}
+
+export interface MemoryAgentResponse {
+  memory_summary: string
+  conversation_history: Record<string, any>[]
+  patient_summary: string
+  relevant_context: Record<string, any>[]
+  metadata: Record<string, any>
+}
+
 
 
 

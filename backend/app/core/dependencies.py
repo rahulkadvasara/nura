@@ -63,6 +63,8 @@ from app.agents import (
     BaseAgent,
     RetrievalAgent,
     MemoryAgent,
+    MedicalKnowledgeAgent,
+    SymptomAgent,
 )
 
 
@@ -669,9 +671,60 @@ def get_retrieval_agent() -> RetrievalAgent:
     )
 
 
+_medical_knowledge_agent_instance = None
+_symptom_agent_instance = None
+_memory_agent_instance = None
+
+
+def get_medical_knowledge_agent() -> MedicalKnowledgeAgent:
+    """Get singleton MedicalKnowledgeAgent instance"""
+    global _medical_knowledge_agent_instance
+    if _medical_knowledge_agent_instance is None:
+        from app.agents.core.medical_knowledge_agent import MedicalKnowledgeAgent
+        _medical_knowledge_agent_instance = MedicalKnowledgeAgent(
+            retrieval_agent=get_retrieval_agent(),
+            patient_context_service=get_patient_context_service(),
+            ai_service=get_ai_service()
+        )
+    return _medical_knowledge_agent_instance
+
+
+def get_symptom_agent() -> SymptomAgent:
+    """Get singleton SymptomAgent instance"""
+    global _symptom_agent_instance
+    if _symptom_agent_instance is None:
+        from app.agents.core.symptom_agent import SymptomAgent
+        _symptom_agent_instance = SymptomAgent(
+            retrieval_agent=get_retrieval_agent(),
+            patient_context_service=get_patient_context_service(),
+            ai_service=get_ai_service()
+        )
+    return _symptom_agent_instance
+
+
 def get_memory_agent() -> MemoryAgent:
-    """Get MemoryAgent instance"""
-    return MemoryAgent("Memory Agent")
+    """Get singleton MemoryAgent instance"""
+    global _memory_agent_instance
+    if _memory_agent_instance is None:
+        from app.agents.core.memory_agent import MemoryAgent
+        from app.repositories.chat_message_repository import ChatMessageRepository
+        database = get_database()
+        
+        _memory_agent_instance = MemoryAgent(
+            patient_memory_repository=get_patient_memory_repository(),
+            chat_message_repository=ChatMessageRepository(database.chat_messages),
+            retrieval_service=get_retrieval_service(),
+            memory_sync_service=MemorySyncService(
+                patient_memory_repository=get_patient_memory_repository(),
+                user_repository=get_user_repository(),
+                patient_summary_builder=get_patient_summary_builder(),
+                embedding_service=get_embedding_service(),
+                vector_service=get_vector_service(),
+                index_version_service=get_index_version_service(),
+                audit_log_service=get_audit_log_service()
+            )
+        )
+    return _memory_agent_instance
 
 
 def get_ai_orchestrator() -> AIOrchestrator:
@@ -841,4 +894,4 @@ def get_router_agent():
 
 
 
-
+

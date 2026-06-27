@@ -101,3 +101,155 @@ class FinishNode:
             updates["response"] = "Mock execution completed successfully via graph infrastructure nodes."
             
         return updates
+
+
+class MedicalKnowledgeAgentNode:
+    """Executes MedicalKnowledgeAgent to answer medical questions using RAG"""
+
+    async def __call__(self, state: GraphState) -> Dict[str, Any]:
+        from app.core.dependencies import get_medical_knowledge_agent
+        from app.agents.base.context import AgentContext
+        
+        agent = get_medical_knowledge_agent()
+        ctx = AgentContext(
+            request_id=state.request_id,
+            session_id=state.session_id,
+            conversation_id=state.conversation_id,
+            patient_id=state.patient_id,
+            doctor_id=state.doctor_id,
+            user_id=state.user_id,
+            role=state.role,
+            metadata=dict(state.metadata or {})
+        )
+        
+        res = await agent.run(state.query, ctx)
+        trace = list(state.execution_trace) if state.execution_trace else []
+        trace.append("MedicalKnowledgeAgent")
+        
+        if not res.success:
+            return {
+                "current_node": "MedicalKnowledgeAgent",
+                "previous_node": state.current_node,
+                "execution_trace": trace,
+                "error": res.message
+            }
+            
+        meta = dict(state.metadata or {})
+        meta.update(res.metadata or {})
+        
+        return {
+            "current_node": "MedicalKnowledgeAgent",
+            "previous_node": state.current_node,
+            "execution_trace": trace,
+            "response": res.response.answer if hasattr(res.response, "answer") else str(res.response),
+            "citations": getattr(res.response, "citations", []),
+            "metadata": meta,
+            "token_usage": getattr(res.response, "usage", {})
+        }
+
+
+class SymptomAgentNode:
+    """Executes SymptomAgent to analyze user-reported symptoms"""
+
+    async def __call__(self, state: GraphState) -> Dict[str, Any]:
+        from app.core.dependencies import get_symptom_agent
+        from app.agents.base.context import AgentContext
+        
+        agent = get_symptom_agent()
+        ctx = AgentContext(
+            request_id=state.request_id,
+            session_id=state.session_id,
+            conversation_id=state.conversation_id,
+            patient_id=state.patient_id,
+            doctor_id=state.doctor_id,
+            user_id=state.user_id,
+            role=state.role,
+            metadata=dict(state.metadata or {})
+        )
+        
+        res = await agent.run(state.query, ctx)
+        trace = list(state.execution_trace) if state.execution_trace else []
+        trace.append("SymptomAgent")
+        
+        if not res.success:
+            return {
+                "current_node": "SymptomAgent",
+                "previous_node": state.current_node,
+                "execution_trace": trace,
+                "error": res.message
+            }
+            
+        meta = dict(state.metadata or {})
+        meta.update(res.metadata or {})
+        symptom_data = res.response
+        meta["symptom_analysis"] = symptom_data.model_dump() if hasattr(symptom_data, "model_dump") else symptom_data
+        
+        return {
+            "current_node": "SymptomAgent",
+            "previous_node": state.current_node,
+            "execution_trace": trace,
+            "response": symptom_data.summary if hasattr(symptom_data, "summary") else str(symptom_data),
+            "citations": getattr(symptom_data, "citations", []),
+            "metadata": meta,
+            "token_usage": getattr(symptom_data, "usage", {})
+        }
+
+
+class MemoryAgentNode:
+    """Executes MemoryAgent to retrieve and update longitudinal memory"""
+
+    async def __call__(self, state: GraphState) -> Dict[str, Any]:
+        from app.core.dependencies import get_memory_agent
+        from app.agents.base.context import AgentContext
+        
+        agent = get_memory_agent()
+        ctx = AgentContext(
+            request_id=state.request_id,
+            session_id=state.session_id,
+            conversation_id=state.conversation_id,
+            patient_id=state.patient_id,
+            doctor_id=state.doctor_id,
+            user_id=state.user_id,
+            role=state.role,
+            metadata=dict(state.metadata or {})
+        )
+        
+        res = await agent.run(state.query, ctx)
+        trace = list(state.execution_trace) if state.execution_trace else []
+        trace.append("MemoryAgent")
+        
+        if not res.success:
+            return {
+                "current_node": "MemoryAgent",
+                "previous_node": state.current_node,
+                "execution_trace": trace,
+                "error": res.message
+            }
+            
+        meta = dict(state.metadata or {})
+        meta.update(res.metadata or {})
+        mem_data = res.response
+        meta["memory_analysis"] = mem_data.model_dump() if hasattr(mem_data, "model_dump") else mem_data
+        
+        return {
+            "current_node": "MemoryAgent",
+            "previous_node": state.current_node,
+            "execution_trace": trace,
+            "response": mem_data.memory_summary if hasattr(mem_data, "memory_summary") else str(mem_data),
+            "metadata": meta
+        }
+
+
+class UnknownAgentNode:
+    """Fallback agent node handling unrecognized intents"""
+
+    async def __call__(self, state: GraphState) -> Dict[str, Any]:
+        trace = list(state.execution_trace) if state.execution_trace else []
+        trace.append("UnknownAgent")
+        return {
+            "current_node": "UnknownAgent",
+            "previous_node": state.current_node,
+            "execution_trace": trace,
+            "response": "I'm sorry, I could not classify your query's clinical intent. Please try rephrasing your symptoms or question."
+        }
+

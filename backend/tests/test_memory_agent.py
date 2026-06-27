@@ -1,93 +1,83 @@
 """
-Nura - Unit tests for MemoryAgent
+Nura - Unit tests for Production MemoryAgent
 """
 
 import pytest
-from typing import List, Dict, Any, Optional
-
-from app.core.ai_config import AISettings
-from app.agents import MemoryAgent, AgentContext, AgentResponse
+from unittest.mock import AsyncMock, MagicMock
+from app.agents.core.memory_agent import MemoryAgent
+from app.agents.base.context import AgentContext
+from app.agents.core.schemas import MemoryAgentResponse
 
 
 @pytest.fixture
-def mock_settings():
-    return AISettings(
-        GROQ_API_KEY="test_key",
-        GROQ_MODEL="llama-3.3-70b-versatile",
-        TIMEOUT_SECONDS=0.1,
-        MAX_RETRIES=0,
-        RETRY_MIN_DELAY=0.01,
-        RETRY_MAX_DELAY=0.02
+def mock_patient_memory_repo():
+    repo = MagicMock()
+    mock_memory = MagicMock()
+    mock_memory.ai_summary = "Longitudinal medical history summary"
+    mock_memory.chronic_conditions = ["Diabetes"]
+    mock_memory.allergies = ["Penicillin"]
+    mock_memory.medications = ["Metformin"]
+    mock_memory.surgeries = []
+    mock_memory.diagnoses = []
+    mock_memory.summary_version = 2
+    repo.get_by_patient_id = AsyncMock(return_value=mock_memory)
+    return repo
+
+
+@pytest.fixture
+def mock_chat_msg_repo():
+    repo = MagicMock()
+    mock_msg = MagicMock()
+    mock_msg.model_dump.return_value = {"role": "user", "content": "Query"}
+    repo.get_latest_messages = AsyncMock(return_value=[mock_msg])
+    return repo
+
+
+@pytest.fixture
+def mock_retrieval_service():
+    service = MagicMock()
+    service.retrieve_multiple = AsyncMock(return_value={
+        "results": [{"content": "Matched vector text", "score": 0.85}]
+    })
+    return service
+
+
+@pytest.fixture
+def mock_memory_sync_service():
+    service = MagicMock()
+    service.sync_patient = AsyncMock(return_value={"success": True, "rebuilt": True})
+    return service
+
+
+@pytest.mark.asyncio
+async def test_memory_agent_execution(
+    mock_patient_memory_repo,
+    mock_chat_msg_repo,
+    mock_retrieval_service,
+    mock_memory_sync_service
+):
+    agent = MemoryAgent(
+        patient_memory_repository=mock_patient_memory_repo,
+        chat_message_repository=mock_chat_msg_repo,
+        retrieval_service=mock_retrieval_service,
+        memory_sync_service=mock_memory_sync_service
     )
-
-
-class CustomMemoryAgent(MemoryAgent):
-    """Concrete subclass of MemoryAgent overriding get/update memory hooks"""
-
-    async def get_patient_memory(self, patient_id: str) -> Optional[Dict[str, Any]]:
-        if patient_id == "pt-exists":
-            return {
-                "patient_id": patient_id,
-                "ai_summary": "Known patient summary",
-                "allergies": ["Peanuts"]
-            }
-        return None
-
-    async def update_patient_memory(self, patient_id: str, updates: Dict[str, Any]) -> bool:
-        return patient_id == "pt-exists"
-
-    async def get_conversation_history(self, session_id: str, limit: int = 20) -> List[Dict[str, Any]]:
-        return [{"role": "user", "content": "hello msg"}]
-
-
-@pytest.mark.asyncio
-async def test_memory_agent_default_implementation_empty_context(mock_settings):
-    """Verify default MemoryAgent execute with empty context returns None and empty citations"""
-    agent = MemoryAgent(settings=mock_settings)
-    ctx = AgentContext()
     
-    response = await agent.run("some query", ctx)
+    ctx = AgentContext(
+        patient_id="patient-123",
+        session_id="session-456"
+    )
     
-    assert response.success is True
-    assert response.response is None
-    assert response.citations == []
-    assert response.metadata["has_memory"] is False
-
-
-@pytest.mark.asyncio
-async def test_memory_agent_default_implementation_with_patient(mock_settings):
-    """Verify default MemoryAgent execute with patient ID returns None but includes memory citations"""
-    agent = MemoryAgent(settings=mock_settings)
-    ctx = AgentContext(patient_id="pt-123")
+    res = await agent.run("recall allergies", ctx)
     
-    response = await agent.run("some query", ctx)
+    assert res.success is True
+    assert isinstance(res.response, MemoryAgentResponse)
+    assert res.response.memory_summary == "Longitudinal medical history summary"
+    assert len(res.response.conversation_history) == 1
+    assert "Diabetes" in res.response.patient_summary
+    assert len(res.response.relevant_context) == 1
+    assert res.response.relevant_context[0]["content"] == "Matched vector text"
     
-    assert response.success is True
-    assert response.response is None
-    assert response.citations == ["memory://patient/pt-123"]
-    assert response.metadata["has_memory"] is False
-
-
-@pytest.mark.asyncio
-async def test_memory_agent_custom_subclass(mock_settings):
-    """Verify custom MemoryAgent subclass overrides memory methods successfully"""
-    agent = CustomMemoryAgent(name="Clinical Memory Keeper", settings=mock_settings)
-    
-    # 1. Test get memory for existing patient
-    ctx1 = AgentContext(patient_id="pt-exists")
-    response1 = await agent.run("get profile", ctx1)
-    
-    assert response1.success is True
-    assert response1.agent_name == "Clinical Memory Keeper"
-    assert response1.response["patient_id"] == "pt-exists"
-    assert response1.response["allergies"] == ["Peanuts"]
-    assert response1.citations == ["memory://patient/pt-exists"]
-    assert response1.metadata["has_memory"] is True
-    
-    # 2. Test hooks directly
-    update_ok = await agent.update_patient_memory("pt-exists", {"allergies": []})
-    assert update_ok is True
-    
-    history = await agent.get_conversation_history("session-123")
-    assert len(history) == 1
-    assert history[0]["content"] == "hello msg"
+    # Assert mocks were called
+    mock_patient_memory_repo.get_by_patient_id.assert_called_with("patient-123")
+    mock_memory_sync_service.sync_patient.assert_called_with("patient-123")

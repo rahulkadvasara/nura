@@ -32,6 +32,9 @@ from app.core.dependencies import (
     get_graph_registry,
     get_graph_builder,
     get_graph_engine,
+    get_medical_knowledge_agent,
+    get_symptom_agent,
+    get_memory_agent,
 )
 from app.models import UserRole, UserInDB
 from app.schemas.ai import (
@@ -67,6 +70,9 @@ from app.schemas.router import (
     RouterTestRequest,
     RouterTestResponse,
     RouterStatisticsResponse,
+    MedicalKnowledgeAgentResponse,
+    SymptomAgentResponse,
+    MemoryAgentResponse,
 )
 from app.schemas.retrieval import RetrievalRequest, RetrievalResponse, RetrievalStatisticsResponse, RetrievalPackage, RetrievalAgentStatisticsResponse
 from app.schemas.context_assembly import ContextAssemblyRequest, ContextAssemblyResponse, ContextAssemblyStatisticsResponse
@@ -1363,6 +1369,110 @@ async def get_router_statistics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch router statistics: {str(e)}"
+        )
+
+
+@router.post(
+    "/agents/medical/test",
+    response_model=MedicalKnowledgeAgentResponse,
+    summary="Directly test the MedicalKnowledgeAgent RAG pipeline. Guarded: Admin Only.",
+)
+async def test_medical_agent(
+    payload: RouterTestRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    agent = Depends(get_medical_knowledge_agent),
+):
+    try:
+        from app.agents.base.context import AgentContext
+        import time
+        ctx = AgentContext(
+            request_id=f"test-med-{int(time.time())}",
+            patient_id=payload.patient_id,
+            metadata={**(payload.metadata or {}), "debug_mode": payload.debug_mode}
+        )
+        res = await agent.run(payload.query, ctx)
+        if not res.success:
+            raise Exception(res.message)
+        return res.response
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Medical Knowledge Agent test run failed: {str(e)}"
+        )
+
+
+@router.post(
+    "/agents/symptom/test",
+    response_model=SymptomAgentResponse,
+    summary="Directly test the SymptomAgent guidance pipeline. Guarded: Admin Only.",
+)
+async def test_symptom_agent(
+    payload: RouterTestRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    agent = Depends(get_symptom_agent),
+):
+    try:
+        from app.agents.base.context import AgentContext
+        import time
+        ctx = AgentContext(
+            request_id=f"test-symp-{int(time.time())}",
+            patient_id=payload.patient_id,
+            metadata={**(payload.metadata or {}), "debug_mode": payload.debug_mode}
+        )
+        res = await agent.run(payload.query, ctx)
+        if not res.success:
+            raise Exception(res.message)
+        return res.response
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Symptom Agent test run failed: {str(e)}"
+        )
+
+
+@router.post(
+    "/agents/memory/test",
+    response_model=MemoryAgentResponse,
+    summary="Directly test the MemoryAgent memory pipeline. Guarded: Admin Only.",
+)
+async def test_memory_agent(
+    payload: RouterTestRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    agent = Depends(get_memory_agent),
+):
+    try:
+        from app.agents.base.context import AgentContext
+        import time
+        ctx = AgentContext(
+            request_id=f"test-mem-{int(time.time())}",
+            patient_id=payload.patient_id,
+            metadata={**(payload.metadata or {}), "debug_mode": payload.debug_mode}
+        )
+        res = await agent.run(payload.query, ctx)
+        if not res.success:
+            raise Exception(res.message)
+        return res.response
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Memory Agent test run failed: {str(e)}"
+        )
+
+
+@router.get(
+    "/agents/statistics",
+    summary="Retrieve cumulative core agents telemetry. Guarded: Admin Only.",
+)
+async def get_core_agents_statistics(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+):
+    try:
+        from app.agents.core.telemetry import get_core_agents_telemetry
+        return get_core_agents_telemetry().get_stats()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch core agents statistics: {str(e)}"
         )
 
 

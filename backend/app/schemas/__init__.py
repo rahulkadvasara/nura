@@ -171,6 +171,9 @@ from app.schemas.router import (
     RouterTestRequest,
     RouterTestResponse,
     RouterStatisticsResponse,
+    MedicalKnowledgeAgentResponse,
+    SymptomAgentResponse,
+    MemoryAgentResponse,
 )
 
 
@@ -321,4 +324,7 @@ __all__ = [
     "RouterTestRequest",
     "RouterTestResponse",
     "RouterStatisticsResponse",
+    "MedicalKnowledgeAgentResponse",
+    "SymptomAgentResponse",
+    "MemoryAgentResponse",
 ]

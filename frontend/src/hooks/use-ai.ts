@@ -36,7 +36,10 @@ import {
   RouterClassifyResponse,
   RouterTestRequest,
   RouterTestResponse,
-  RouterStatisticsResponse
+  RouterStatisticsResponse,
+  MedicalKnowledgeAgentResponse,
+  SymptomAgentResponse,
+  MemoryAgentResponse
 } from '@/services/ai.service'
 
 /**
@@ -464,5 +467,64 @@ export function useRouterStatistics() {
     refetchInterval: 10000, // Refresh stats check every 10 seconds
   })
 }
+
+/**
+ * Custom hook to test the MedicalKnowledgeAgent RAG pipeline.
+ */
+export function useMedicalAgentTest() {
+  const queryClient = useQueryClient()
+  return useMutation<MedicalKnowledgeAgentResponse, Error, RouterTestRequest>({
+    mutationFn: async (request: RouterTestRequest) => {
+      return await aiService.testMedicalAgent(request)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'core-agents', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to test the SymptomAgent guidance pipeline.
+ */
+export function useSymptomAgentTest() {
+  const queryClient = useQueryClient()
+  return useMutation<SymptomAgentResponse, Error, RouterTestRequest>({
+    mutationFn: async (request: RouterTestRequest) => {
+      return await aiService.testSymptomAgent(request)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'core-agents', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to test the MemoryAgent memory pipeline.
+ */
+export function useMemoryAgentTest() {
+  const queryClient = useQueryClient()
+  return useMutation<MemoryAgentResponse, Error, RouterTestRequest>({
+    mutationFn: async (request: RouterTestRequest) => {
+      return await aiService.testMemoryAgent(request)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'core-agents', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to fetch core agents statistics periodically.
+ */
+export function useCoreAgentsStatistics() {
+  return useQuery<Record<string, any>, Error>({
+    queryKey: ['admin', 'ai', 'core-agents', 'statistics'],
+    queryFn: async () => {
+      return await aiService.getCoreAgentsStatistics()
+    },
+    refetchInterval: 10000, // Refresh metrics every 10 seconds
+  })
+}
+
 
 

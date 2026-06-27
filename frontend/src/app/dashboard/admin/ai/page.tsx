@@ -38,7 +38,11 @@ import {
   useRouterIntents,
   useRouterClassify,
   useRouterTest,
-  useRouterStatistics
+  useRouterStatistics,
+  useMedicalAgentTest,
+  useSymptomAgentTest,
+  useMemoryAgentTest,
+  useCoreAgentsStatistics
 } from '@/hooks/use-ai'
 import { 
   Sparkles, 
@@ -4651,6 +4655,460 @@ function GraphHealthSummaryBadge() {
   )
 }
 
+function CoreAgentsView() {
+  const [activePlayground, setActivePlayground] = useState<'medical' | 'symptom' | 'memory'>('medical')
+  
+  const [medicalQuery, setMedicalQuery] = useState('What are the long-term management protocols for Type 2 Diabetes Mellitus?')
+  const [medicalPatientId, setMedicalPatientId] = useState('')
+  const [medicalDebug, setMedicalDebug] = useState(false)
+  
+  const [symptomQuery, setSymptomQuery] = useState('My patient reports sharp chest pain radiating to left arm with mild dyspnea and sweating.')
+  const [symptomPatientId, setSymptomPatientId] = useState('')
+  
+  const [memoryPatientId, setMemoryPatientId] = useState('65f7c32b5e28a425fca68341')
+  const [memoryQuery, setMemoryQuery] = useState('retrieve recent surgeries or allergies')
+
+  const medicalMutation = useMedicalAgentTest()
+  const symptomMutation = useSymptomAgentTest()
+  const memoryMutation = useMemoryAgentTest()
+  
+  const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useCoreAgentsStatistics()
+
+  const handleTestMedical = () => {
+    medicalMutation.mutate({
+      query: medicalQuery,
+      patient_id: medicalPatientId || undefined,
+      debug_mode: medicalDebug
+    })
+  }
+
+  const handleTestSymptom = () => {
+    symptomMutation.mutate({
+      query: symptomQuery,
+      patient_id: symptomPatientId || undefined
+    })
+  }
+
+  const handleTestMemory = () => {
+    memoryMutation.mutate({
+      query: memoryQuery,
+      patient_id: memoryPatientId || undefined
+    })
+  }
+
+  // Helper to safely fetch metrics per agent
+  const getAgentStat = (agentName: string, metric: string, defaultValue: any = 0) => {
+    if (!stats || !stats[agentName]) return defaultValue
+    return stats[agentName][metric] ?? defaultValue
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Metrics Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {['MedicalKnowledgeAgent', 'SymptomAgent', 'MemoryAgent'].map((agent) => {
+          const count = getAgentStat(agent, 'execution_count')
+          const latency = getAgentStat(agent, 'average_latency_ms').toFixed(1)
+          const tokens = getAgentStat(agent, 'total_tokens')
+          const failures = getAgentStat(agent, 'failures')
+          const cost = getAgentStat(agent, 'estimated_cost').toFixed(4)
+          
+          return (
+            <Card key={agent} className="border border-slate-200 shadow-sm relative overflow-hidden bg-white">
+              <CardHeader className="pb-2 border-b border-slate-100 bg-slate-50/50">
+                <div className="flex justify-between items-center">
+                  <CardTitle className="text-sm font-bold text-slate-800 tracking-tight">{agent}</CardTitle>
+                  <span className="px-2 py-0.5 text-[10px] font-semibold bg-emerald-100 text-emerald-800 rounded-full">
+                    Production
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-4 grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-xs text-slate-400 block uppercase font-semibold">Executions</span>
+                  <span className="text-lg font-bold text-slate-900">{count}</span>
+                  <span className="text-[10px] text-red-500 block">Failures: {failures}</span>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-400 block uppercase font-semibold">Avg Latency</span>
+                  <span className="text-lg font-bold text-slate-900">{latency} ms</span>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-400 block uppercase font-semibold">Tokens</span>
+                  <span className="text-sm font-bold text-slate-900">{tokens.toLocaleString()}</span>
+                </div>
+                <div>
+                  <span className="text-xs text-slate-400 block uppercase font-semibold">LLM Cost</span>
+                  <span className="text-sm font-bold text-slate-900">${cost}</span>
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })}
+      </div>
+
+      {/* Selector and Main Container */}
+      <Card className="border border-slate-200 shadow-md overflow-hidden bg-white">
+        <CardHeader className="pb-0 border-b border-slate-100 bg-slate-50/50">
+          <div className="flex justify-between items-center">
+            <div className="flex gap-4">
+              <button
+                onClick={() => setActivePlayground('medical')}
+                className={`pb-3 text-sm font-semibold border-b-2 transition-all ${
+                  activePlayground === 'medical'
+                    ? 'border-teal-600 text-teal-600 font-bold'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Medical Knowledge
+              </button>
+              <button
+                onClick={() => setActivePlayground('symptom')}
+                className={`pb-3 text-sm font-semibold border-b-2 transition-all ${
+                  activePlayground === 'symptom'
+                    ? 'border-teal-600 text-teal-600 font-bold'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Symptom Guidance
+              </button>
+              <button
+                onClick={() => setActivePlayground('memory')}
+                className={`pb-3 text-sm font-semibold border-b-2 transition-all ${
+                  activePlayground === 'memory'
+                    ? 'border-teal-600 text-teal-600 font-bold'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Memory Sync & Recall
+              </button>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetchStats()}
+              disabled={statsLoading}
+              className="mb-2 text-xs flex items-center gap-1.5"
+            >
+              <RefreshCw className={`h-3 w-3 ${statsLoading ? 'animate-spin' : ''}`} />
+              Refresh Stats
+            </Button>
+          </div>
+        </CardHeader>
+
+        <CardContent className="pt-6">
+          {activePlayground === 'medical' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Inputs Panel */}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700 block">Clinical Query</label>
+                  <textarea
+                    rows={4}
+                    value={medicalQuery}
+                    onChange={(e) => setMedicalQuery(e.target.value)}
+                    className="w-full p-3 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:outline-none transition-all leading-relaxed"
+                    placeholder="Enter medical question..."
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-700 block">Patient ID (Optional)</label>
+                    <Input
+                      type="text"
+                      value={medicalPatientId}
+                      onChange={(e) => setMedicalPatientId(e.target.value)}
+                      placeholder="e.g. 65f7c3..."
+                      className="border-slate-300"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 pt-8">
+                    <input
+                      type="checkbox"
+                      id="medical_debug"
+                      checked={medicalDebug}
+                      onChange={(e) => setMedicalDebug(e.target.checked)}
+                      className="rounded text-teal-600 focus:ring-teal-500"
+                    />
+                    <label htmlFor="medical_debug" className="text-sm text-slate-600 font-semibold cursor-pointer">
+                      Debug Mode
+                    </label>
+                  </div>
+                </div>
+                <Button
+                  onClick={handleTestMedical}
+                  disabled={medicalMutation.isPending}
+                  className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold"
+                >
+                  {medicalMutation.isPending ? 'Executing RAG pipeline...' : 'Execute Medical Agent'}
+                </Button>
+              </div>
+
+              {/* Outputs Panel */}
+              <div className="space-y-4">
+                {medicalMutation.data ? (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-lg shadow-sm">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider block">Agent Answer Output</span>
+                        <span className="text-[10px] font-semibold bg-emerald-200 text-emerald-900 rounded-full px-2 py-0.5">
+                          Confidence: {(medicalMutation.data.confidence * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <p className="text-sm text-slate-800 leading-relaxed font-sans whitespace-pre-wrap">
+                        {medicalMutation.data.answer}
+                      </p>
+                    </div>
+
+                    {medicalMutation.data.sources && medicalMutation.data.sources.length > 0 && (
+                      <div className="space-y-1.5">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Sources Consulted</span>
+                        <div className="flex flex-wrap gap-2">
+                          {medicalMutation.data.sources.map((src) => (
+                            <span key={src} className="px-2.5 py-1 text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200 rounded-md">
+                              {src}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {medicalMutation.data.citations && medicalMutation.data.citations.length > 0 && (
+                      <div className="space-y-2">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Citations & Grounding Chunks</span>
+                        <div className="space-y-2 max-h-[220px] overflow-y-auto">
+                          {medicalMutation.data.citations.map((c, i) => (
+                            <div key={i} className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs leading-relaxed">
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="font-bold text-teal-800">[{c.source}]</span>
+                                <span className="text-[10px] font-mono text-slate-400">Score: {(c.score * 100).toFixed(0)}%</span>
+                              </div>
+                              <p className="text-slate-600 font-sans italic">"{c.text}"</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : medicalMutation.error ? (
+                  <div className="p-4 bg-red-50 border border-red-100 rounded-lg flex items-start gap-2 text-sm text-red-800 leading-relaxed font-semibold">
+                    <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0" />
+                    Error: {medicalMutation.error.message}
+                  </div>
+                ) : (
+                  <div className="h-[250px] border border-dashed border-slate-300 rounded-lg flex flex-col justify-center items-center text-slate-400 gap-2">
+                    <Brain className="h-10 w-10 text-slate-300" />
+                    <span className="text-sm font-semibold">Ready to execute Medical Knowledge RAG test.</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activePlayground === 'symptom' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Inputs Panel */}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700 block">Reported Symptoms</label>
+                  <textarea
+                    rows={4}
+                    value={symptomQuery}
+                    onChange={(e) => setSymptomQuery(e.target.value)}
+                    className="w-full p-3 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:outline-none transition-all leading-relaxed"
+                    placeholder="Describe patient symptoms..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700 block">Patient ID (Optional)</label>
+                  <Input
+                    type="text"
+                    value={symptomPatientId}
+                    onChange={(e) => setSymptomPatientId(e.target.value)}
+                    placeholder="e.g. 65f7c3..."
+                    className="border-slate-300"
+                  />
+                </div>
+                <Button
+                  onClick={handleTestSymptom}
+                  disabled={symptomMutation.isPending}
+                  className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold"
+                >
+                  {symptomMutation.isPending ? 'Analyzing symptoms...' : 'Analyze Symptoms'}
+                </Button>
+              </div>
+
+              {/* Outputs Panel */}
+              <div className="space-y-4">
+                {symptomMutation.data ? (
+                  <div className="space-y-4">
+                    {symptomMutation.data.emergency && (
+                      <div className="p-3 bg-red-100 border border-red-200 rounded-lg text-red-900 font-bold flex items-center gap-2 text-sm shadow-sm animate-pulse">
+                        <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
+                        EMERGENCY NOTICE: Immediate medical check recommended!
+                      </div>
+                    )}
+
+                    <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-lg shadow-sm">
+                      <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider block mb-2">Guidance Summary</span>
+                      <p className="text-sm text-slate-800 leading-relaxed font-sans whitespace-pre-wrap">
+                        {symptomMutation.data.summary}
+                      </p>
+                    </div>
+
+                    {symptomMutation.data.possible_causes && symptomMutation.data.possible_causes.length > 0 && (
+                      <div className="space-y-1.5">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Possible Causes</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {symptomMutation.data.possible_causes.map((c) => (
+                            <span key={c} className="px-2 py-0.5 text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded-md">
+                              {c}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {symptomMutation.data.red_flags && symptomMutation.data.red_flags.length > 0 && (
+                      <div className="space-y-1.5">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Red Flags / Risks</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {symptomMutation.data.red_flags.map((flag) => (
+                            <span key={flag} className="px-2 py-0.5 text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 rounded-md flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3" />
+                              {flag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs leading-relaxed">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Recommended Action Protocols</span>
+                      <p className="text-slate-700 font-sans font-semibold">
+                        {symptomMutation.data.recommended_action}
+                      </p>
+                    </div>
+                  </div>
+                ) : symptomMutation.error ? (
+                  <div className="p-4 bg-red-50 border border-red-100 rounded-lg flex items-start gap-2 text-sm text-red-800 leading-relaxed font-semibold">
+                    <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0" />
+                    Error: {symptomMutation.error.message}
+                  </div>
+                ) : (
+                  <div className="h-[250px] border border-dashed border-slate-300 rounded-lg flex flex-col justify-center items-center text-slate-400 gap-2">
+                    <Brain className="h-10 w-10 text-slate-300" />
+                    <span className="text-sm font-semibold">Ready to analyze symptoms.</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activePlayground === 'memory' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Inputs Panel */}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700 block">Patient ID (Required for MongoDB retrieval)</label>
+                  <Input
+                    type="text"
+                    value={memoryPatientId}
+                    onChange={(e) => setMemoryPatientId(e.target.value)}
+                    placeholder="e.g. 65f7c3..."
+                    className="border-slate-300"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700 block">Semantic Query (Search chat vector memories)</label>
+                  <textarea
+                    rows={2}
+                    value={memoryQuery}
+                    onChange={(e) => setMemoryQuery(e.target.value)}
+                    className="w-full p-3 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-500 focus:outline-none transition-all leading-relaxed"
+                    placeholder="Describe memory concepts to recall..."
+                  />
+                </div>
+                <Button
+                  onClick={handleTestMemory}
+                  disabled={memoryMutation.isPending || !memoryPatientId}
+                  className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold"
+                >
+                  {memoryMutation.isPending ? 'Syncing and recalling memory...' : 'Execute Memory Agent (Sync & Recall)'}
+                </Button>
+              </div>
+
+              {/* Outputs Panel */}
+              <div className="space-y-4">
+                {memoryMutation.data ? (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-lg shadow-sm">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider block">Longitudinal Summary (MongoDB Memory)</span>
+                        <span className="text-[10px] font-mono text-emerald-700 font-bold bg-emerald-100 rounded-full px-2 py-0.5">
+                          Synced Live
+                        </span>
+                      </div>
+                      <p className="text-sm text-slate-800 leading-relaxed font-sans whitespace-pre-wrap">
+                        {memoryMutation.data.memory_summary}
+                      </p>
+                    </div>
+
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs max-h-[150px] overflow-y-auto">
+                      <span className="font-bold text-slate-500 uppercase block mb-1">AGGREGATED CLINICAL PROFILE</span>
+                      <pre className="text-[11px] font-mono text-slate-600 leading-normal whitespace-pre-wrap">
+                        {memoryMutation.data.patient_summary}
+                      </pre>
+                    </div>
+
+                    {memoryMutation.data.relevant_context && memoryMutation.data.relevant_context.length > 0 && (
+                      <div className="space-y-2">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Semantic Memories Recalled (Qdrant vectors)</span>
+                        <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
+                          {memoryMutation.data.relevant_context.map((m, i) => (
+                            <div key={i} className="p-2 bg-slate-50 border border-slate-200 rounded text-xs leading-normal">
+                              <p className="text-slate-600 italic">"{m.content || m.text}"</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {memoryMutation.data.conversation_history && memoryMutation.data.conversation_history.length > 0 && (
+                      <div className="space-y-2">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Recent Chats Audit (MongoDB logs)</span>
+                        <div className="space-y-1.5 max-h-[150px] overflow-y-auto border border-slate-100 rounded-lg p-2 bg-slate-50/50">
+                          {memoryMutation.data.conversation_history.map((h, i) => (
+                            <div key={i} className="text-[11px] border-b border-slate-100 pb-1.5 last:border-0">
+                              <span className="font-bold text-teal-800 uppercase text-[9px] mr-1 block">[{h.role}]</span>
+                              <span className="text-slate-600 font-sans leading-snug">{h.content}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : memoryMutation.error ? (
+                  <div className="p-4 bg-red-50 border border-red-100 rounded-lg flex items-start gap-2 text-sm text-red-800 leading-relaxed font-semibold">
+                    <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0" />
+                    Error: {memoryMutation.error.message}
+                  </div>
+                ) : (
+                  <div className="h-[250px] border border-dashed border-slate-300 rounded-lg flex flex-col justify-center items-center text-slate-400 gap-2">
+                    <Brain className="h-10 w-10 text-slate-300" />
+                    <span className="text-sm font-semibold">Ready to test Patient Memory Sync pipeline.</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+
 function RouterAgentView() {
   const { data: intents, isLoading: isIntentsLoading } = useRouterIntents()
   const { data: stats, isLoading: isStatsLoading, refetch: refetchStats } = useRouterStatistics()
@@ -5461,7 +5919,7 @@ function WorkflowEngineView() {
 }
 
 function AIPlaygroundContent() {
-  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent' | 'workflow-engine' | 'router-agent'>('llm')
+  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent' | 'workflow-engine' | 'router-agent' | 'core-agents'>('llm')
 
   return (
     <div className="space-y-6">
@@ -5616,6 +6074,17 @@ function AIPlaygroundContent() {
           Router Agent
         </button>
         <button
+          onClick={() => setActiveTab('core-agents')}
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
+            activeTab === 'core-agents'
+              ? 'border-teal-600 text-teal-600 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Activity className="h-4 w-4" />
+          Core Agents
+        </button>
+        <button
           onClick={() => setActiveTab('integration')}
           className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
             activeTab === 'integration'
@@ -5648,6 +6117,8 @@ function AIPlaygroundContent() {
         <WorkflowEngineView />
       ) : activeTab === 'router-agent' ? (
         <RouterAgentView />
+      ) : activeTab === 'core-agents' ? (
+        <CoreAgentsView />
       ) : (
         <IntegrationPlaygroundView />
       )}

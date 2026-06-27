@@ -25,7 +25,7 @@ class IntentRegistry:
             "DOCTOR_RECOMMENDATION": "DoctorRecommendationAgent",
             "REMINDER": "ReminderAgent",
             "APPOINTMENT": "AppointmentAgent",
-            "CONVERSATION_RECALL": "ConversationRecallAgent",
+            "CONVERSATION_RECALL": "MemoryAgent",
             "UNKNOWN": "UnknownAgent"
         }
 
