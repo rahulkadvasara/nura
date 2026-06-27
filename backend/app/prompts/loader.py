@@ -32,6 +32,10 @@ class PromptLoader:
             "drug_interaction_user": "1.0.0",
             "doctor_recommendation_system": "1.0.0",
             "doctor_recommendation_user": "1.0.0",
+            "reminder_system": "1.0.0",
+            "reminder_user": "1.0.0",
+            "appointment_system": "1.0.0",
+            "appointment_user": "1.0.0",
         }
 
     def get_template(self, name: str, is_system: bool = False) -> str:

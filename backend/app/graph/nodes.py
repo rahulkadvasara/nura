@@ -383,7 +383,6 @@ class DoctorRecommendationAgentNode:
         meta.update(res.metadata or {})
         doctor_data = res.response
         meta["doctor_recommendations_analysis"] = doctor_data.model_dump() if hasattr(doctor_data, "model_dump") else doctor_data
-        
         return {
             "current_node": "DoctorRecommendationAgent",
             "previous_node": state.current_node,
@@ -393,3 +392,94 @@ class DoctorRecommendationAgentNode:
             "token_usage": getattr(doctor_data, "usage", {})
         }
 
+
+class ReminderAgentNode:
+    """Executes ReminderAgent to create or manage patient reminders"""
+
+    async def __call__(self, state: GraphState) -> Dict[str, Any]:
+        from app.core.dependencies import get_reminder_agent
+        from app.agents.base.context import AgentContext
+        
+        agent = get_reminder_agent()
+        ctx = AgentContext(
+            request_id=state.request_id,
+            session_id=state.session_id,
+            conversation_id=state.conversation_id,
+            patient_id=state.patient_id,
+            doctor_id=state.doctor_id,
+            user_id=state.user_id,
+            role=state.role,
+            metadata=dict(state.metadata or {})
+        )
+        
+        res = await agent.run(state.query, ctx)
+        trace = list(state.execution_trace) if state.execution_trace else []
+        trace.append("ReminderAgent")
+        
+        if not res.success:
+            return {
+                "current_node": "ReminderAgent",
+                "previous_node": state.current_node,
+                "execution_trace": trace,
+                "error": res.message
+            }
+            
+        meta = dict(state.metadata or {})
+        meta.update(res.metadata or {})
+        reminder_data = res.response
+        meta["reminder_analysis"] = reminder_data.model_dump() if hasattr(reminder_data, "model_dump") else reminder_data
+        
+        return {
+            "current_node": "ReminderAgent",
+            "previous_node": state.current_node,
+            "execution_trace": trace,
+            "response": reminder_data.message if hasattr(reminder_data, "message") else str(reminder_data),
+            "metadata": meta,
+            "token_usage": getattr(reminder_data, "usage", {})
+        }
+
+
+class AppointmentAgentNode:
+    """Executes AppointmentAgent to schedule, cancel or search appointments"""
+
+    async def __call__(self, state: GraphState) -> Dict[str, Any]:
+        from app.core.dependencies import get_appointment_agent
+        from app.agents.base.context import AgentContext
+        
+        agent = get_appointment_agent()
+        ctx = AgentContext(
+            request_id=state.request_id,
+            session_id=state.session_id,
+            conversation_id=state.conversation_id,
+            patient_id=state.patient_id,
+            doctor_id=state.doctor_id,
+            user_id=state.user_id,
+            role=state.role,
+            metadata=dict(state.metadata or {})
+        )
+        
+        res = await agent.run(state.query, ctx)
+        trace = list(state.execution_trace) if state.execution_trace else []
+        trace.append("AppointmentAgent")
+        
+        if not res.success:
+            return {
+                "current_node": "AppointmentAgent",
+                "previous_node": state.current_node,
+                "execution_trace": trace,
+                "error": res.message
+            }
+            
+        meta = dict(state.metadata or {})
+        meta.update(res.metadata or {})
+        appointment_data = res.response
+        meta["appointment_analysis"] = appointment_data.model_dump() if hasattr(appointment_data, "model_dump") else appointment_data
+        
+        return {
+            "current_node": "AppointmentAgent",
+            "previous_node": state.current_node,
+            "execution_trace": trace,
+            "response": appointment_data.message if hasattr(appointment_data, "message") else str(appointment_data),
+            "metadata": meta,
+            "token_usage": getattr(appointment_data, "usage", {})
+        }

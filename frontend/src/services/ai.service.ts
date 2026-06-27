@@ -406,6 +406,21 @@ export const aiService = {
   getHealthcareAgentsStatistics: async (): Promise<Record<string, any>> => {
     const response = await apiClient.get<Record<string, any>>('/ai/agents/healthcare/statistics')
     return response.data
+  },
+
+  testReminderAgent: async (request: RouterTestRequest): Promise<ReminderAgentResponse> => {
+    const response = await apiClient.post<ReminderAgentResponse>('/ai/agents/reminder/test', request)
+    return response.data
+  },
+
+  testAppointmentAgent: async (request: RouterTestRequest): Promise<AppointmentAgentResponse> => {
+    const response = await apiClient.post<AppointmentAgentResponse>('/ai/agents/appointment/test', request)
+    return response.data
+  },
+
+  getOperationsAgentsStatistics: async (): Promise<Record<string, any>> => {
+    const response = await apiClient.get<Record<string, any>>('/ai/agents/operations/statistics')
+    return response.data
   }
 }
 
@@ -940,6 +955,33 @@ export interface DoctorRecommendationAgentResponse {
   confidence: number
   metadata: Record<string, any>
   usage: Record<string, number>
+}
+
+export interface ReminderAgentResponse {
+  status: string
+  action: string
+  message: string
+  created_reminder?: Record<string, any>
+  updated_reminder?: Record<string, any>
+  deleted_id?: string
+  warnings: string[]
+  safety_check_details?: Record<string, any>
+  usage: Record<string, number>
+  metadata: Record<string, any>
+}
+
+export interface AppointmentAgentResponse {
+  status: string
+  action: string
+  message: string
+  search_results?: Record<string, any>[]
+  slots?: Record<string, any>[]
+  appointment?: Record<string, any>
+  rescheduled_appointment?: Record<string, any>
+  cancelled_id?: string
+  reasoning?: string
+  usage: Record<string, number>
+  metadata: Record<string, any>
 }
 
 

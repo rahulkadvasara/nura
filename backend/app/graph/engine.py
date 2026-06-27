@@ -242,6 +242,12 @@ def get_graph_engine() -> LangGraphEngine:
         if "DoctorRecommendationAgent" not in registered_nodes:
             from app.graph.nodes import DoctorRecommendationAgentNode
             builder.add_node("DoctorRecommendationAgent", DoctorRecommendationAgentNode())
+        if "ReminderAgent" not in registered_nodes:
+            from app.graph.nodes import ReminderAgentNode
+            builder.add_node("ReminderAgent", ReminderAgentNode())
+        if "AppointmentAgent" not in registered_nodes:
+            from app.graph.nodes import AppointmentAgentNode
+            builder.add_node("AppointmentAgent", AppointmentAgentNode())
         if "UnknownAgent" not in registered_nodes:
             from app.graph.nodes import UnknownAgentNode
             builder.add_node("UnknownAgent", UnknownAgentNode())
@@ -262,6 +268,8 @@ def get_graph_engine() -> LangGraphEngine:
                 "ReportAnalysisAgent": "ReportAnalysisAgent",
                 "DrugInteractionAgent": "DrugInteractionAgent",
                 "DoctorRecommendationAgent": "DoctorRecommendationAgent",
+                "ReminderAgent": "ReminderAgent",
+                "AppointmentAgent": "AppointmentAgent",
                 "UnknownAgent": "UnknownAgent"
             }
         )
@@ -273,6 +281,8 @@ def get_graph_engine() -> LangGraphEngine:
         builder.add_transition("ReportAnalysisAgent", FINISH_NODE)
         builder.add_transition("DrugInteractionAgent", FINISH_NODE)
         builder.add_transition("DoctorRecommendationAgent", FINISH_NODE)
+        builder.add_transition("ReminderAgent", FINISH_NODE)
+        builder.add_transition("AppointmentAgent", FINISH_NODE)
         builder.add_transition("UnknownAgent", FINISH_NODE)
         
         # Compile engine

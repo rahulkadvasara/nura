@@ -16,6 +16,8 @@ from app.agents.core.memory_agent import MemoryAgent
 from app.agents.healthcare.report_analysis_agent import ReportAnalysisAgent
 from app.agents.healthcare.drug_interaction_agent import DrugInteractionAgent
 from app.agents.healthcare.doctor_recommendation_agent import DoctorRecommendationAgent
+from app.agents.operations.reminder_agent import ReminderAgent
+from app.agents.operations.appointment_agent import AppointmentAgent
 
 __all__ = [
     "AgentException",
@@ -34,4 +36,6 @@ __all__ = [
     "ReportAnalysisAgent",
     "DrugInteractionAgent",
     "DoctorRecommendationAgent",
+    "ReminderAgent",
+    "AppointmentAgent",
 ]

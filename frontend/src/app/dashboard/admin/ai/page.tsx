@@ -50,6 +50,7 @@ import {
   useHealthcareAgentsStatistics
 } from '@/hooks/use-ai'
 import { HealthcareAgentsView } from './healthcare_agents_view'
+import { OperationsAgentsView } from './operations_agents_view'
 import { 
   Sparkles, 
   Cpu, 
@@ -5926,7 +5927,7 @@ function WorkflowEngineView() {
 }
 
 function AIPlaygroundContent() {
-  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent' | 'workflow-engine' | 'router-agent' | 'core-agents' | 'healthcare-agents'>('llm')
+  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent' | 'workflow-engine' | 'router-agent' | 'core-agents' | 'healthcare-agents' | 'operations-agents'>('llm')
 
   return (
     <div className="space-y-6">
@@ -6103,6 +6104,17 @@ function AIPlaygroundContent() {
           Healthcare Agents
         </button>
         <button
+          onClick={() => setActiveTab('operations-agents')}
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
+            activeTab === 'operations-agents'
+              ? 'border-teal-600 text-teal-600 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Terminal className="h-4 w-4" />
+          Operations Agents
+        </button>
+        <button
           onClick={() => setActiveTab('integration')}
           className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
             activeTab === 'integration'
@@ -6139,6 +6151,8 @@ function AIPlaygroundContent() {
         <CoreAgentsView />
       ) : activeTab === 'healthcare-agents' ? (
         <HealthcareAgentsView />
+      ) : activeTab === 'operations-agents' ? (
+        <OperationsAgentsView />
       ) : (
         <IntegrationPlaygroundView />
       )}

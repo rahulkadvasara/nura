@@ -58,6 +58,7 @@ from app.services import (
     get_intent_detection_service,
     PatientSummaryBuilder,
     MemorySyncService,
+    ReminderService,
 )
 from app.events import EventDispatcher, EventQueue
 from app.agents import (
@@ -69,7 +70,10 @@ from app.agents import (
     ReportAnalysisAgent,
     DrugInteractionAgent,
     DoctorRecommendationAgent,
+    ReminderAgent,
+    AppointmentAgent,
 )
+from app.prompts.loader import PromptLoader
 
 
 
@@ -681,6 +685,8 @@ _memory_agent_instance = None
 _report_analysis_agent_instance = None
 _drug_interaction_agent_instance = None
 _doctor_recommendation_agent_instance = None
+_reminder_agent_instance = None
+_appointment_agent_instance = None
 
 
 def get_report_repository() -> ReportRepository:
@@ -938,6 +944,45 @@ def get_router_agent():
         from app.agents.router import RouterAgent
         _router_instance = RouterAgent()
     return _router_instance
+
+
+def get_reminder_repository():
+    """Get ReminderRepository instance"""
+    from app.repositories.reminder_repository import ReminderRepository
+    database = get_database()
+    return ReminderRepository(database.reminders)
+
+
+def get_reminder_service() -> ReminderService:
+    """Get ReminderService instance"""
+    return ReminderService(
+        reminder_repository=get_reminder_repository(),
+        user_repository=get_user_repository()
+    )
+
+
+def get_reminder_agent() -> ReminderAgent:
+    """Get singleton ReminderAgent instance"""
+    global _reminder_agent_instance
+    if _reminder_agent_instance is None:
+        _reminder_agent_instance = ReminderAgent(
+            reminder_service=get_reminder_service(),
+            prompt_loader=PromptLoader()
+        )
+    return _reminder_agent_instance
+
+
+def get_appointment_agent() -> AppointmentAgent:
+    """Get singleton AppointmentAgent instance"""
+    global _appointment_agent_instance
+    if _appointment_agent_instance is None:
+        _appointment_agent_instance = AppointmentAgent(
+            appointment_service=get_appointment_service(),
+            doctor_service=get_doctor_profile_service(),
+            availability_service=get_doctor_availability_service(),
+            prompt_loader=PromptLoader()
+        )
+    return _appointment_agent_instance
 
 
 

@@ -42,7 +42,9 @@ import {
   MemoryAgentResponse,
   ReportAnalysisAgentResponse,
   DrugInteractionAgentResponse,
-  DoctorRecommendationAgentResponse
+  DoctorRecommendationAgentResponse,
+  ReminderAgentResponse,
+  AppointmentAgentResponse,
 } from '@/services/ai.service'
 
 /**
@@ -582,6 +584,49 @@ export function useHealthcareAgentsStatistics() {
     queryKey: ['admin', 'ai', 'healthcare-agents', 'statistics'],
     queryFn: async () => {
       return await aiService.getHealthcareAgentsStatistics()
+    },
+    refetchInterval: 10000, // Refresh metrics every 10 seconds
+  })
+}
+
+/**
+ * Custom hook to test the ReminderAgent.
+ */
+export function useReminderAgentTest() {
+  const queryClient = useQueryClient()
+  return useMutation<ReminderAgentResponse, Error, RouterTestRequest>({
+    mutationFn: async (request: RouterTestRequest) => {
+      return await aiService.testReminderAgent(request)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'operations-agents', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to test the AppointmentAgent.
+ */
+export function useAppointmentAgentTest() {
+  const queryClient = useQueryClient()
+  return useMutation<AppointmentAgentResponse, Error, RouterTestRequest>({
+    mutationFn: async (request: RouterTestRequest) => {
+      return await aiService.testAppointmentAgent(request)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'operations-agents', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to fetch operations agents statistics periodically.
+ */
+export function useOperationsAgentsStatistics() {
+  return useQuery<Record<string, any>, Error>({
+    queryKey: ['admin', 'ai', 'operations-agents', 'statistics'],
+    queryFn: async () => {
+      return await aiService.getOperationsAgentsStatistics()
     },
     refetchInterval: 10000, // Refresh metrics every 10 seconds
   })

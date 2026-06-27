@@ -38,6 +38,8 @@ from app.core.dependencies import (
     get_report_analysis_agent,
     get_drug_interaction_agent,
     get_doctor_recommendation_agent,
+    get_reminder_agent,
+    get_appointment_agent,
 )
 from app.models import UserRole, UserInDB
 from app.schemas.ai import (
@@ -94,6 +96,7 @@ from app.schemas.vector import (
     VectorTestResultItem
 )
 from app.schemas.patient_context import PatientContextResponse
+from app.schemas import ReminderAgentResponse, AppointmentAgentResponse
 from app.services.ai_service import AIService
 from app.services.groq_service import GroqService
 from app.services.embedding_service import EmbeddingService
@@ -1583,6 +1586,83 @@ async def get_healthcare_agents_statistics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch healthcare agents statistics: {str(e)}"
+        )
+
+
+@router.post(
+    "/agents/reminder/test",
+    response_model=ReminderAgentResponse,
+    summary="Directly test the ReminderAgent. Guarded: Admin Only.",
+)
+async def test_reminder_agent(
+    payload: RouterTestRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    agent = Depends(get_reminder_agent),
+):
+    try:
+        from app.agents.base.context import AgentContext
+        import time
+        ctx = AgentContext(
+            request_id=f"test-reminder-{int(time.time())}",
+            patient_id=payload.patient_id,
+            metadata={**(payload.metadata or {}), "debug_mode": payload.debug_mode}
+        )
+        res = await agent.run(payload.query, ctx)
+        if not res.success:
+            if hasattr(res, "response") and res.response is not None:
+                return res.response
+            raise Exception(res.message)
+        return res.response
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Reminder Agent test run failed: {str(e)}"
+        )
+
+
+@router.post(
+    "/agents/appointment/test",
+    response_model=AppointmentAgentResponse,
+    summary="Directly test the AppointmentAgent. Guarded: Admin Only.",
+)
+async def test_appointment_agent(
+    payload: RouterTestRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    agent = Depends(get_appointment_agent),
+):
+    try:
+        from app.agents.base.context import AgentContext
+        import time
+        ctx = AgentContext(
+            request_id=f"test-appt-{int(time.time())}",
+            patient_id=payload.patient_id,
+            metadata={**(payload.metadata or {}), "debug_mode": payload.debug_mode}
+        )
+        res = await agent.run(payload.query, ctx)
+        if not res.success:
+            raise Exception(res.message)
+        return res.response
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Appointment Agent test run failed: {str(e)}"
+        )
+
+
+@router.get(
+    "/agents/operations/statistics",
+    summary="Retrieve cumulative operations agents telemetry. Guarded: Admin Only.",
+)
+async def get_operations_agents_statistics(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+):
+    try:
+        from app.agents.operations.telemetry import get_operations_telemetry
+        return get_operations_telemetry().get_stats()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch operations agents statistics: {str(e)}"
         )
 
 
