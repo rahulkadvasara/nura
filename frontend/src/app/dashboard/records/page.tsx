@@ -23,7 +23,9 @@ import {
   Activity,
   Heart,
   Shield,
-  Layers
+  Layers,
+  Zap,
+  CheckSquare
 } from 'lucide-react'
 
 export default function PatientRecordsPage() {
@@ -38,9 +40,11 @@ export default function PatientRecordsPage() {
   const [inspectingReport, setInspectingReport] = useState<ReportResponse | null>(null)
   const [ocrData, setOcrData] = useState<ReportOcrData | null>(null)
   const [structuredData, setStructuredData] = useState<any>(null)
+  const [riskData, setRiskData] = useState<any>(null)
   const [loadingOcr, setLoadingOcr] = useState(false)
   const [loadingExtraction, setLoadingExtraction] = useState(false)
-  const [inspectTab, setInspectTab] = useState<'structured' | 'ocr' | 'labs' | 'meds'>('structured')
+  const [loadingRisk, setLoadingRisk] = useState(false)
+  const [inspectTab, setInspectTab] = useState<'structured' | 'ocr' | 'labs' | 'meds' | 'risk'>('structured')
 
   const fetchReports = async () => {
     try {
@@ -65,7 +69,8 @@ export default function PatientRecordsPage() {
     const processing = reports.filter(
       r => r.ocr_status === 'processing' || 
            r.ocr_status === 'pending' || 
-           r.extraction_status === 'processing'
+           r.extraction_status === 'processing' ||
+           r.processing_status === 'processing'
     )
     if (processing.length === 0) return
 
@@ -74,11 +79,11 @@ export default function PatientRecordsPage() {
       const copy = [...reports]
       for (let i = 0; i < copy.length; i++) {
         const r = copy[i]
-        if (r.ocr_status === 'processing' || r.ocr_status === 'pending' || r.extraction_status === 'processing') {
+        if (r.ocr_status === 'processing' || r.ocr_status === 'pending' || r.extraction_status === 'processing' || r.processing_status === 'processing') {
           try {
             const statusData = await reportService.getProcessingStatus(r.id)
             const structData = await reportService.getStructuredData(r.id)
-            if (statusData.ocr_status !== r.ocr_status || structData.extraction_status !== r.extraction_status) {
+            if (statusData.ocr_status !== r.ocr_status || structData.extraction_status !== r.extraction_status || structData.processing_status !== r.processing_status) {
               updated = true
             }
           } catch (e) {
@@ -133,7 +138,8 @@ export default function PatientRecordsPage() {
     setInspectingReport(report)
     setOcrData(null)
     setStructuredData(null)
-    setInspectTab(report.extraction_status === 'completed' ? 'structured' : 'ocr')
+    setRiskData(null)
+    setInspectTab(report.overall_risk ? 'risk' : report.extraction_status === 'completed' ? 'structured' : 'ocr')
 
     if (report.ocr_status === 'completed') {
       try {
@@ -158,6 +164,18 @@ export default function PatientRecordsPage() {
         setLoadingExtraction(false)
       }
     }
+
+    if (report.overall_risk) {
+      try {
+        setLoadingRisk(true)
+        const rDetails = await reportService.getReportRisks(report.id)
+        setRiskData(rDetails)
+      } catch (e) {
+        console.error(e)
+      } finally {
+        setLoadingRisk(false)
+      }
+    }
   }
 
   const handleExtract = async (reportId: string) => {
@@ -165,7 +183,6 @@ export default function PatientRecordsPage() {
       setLoadingExtraction(true)
       await reportService.extractReport(reportId)
       fetchReports()
-      // Reload details after short wait
       setTimeout(async () => {
         const struct = await reportService.getStructuredData(reportId)
         setStructuredData(struct)
@@ -174,6 +191,24 @@ export default function PatientRecordsPage() {
       console.error(e)
     } finally {
       setLoadingExtraction(false)
+    }
+  }
+
+  const handleRunRiskAnalysis = async (reportId: string) => {
+    try {
+      setLoadingRisk(true)
+      await reportService.analyzeReportRisks(reportId)
+      fetchReports()
+      setTimeout(async () => {
+        const struct = await reportService.getStructuredData(reportId)
+        setStructuredData(struct)
+        const rDetails = await reportService.getReportRisks(reportId)
+        setRiskData(rDetails)
+      }, 2000)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoadingRisk(false)
     }
   }
 
@@ -186,16 +221,35 @@ export default function PatientRecordsPage() {
     }
   }
 
+  // Risk Color Class Mapper
+  const getRiskHeaderColor = (risk: string) => {
+    const r = risk?.toUpperCase()
+    if (r === 'CRITICAL') return 'bg-red-600 border-red-700 text-white'
+    if (r === 'HIGH') return 'bg-orange-500 border-orange-600 text-white'
+    if (r === 'MEDIUM') return 'bg-amber-400 border-amber-500 text-slate-900'
+    if (r === 'LOW') return 'bg-sky-500 border-sky-600 text-white'
+    return 'bg-emerald-600 border-emerald-700 text-white'
+  }
+
+  const getRiskBadgeColor = (risk: string) => {
+    const r = risk?.toUpperCase()
+    if (r === 'CRITICAL') return 'bg-red-50 text-red-700 border border-red-200'
+    if (r === 'HIGH') return 'bg-orange-50 text-orange-700 border border-orange-200'
+    if (r === 'MEDIUM') return 'bg-amber-50 text-amber-700 border border-amber-200'
+    if (r === 'LOW') return 'bg-sky-50 text-sky-700 border border-sky-200'
+    return 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+  }
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-6 bg-slate-50 min-h-screen">
       {/* Header section */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
           <FileText className="h-8 w-8 text-teal-600" />
-          My Medical Records & Reports
+          My Medical Records & Diagnostics
         </h1>
         <p className="text-slate-500 mt-1">
-          Upload laboratory investigations, prescriptions or discharge sheets to parse and structure clinical details.
+          Upload laboratory investigations or prescriptions to perform OCR extraction and calculate clinical risks.
         </p>
       </div>
 
@@ -314,6 +368,11 @@ export default function PatientRecordsPage() {
                               {report.document_type}
                             </Badge>
                           )}
+                          {report.overall_risk && (
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${getRiskBadgeColor(report.overall_risk)}`}>
+                              Risk: {report.overall_risk}
+                            </span>
+                          )}
                         </div>
                         <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-4">
                           <span>Uploaded: {new Date(report.created_at).toLocaleDateString()}</span>
@@ -325,79 +384,43 @@ export default function PatientRecordsPage() {
                       </div>
 
                       <div className="flex items-center gap-3 justify-end">
-                        {/* Process status badges */}
+                        {/* Status badges */}
                         {report.ocr_status !== 'completed' ? (
+                          <span className="text-xs font-semibold text-slate-500 flex items-center gap-1 bg-slate-100 px-2 py-1 rounded">
+                            <Clock className="h-3.5 w-3.5 animate-pulse" /> OCR Pending
+                          </span>
+                        ) : report.extraction_status !== 'completed' ? (
                           <div className="flex items-center gap-2">
-                            {report.ocr_status === 'pending' && (
-                              <span className="text-xs font-semibold text-slate-500 flex items-center gap-1 bg-slate-100 px-2 py-1 rounded">
-                                <Clock className="h-3.5 w-3.5 animate-pulse" /> OCR Pending
-                              </span>
-                            )}
-                            {report.ocr_status === 'processing' && (
-                              <span className="text-xs font-semibold text-amber-600 flex items-center gap-1 bg-amber-50 px-2 py-1 rounded">
-                                <RefreshCw className="h-3.5 w-3.5 animate-spin" /> OCR Processing
-                              </span>
-                            )}
-                            {report.ocr_status === 'failed' && (
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-semibold text-red-600 flex items-center gap-1 bg-red-50 px-2 py-1 rounded">
-                                  <AlertCircle className="h-3.5 w-3.5" /> OCR Failed
-                                </span>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleRetryOcr(report.id)}
-                                  className="px-2 py-1 h-auto text-[10px] text-teal-700 hover:bg-teal-50 border-teal-200"
-                                >
-                                  Retry
-                                </Button>
-                              </div>
-                            )}
+                            <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded flex items-center gap-1">
+                              <Clock className="h-3 w-3" /> Struct Pending
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleExtract(report.id)}
+                              className="px-2 py-1 h-auto text-[10px] text-teal-700 hover:bg-teal-50 border-teal-200"
+                            >
+                              Extract
+                            </Button>
+                          </div>
+                        ) : !report.overall_risk ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded flex items-center gap-1">
+                              <Clock className="h-3 w-3" /> Risk Pending
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRunRiskAnalysis(report.id)}
+                              className="px-2 py-1 h-auto text-[10px] text-orange-700 hover:bg-orange-50 border-orange-200"
+                            >
+                              Analyze Risk
+                            </Button>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-2">
-                            {/* Extraction status badges */}
-                            {(!report.extraction_status || report.extraction_status === 'pending') && (
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded flex items-center gap-1">
-                                  <Clock className="h-3 w-3" /> Struct Pending
-                                </span>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleExtract(report.id)}
-                                  className="px-2 py-1 h-auto text-[10px] text-teal-700 hover:bg-teal-50 border-teal-200"
-                                >
-                                  Extract
-                                </Button>
-                              </div>
-                            )}
-                            {report.extraction_status === 'processing' && (
-                              <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded flex items-center gap-1">
-                                <RefreshCw className="h-3 w-3 animate-spin" /> Extracting...
-                              </span>
-                            )}
-                            {report.extraction_status === 'completed' && (
-                              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded flex items-center gap-1">
-                                <CheckCircle className="h-3 w-3" /> Structured
-                              </span>
-                            )}
-                            {report.extraction_status === 'failed' && (
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-1 rounded flex items-center gap-1">
-                                  <AlertCircle className="h-3 w-3" /> Struct Failed
-                                </span>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleExtract(report.id)}
-                                  className="px-2 py-1 h-auto text-[10px] text-teal-700 hover:bg-teal-50 border-teal-200"
-                                >
-                                  Retry
-                                </Button>
-                              </div>
-                            )}
-                          </div>
+                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded flex items-center gap-1">
+                            <CheckCircle className="h-3 w-3" /> Risk Checked
+                          </span>
                         )}
 
                         <div className="flex items-center gap-1 border-l border-slate-200 pl-3">
@@ -444,6 +467,7 @@ export default function PatientRecordsPage() {
 
                 <div className="flex flex-wrap gap-2">
                   {[
+                    { id: 'risk', name: 'Clinical Risk' },
                     { id: 'structured', name: 'Profile Summary' },
                     { id: 'labs', name: 'Lab Results' },
                     { id: 'meds', name: 'Prescribed Drugs' },
@@ -465,6 +489,131 @@ export default function PatientRecordsPage() {
               </CardHeader>
 
               <CardContent className="pt-6">
+                {/* Clinical Risk Tab */}
+                {inspectTab === 'risk' && (
+                  <div className="space-y-6">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Clinical Risk Diagnostics</span>
+                      {inspectingReport.extraction_status === 'completed' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRunRiskAnalysis(inspectingReport.id)}
+                          className="h-7 text-[10px] text-orange-700 border-orange-200"
+                          disabled={loadingRisk}
+                        >
+                          Run Risk Analysis
+                        </Button>
+                      )}
+                    </div>
+
+                    {loadingRisk ? (
+                      <div className="text-center py-10">
+                        <RefreshCw className="h-6 w-6 animate-spin text-teal-600 mx-auto mb-2" />
+                        <p className="text-xs text-slate-500">Calculating clinical risks & scoring models...</p>
+                      </div>
+                    ) : riskData ? (
+                      <div className="space-y-6 text-xs text-slate-700">
+                        {/* Overall Risk Card Banner */}
+                        <div className={`p-5 rounded-lg border flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${getRiskHeaderColor(riskData.overall_risk)}`}>
+                          <div>
+                            <span className="text-[10px] uppercase font-bold tracking-wider opacity-85">Aggregate Severity Status</span>
+                            <h3 className="text-2xl font-black tracking-wide mt-1 uppercase flex items-center gap-2">
+                              <Shield className="h-6 w-6 shrink-0" />
+                              {riskData.overall_risk} RISK
+                            </h3>
+                          </div>
+                          <div className="bg-white/15 px-4 py-2.5 rounded border border-white/10 text-right">
+                            <span className="text-[9px] uppercase font-bold tracking-wider block opacity-80">Risk Score Metric</span>
+                            <span className="text-2xl font-black block mt-0.5">{riskData.risk_score.toFixed(0)} / 100</span>
+                          </div>
+                        </div>
+
+                        {/* Triggered clinical flags list */}
+                        {riskData.clinical_flags && riskData.clinical_flags.length > 0 && (
+                          <div className="space-y-2">
+                            <span className="font-bold uppercase text-slate-500 tracking-wider text-[10px] block">Triggered Risk Flags Badges</span>
+                            <div className="flex flex-wrap gap-2">
+                              {riskData.clinical_flags.map((flg: string, idx: number) => (
+                                <Badge key={idx} className="bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-50 font-bold uppercase rounded py-1">
+                                  <AlertCircle className="h-3 w-3 mr-1" />
+                                  {flg.replace('_', ' ')}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          {/* Identified Specific Findings */}
+                          <div className="space-y-3">
+                            <span className="font-bold uppercase text-slate-500 tracking-wider text-[10px] flex items-center gap-1">
+                              <Activity className="h-3.5 w-3.5 text-teal-600 animate-pulse" />
+                              Key Findings Identified
+                            </span>
+                            {riskData.risk_findings && riskData.risk_findings.length > 0 ? (
+                              <div className="space-y-3">
+                                {riskData.risk_findings.map((f: any, idx: number) => (
+                                  <div key={idx} className="p-3 border rounded bg-white shadow-xs space-y-2">
+                                    <div className="flex justify-between items-center border-b pb-1.5">
+                                      <strong className="text-slate-900">{f.finding_name}</strong>
+                                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${getRiskBadgeColor(f.severity)}`}>
+                                        {f.severity}
+                                      </span>
+                                    </div>
+                                    <p className="text-slate-600 text-[11px] leading-relaxed">{f.explanation}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="p-4 border border-dashed rounded text-center text-slate-400 bg-slate-50">
+                                No diagnostic rule findings matches. All parameter values are within standard thresholds.
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Actionable Recommendations List */}
+                          <div className="space-y-3">
+                            <span className="font-bold uppercase text-slate-500 tracking-wider text-[10px] flex items-center gap-1">
+                              <CheckSquare className="h-3.5 w-3.5 text-teal-600" />
+                              Actionable Suggestions
+                            </span>
+                            {riskData.recommendations && riskData.recommendations.length > 0 ? (
+                              <div className="space-y-3">
+                                {riskData.recommendations.map((rec: any, idx: number) => (
+                                  <div key={idx} className="p-3 border rounded bg-white shadow-xs space-y-2 border-l-4 border-l-teal-500">
+                                    <div className="flex justify-between items-center border-b pb-1.5">
+                                      <strong className="text-slate-900 uppercase text-[10px]">{rec.recommendation_type}</strong>
+                                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                        rec.urgency === 'IMMEDIATE' ? 'bg-red-50 text-red-700 border border-red-200' :
+                                        rec.urgency === 'SOON' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                                        'bg-slate-50 text-slate-600 border border-slate-200'
+                                      }`}>
+                                        {rec.urgency}
+                                      </span>
+                                    </div>
+                                    <p className="text-slate-600 text-[11px] leading-relaxed font-medium">{rec.description}</p>
+                                    <p className="text-[9px] text-slate-400 italic font-mono pt-1 border-t border-slate-100">{rec.disclaimer}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="p-4 border border-dashed rounded text-center text-slate-400 bg-slate-50">
+                                No recommendations generated.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-20 border border-dashed rounded-lg text-slate-400 bg-slate-50/50">
+                        <Shield className="h-10 w-10 mx-auto text-slate-300 mb-2 stroke-1" />
+                        <p className="text-sm">No clinical risk calculations compiled yet.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Structured Overview Tab */}
                 {inspectTab === 'structured' && (
                   <div className="space-y-6">
@@ -582,26 +731,6 @@ export default function PatientRecordsPage() {
                             )}
                           </div>
                         </div>
-
-                        {/* Pipeline extraction telemetry info */}
-                        <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg grid grid-cols-2 md:grid-cols-4 gap-4">
-                          <div>
-                            <span className="text-slate-400 font-semibold block uppercase text-[10px]">Extraction Method</span>
-                            <strong className="text-slate-800 font-mono block mt-0.5 uppercase">{structuredData.metadata?.extraction_method}</strong>
-                          </div>
-                          <div>
-                            <span className="text-slate-400 font-semibold block uppercase text-[10px]">Confidence</span>
-                            <strong className="text-slate-800 block mt-0.5">{((structuredData.metadata?.confidence_score ?? 0.0) * 100.0).toFixed(0)}%</strong>
-                          </div>
-                          <div>
-                            <span className="text-slate-400 font-semibold block uppercase text-[10px]">Status</span>
-                            <strong className="text-slate-800 block mt-0.5 uppercase">{structuredData.extraction_status}</strong>
-                          </div>
-                          <div>
-                            <span className="text-slate-400 font-semibold block uppercase text-[10px]">Engine Version</span>
-                            <strong className="text-slate-800 font-mono block mt-0.5">{structuredData.metadata?.extraction_version}</strong>
-                          </div>
-                        </div>
                       </div>
                     ) : (
                       <div className="text-center py-10 text-slate-400">
@@ -641,6 +770,7 @@ export default function PatientRecordsPage() {
                                 <td className="p-3 font-mono text-slate-500">{lab.reference_range || '-'}</td>
                                 <td className="p-3 text-right">
                                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wider ${
+                                    lab.status === 'CRITICAL_HIGH' || lab.status === 'CRITICAL_LOW' ? 'bg-rose-600 text-white border-rose-700 font-extrabold' :
                                     lab.status === 'HIGH' ? 'bg-red-50 border-red-200 text-red-700' :
                                     lab.status === 'LOW' ? 'bg-amber-50 border-amber-200 text-amber-700' :
                                     'bg-emerald-50 border-emerald-200 text-emerald-700'

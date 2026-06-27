@@ -40,6 +40,7 @@ export default function DoctorPatientsPage() {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null)
   const [structuredReport, setStructuredReport] = useState<any>(null)
   const [reportEntities, setReportEntities] = useState<any[] | null>(null)
+  const [reportRiskDetails, setReportRiskDetails] = useState<any>(null)
   const [loadingReportDetails, setLoadingReportDetails] = useState(false)
 
   const { data: listData, isLoading, isError, error, refetch } = useDoctorPatients({
@@ -55,6 +56,8 @@ export default function DoctorPatientsPage() {
 
   const getRiskBadgeColor = (risk?: string) => {
     switch (risk?.toLowerCase()) {
+      case 'critical':
+        return 'bg-red-50 text-red-700 border-red-200 font-extrabold'
       case 'high':
         return 'bg-rose-50 text-rose-700 border-rose-200'
       case 'medium':
@@ -82,6 +85,7 @@ export default function DoctorPatientsPage() {
       setSelectedReportId(reportId)
       setStructuredReport(null)
       setReportEntities(null)
+      setReportRiskDetails(null)
       setLoadingReportDetails(true)
       
       const struct = await reportService.getStructuredData(reportId)
@@ -89,6 +93,13 @@ export default function DoctorPatientsPage() {
       
       const ents = await reportService.getEntities(reportId)
       setReportEntities(ents.entities)
+
+      try {
+        const risk = await reportService.getReportRisks(reportId)
+        setReportRiskDetails(risk)
+      } catch (err) {
+        console.warn("No report risk details found for this report yet", err)
+      }
     } catch (e) {
       console.error(e)
     } finally {
@@ -100,6 +111,7 @@ export default function DoctorPatientsPage() {
     setSelectedReportId(null)
     setStructuredReport(null)
     setReportEntities(null)
+    setReportRiskDetails(null)
   }
 
   return (
@@ -739,6 +751,50 @@ export default function DoctorPatientsPage() {
                                             </tbody>
                                           </table>
                                         </div>
+                                      </div>
+                                    )}
+
+                                    {/* Clinical Risk Summary */}
+                                    {reportRiskDetails && (
+                                      <div className="space-y-3 bg-slate-50 p-3 rounded-lg border">
+                                        <div className="flex justify-between items-center pb-2 border-b">
+                                          <span className="font-bold text-slate-800 uppercase text-[10px] flex items-center gap-1">
+                                            <Activity className="h-3.5 w-3.5 text-teal-600 animate-pulse" />
+                                            Clinical Risk Summary
+                                          </span>
+                                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wider ${
+                                            reportRiskDetails.overall_risk === 'CRITICAL' ? 'bg-red-600 text-white border-red-700 font-extrabold' :
+                                            reportRiskDetails.overall_risk === 'HIGH' ? 'bg-rose-50 border-rose-200 text-rose-700' :
+                                            reportRiskDetails.overall_risk === 'MEDIUM' ? 'bg-amber-50 border-amber-200 text-amber-700' :
+                                            'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                          }`}>
+                                            {reportRiskDetails.overall_risk} RISK ({reportRiskDetails.risk_score?.toFixed(0)}/100)
+                                          </span>
+                                        </div>
+
+                                        {reportRiskDetails.clinical_flags && reportRiskDetails.clinical_flags.length > 0 && (
+                                          <div className="flex flex-wrap gap-1">
+                                            {reportRiskDetails.clinical_flags.map((flg: string, idx: number) => (
+                                              <span key={idx} className="bg-rose-50 text-rose-700 border border-rose-200 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase">
+                                                {flg.replace('_', ' ')}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        )}
+
+                                        {reportRiskDetails.risk_findings && reportRiskDetails.risk_findings.length > 0 && (
+                                          <div className="space-y-2 mt-2">
+                                            {reportRiskDetails.risk_findings.map((f: any, idx: number) => (
+                                              <div key={idx} className="p-2 border rounded bg-white shadow-2xs space-y-1">
+                                                <div className="flex justify-between items-center text-[10px] font-semibold text-slate-900 border-b pb-0.5">
+                                                  <span>{f.finding_name}</span>
+                                                  <span className="text-slate-400 font-normal">{f.severity}</span>
+                                                </div>
+                                                <p className="text-[10px] text-slate-600 leading-normal">{f.explanation}</p>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
                                       </div>
                                     )}
 

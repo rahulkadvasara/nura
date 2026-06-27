@@ -20,6 +20,7 @@ from app.core.dependencies import (
     get_document_parser,
     get_database,
     get_report_extraction_service,
+    get_risk_analysis_service,
 )
 from app.services.report_service import ReportService
 from app.services.report_processing.document_parser import DocumentParser
@@ -467,4 +468,100 @@ async def get_extraction_telemetry(
         message="Report extraction telemetry fetched successfully",
         data=stats
     )
+
+
+@router.post(
+    "/{report_id}/risk-analysis",
+    response_model=SuccessResponse,
+    summary="Trigger clinical risk analysis for a report. Guarded: Authorized Users.",
+)
+async def analyze_report_clinical_risks(
+    report_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: UserInDB = Depends(get_current_user),
+    report_service: ReportService = Depends(get_report_service),
+    risk_service = Depends(get_risk_analysis_service),
+) -> SuccessResponse:
+    report = await report_service.get_report_by_id(report_id)
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found"
+        )
+
+    # Authorize access
+    await verify_report_access(report, current_user)
+
+    # Trigger risk analysis in background tasks
+    background_tasks.add_task(risk_service.analyze_report_risks, report_id)
+
+    return SuccessResponse(
+        success=True,
+        message="Clinical risk analysis task triggered successfully"
+    )
+
+
+@router.get(
+    "/{report_id}/risk",
+    response_model=SuccessResponse,
+    summary="Get calculated clinical risk analysis and recommendations. Guarded: Authorized Users.",
+)
+async def get_report_risks(
+    report_id: str,
+    current_user: UserInDB = Depends(get_current_user),
+    report_service: ReportService = Depends(get_report_service),
+) -> SuccessResponse:
+    report = await report_service.get_report_by_id(report_id)
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found"
+        )
+
+    # Authorize access
+    await verify_report_access(report, current_user)
+
+    risk_data = {
+        "report_id": report_id,
+        "overall_risk": getattr(report, "overall_risk", "NORMAL") or "NORMAL",
+        "risk_score": getattr(report, "risk_score", 0.0) or 0.0,
+        "risk_findings": getattr(report, "risk_findings", []) or [],
+        "recommendations": getattr(report, "recommendations", []) or [],
+        "clinical_flags": getattr(report, "clinical_flags", []) or [],
+        "risk_analysis": getattr(report, "risk_analysis", {}) or {},
+        "risk_version": getattr(report, "risk_version", "1.0.0") or "1.0.0",
+        "risk_generated_at": getattr(report, "risk_generated_at", None),
+        "processing_status": getattr(report, "processing_status", "pending") or "pending"
+    }
+
+    return SuccessResponse(
+        success=True,
+        message="Clinical risk analysis data retrieved successfully",
+        data=risk_data
+    )
+
+
+@router.get(
+    "/risk/statistics",
+    response_model=SuccessResponse,
+    summary="Retrieve cumulative clinical risk telemetry statistics. Guarded: Admin Only.",
+)
+async def get_risk_telemetry(
+    current_user: UserInDB = Depends(get_current_user),
+) -> SuccessResponse:
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admin accounts are authorized to view risk telemetry stats"
+        )
+    
+    from app.services.report_risk.telemetry import get_report_risk_telemetry
+    stats = get_report_risk_telemetry().get_stats()
+    
+    return SuccessResponse(
+        success=True,
+        message="Clinical risk telemetry statistics fetched successfully",
+        data=stats
+    )
+
 

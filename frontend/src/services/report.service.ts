@@ -72,6 +72,27 @@ export interface ReportResponse {
   extraction_confidence?: number
   extraction_version?: string
   extraction_warnings?: string[]
+
+  // Clinical Risk Analysis Pipeline fields
+  risk_analysis?: Record<string, any>
+  overall_risk?: string
+  risk_score?: number
+  risk_findings?: {
+    finding_name: string
+    severity: string
+    explanation: string
+    flag: string
+    message: string
+  }[]
+  recommendations?: {
+    recommendation_type: string
+    description: string
+    urgency: string
+    disclaimer: string
+  }[]
+  clinical_flags?: string[]
+  risk_version?: string
+  risk_generated_at?: string
 }
 
 export interface ReportProcessingStatus {
@@ -173,6 +194,21 @@ export const reportService = {
 
   getExtractionTelemetry: async (): Promise<any> => {
     const response = await apiClient.get<{ success: boolean; data: any }>('/reports/telemetry/extraction')
+    return response.data.data
+  },
+
+  analyzeReportRisks: async (reportId: string): Promise<boolean> => {
+    const response = await apiClient.post<{ success: boolean }>((`/reports/${reportId}/risk-analysis`))
+    return response.data.success
+  },
+
+  getReportRisks: async (reportId: string): Promise<any> => {
+    const response = await apiClient.get<{ success: boolean; data: any }>((`/reports/${reportId}/risk`))
+    return response.data.data
+  },
+
+  getRiskTelemetry: async (): Promise<any> => {
+    const response = await apiClient.get<{ success: boolean; data: any }>('/reports/risk/statistics')
     return response.data.data
   },
 }

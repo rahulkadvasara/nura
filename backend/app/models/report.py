@@ -100,6 +100,16 @@ class ReportBase(BaseModel):
     extraction_version: Optional[str] = Field(None, description="Medical information extraction pipeline version")
     extraction_warnings: Optional[List[str]] = Field(None, description="List of non-fatal validation warning logs")
 
+    # Clinical Risk Analysis Pipeline fields
+    risk_analysis: Optional[Dict[str, Any]] = Field(None, description="Detailed clinical risk analysis payload")
+    overall_risk: Optional[str] = Field(None, description="Report aggregate risk category (NORMAL, LOW, MEDIUM, HIGH, CRITICAL)")
+    risk_score: Optional[float] = Field(None, description="Calculated aggregate risk score (0.0 to 100.0)")
+    risk_findings: Optional[List[Dict[str, Any]]] = Field(None, description="List of identified specific risk details")
+    recommendations: Optional[List[Dict[str, Any]]] = Field(None, description="List of structured recommendations details")
+    clinical_flags: Optional[List[str]] = Field(None, description="Badges of triggered risk markers")
+    risk_version: Optional[str] = Field(None, description="Clinical risk evaluation rule-engine version")
+    risk_generated_at: Optional[datetime] = Field(None, description="Risk calculation timestamp")
+
 
 class ReportCreate(ReportBase):
     """Model used to create a new report record"""
@@ -142,6 +152,16 @@ class ReportUpdate(BaseModel):
     extraction_confidence: Optional[float] = None
     extraction_version: Optional[str] = None
     extraction_warnings: Optional[List[str]] = None
+
+    # Clinical Risk Analysis pipeline updates
+    risk_analysis: Optional[Dict[str, Any]] = None
+    overall_risk: Optional[str] = None
+    risk_score: Optional[float] = None
+    risk_findings: Optional[List[Dict[str, Any]]] = None
+    recommendations: Optional[List[Dict[str, Any]]] = None
+    clinical_flags: Optional[List[str]] = None
+    risk_version: Optional[str] = None
+    risk_generated_at: Optional[datetime] = None
 
 
 class ReportInDB(ReportBase):

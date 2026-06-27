@@ -21,13 +21,16 @@ import {
   TrendingUp,
   Cpu,
   Database,
-  Layers
+  Layers,
+  Shield,
+  BarChart4
 } from 'lucide-react'
 
 function AdminReportsDashboardContent() {
   const [reports, setReports] = useState<ReportResponse[]>([])
   const [telemetry, setTelemetry] = useState<ReportTelemetryStats | null>(null)
   const [extractTelemetry, setExtractTelemetry] = useState<any | null>(null)
+  const [riskTelemetry, setRiskTelemetry] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all')
   
@@ -35,9 +38,11 @@ function AdminReportsDashboardContent() {
   const [inspectingReport, setInspectingReport] = useState<ReportResponse | null>(null)
   const [ocrData, setOcrData] = useState<ReportOcrData | null>(null)
   const [structuredData, setStructuredData] = useState<any | null>(null)
+  const [riskData, setRiskData] = useState<any | null>(null)
   const [loadingOcr, setLoadingOcr] = useState(false)
   const [loadingExtraction, setLoadingExtraction] = useState(false)
-  const [inspectTab, setInspectTab] = useState<'ocr' | 'json' | 'warnings'>('json')
+  const [loadingRisk, setLoadingRisk] = useState(false)
+  const [inspectTab, setInspectTab] = useState<'ocr' | 'json' | 'warnings' | 'risk'>('json')
 
   const fetchData = async () => {
     try {
@@ -53,6 +58,13 @@ function AdminReportsDashboardContent() {
         setExtractTelemetry(extraStats)
       } catch (err) {
         console.error('Failed to load extraction telemetry', err)
+      }
+
+      try {
+        const rStats = await reportService.getRiskTelemetry()
+        setRiskTelemetry(rStats)
+      } catch (err) {
+        console.error('Failed to load risk telemetry', err)
       }
     } catch (e) {
       console.error(e)
@@ -103,11 +115,28 @@ function AdminReportsDashboardContent() {
     }
   }
 
+  const handleRunRiskAnalysis = async (reportId: string) => {
+    try {
+      setLoadingRisk(true)
+      await reportService.analyzeReportRisks(reportId)
+      fetchData()
+      setTimeout(async () => {
+        const rDetails = await reportService.getReportRisks(reportId)
+        setRiskData(rDetails)
+      }, 2000)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoadingRisk(false)
+    }
+  }
+
   const handleInspect = async (report: ReportResponse) => {
     setInspectingReport(report)
     setOcrData(null)
     setStructuredData(null)
-    setInspectTab(report.extraction_status === 'completed' ? 'json' : 'ocr')
+    setRiskData(null)
+    setInspectTab(report.overall_risk ? 'risk' : report.extraction_status === 'completed' ? 'json' : 'ocr')
 
     if (report.ocr_status === 'completed') {
       try {
@@ -132,6 +161,33 @@ function AdminReportsDashboardContent() {
         setLoadingExtraction(false)
       }
     }
+
+    if (report.overall_risk) {
+      try {
+        setLoadingRisk(true)
+        const risk = await reportService.getReportRisks(report.id)
+        setRiskData(risk)
+      } catch (e) {
+        console.error(e)
+      } finally {
+        setLoadingRisk(false)
+      }
+    }
+  }
+
+  const getRiskBadgeColor = (risk?: string) => {
+    switch (risk?.toLowerCase()) {
+      case 'critical':
+        return 'bg-red-50 text-red-700 border-red-200 font-extrabold'
+      case 'high':
+        return 'bg-rose-50 text-rose-700 border-rose-200'
+      case 'medium':
+        return 'bg-amber-50 text-amber-700 border-amber-200'
+      case 'low':
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+      default:
+        return 'bg-slate-50 text-slate-700 border-slate-200'
+    }
   }
 
   const filteredReports = statusFilter === 'all'
@@ -150,7 +206,7 @@ function AdminReportsDashboardContent() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-            <Cpu className="h-8 w-8 text-teal-600 animate-pulse" />
+            <Cpu className="h-8 w-8 text-teal-600" />
             Medical Processing Pipeline Control
           </h1>
           <p className="text-slate-500 mt-1">
@@ -190,10 +246,10 @@ function AdminReportsDashboardContent() {
             icon: TrendingUp
           },
           {
-            name: 'Failed Jobs',
-            val: (telemetry?.failures ?? 0) + (extractTelemetry?.failed_extractions ?? 0),
-            desc: `Extraction failures: ${extractTelemetry?.failed_extractions ?? 0}`,
-            icon: AlertTriangle
+            name: 'Clinical Risks Scored',
+            val: riskTelemetry?.total_analyses ?? 0,
+            desc: `Success rate: ${(((riskTelemetry?.successful_analyses ?? 0) / Math.max(1, riskTelemetry?.total_analyses ?? 0)) * 100).toFixed(0)}%`,
+            icon: Shield
           }
         ].map((item, idx) => (
           <Card key={idx} className="border border-slate-200 shadow-sm bg-white">
@@ -239,97 +295,74 @@ function AdminReportsDashboardContent() {
                 <p className="text-xs text-slate-500">Fetching document indexes...</p>
               </div>
             ) : filteredReports.length === 0 ? (
-              <div className="text-center py-20 text-slate-400">
-                <p className="text-sm">No report records matching the selection filter.</p>
+              <div className="text-center py-20 text-slate-400 text-xs">
+                No reports found matching the selected filters.
               </div>
             ) : (
-              <div className="space-y-4 max-h-[600px] overflow-y-auto pr-1">
+              <div className="space-y-3">
                 {filteredReports.map((report) => (
                   <div
                     key={report.id}
-                    className="border border-slate-200 rounded-lg p-4 bg-white hover:bg-slate-50/50 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
+                    className="border border-slate-200 rounded-lg p-3.5 bg-white hover:shadow-xs transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs"
                   >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <strong className="text-xs text-slate-900 font-mono">
-                          {report.id.substring(report.id.length - 8)}
-                        </strong>
-                        {report.document_type ? (
-                          <Badge className="bg-teal-50 text-teal-700 text-[9px] hover:bg-teal-50 border border-teal-200 rounded py-0.5">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <strong className="text-slate-800 truncate max-w-xs">{report.file_url.split('/').pop()?.substring(14) || 'Medical Report'}</strong>
+                        {report.document_type && (
+                          <Badge className="bg-teal-50 text-teal-700 border-teal-200 scale-90 rounded">
                             {report.document_type}
                           </Badge>
-                        ) : (
-                          <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded font-mono font-bold uppercase">
-                            {report.report_type.replace('_', ' ')}
+                        )}
+                        {report.overall_risk && (
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${getRiskBadgeColor(report.overall_risk)}`}>
+                            {report.overall_risk}
                           </span>
                         )}
                       </div>
-                      <div className="text-[10px] text-slate-400">
-                        File: {report.file_url.split('/').pop()?.substring(14) || 'document'}
-                      </div>
-                      <div className="text-[10px] text-slate-400">
-                        Patient: {report.patient_id}
-                      </div>
+                      <p className="text-[10px] text-slate-400">ID: {report.id} • Created: {new Date(report.created_at).toLocaleDateString()}</p>
                     </div>
 
-                    <div className="flex items-center gap-2 justify-end">
-                      {/* OCR and extraction status badges */}
-                      {report.ocr_status !== 'completed' ? (
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase ${
-                          report.ocr_status === 'failed' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'
-                        }`}>
-                          OCR {report.ocr_status}
-                        </span>
+                    <div className="flex items-center gap-2 justify-end w-full sm:w-auto">
+                      {/* Extraction retry/trigger options */}
+                      {report.ocr_status === 'failed' ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRetryOcr(report.id)}
+                          className="text-xs text-amber-600 hover:text-amber-700 font-bold bg-amber-50 h-7"
+                        >
+                          Retry OCR
+                        </Button>
+                      ) : report.extraction_status === 'pending' || report.extraction_status === 'failed' ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleExtract(report.id)}
+                          className="text-xs text-teal-600 hover:text-teal-700 font-bold bg-teal-50 h-7"
+                        >
+                          Run Extract
+                        </Button>
+                      ) : !report.overall_risk ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRunRiskAnalysis(report.id)}
+                          className="text-xs text-orange-600 hover:text-orange-700 font-bold bg-orange-50 h-7"
+                        >
+                          Run Risk
+                        </Button>
                       ) : (
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase ${
-                          report.extraction_status === 'completed' ? 'bg-emerald-50 text-emerald-700' :
-                          report.extraction_status === 'failed' ? 'bg-rose-50 text-rose-700' :
-                          'bg-slate-100 text-slate-600'
-                        }`}>
-                          Struct {report.extraction_status || 'Pending'}
-                        </span>
+                        <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 py-0.5 rounded">
+                          Checked
+                        </Badge>
                       )}
 
                       <div className="flex items-center gap-1 pl-2 border-l border-slate-200">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleInspect(report)}
-                          className="p-1 h-auto text-slate-500 hover:text-teal-600"
-                          title="Inspect details"
-                        >
-                          <Eye className="h-3.5 w-3.5" />
+                        <Button variant="ghost" size="sm" onClick={() => handleInspect(report)} className="p-1 h-auto text-slate-400 hover:text-teal-600">
+                          <Eye className="h-4 w-4" />
                         </Button>
-                        {report.ocr_status === 'completed' && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleExtract(report.id)}
-                            className="p-1 h-auto text-teal-600 hover:text-teal-700"
-                            title="Trigger structured extraction"
-                          >
-                            <Play className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                        {report.ocr_status === 'failed' && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRetryOcr(report.id)}
-                            className="p-1 h-auto text-amber-500 hover:text-amber-700"
-                            title="Retry OCR pipeline"
-                          >
-                            <RefreshCw className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(report.id)}
-                          className="p-1 h-auto text-slate-400 hover:text-red-600"
-                          title="Purge record"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
+                        <Button variant="ghost" size="sm" onClick={() => handleDelete(report.id)} className="p-1 h-auto text-slate-400 hover:text-rose-600">
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
@@ -340,11 +373,11 @@ function AdminReportsDashboardContent() {
           </CardContent>
         </Card>
 
-        {/* Right Column: In-depth OCR Layout & Structured JSON Inspector */}
-        <div className="space-y-6">
-          {inspectingReport ? (
-            <Card className="border-2 border-teal-500 shadow-md bg-white">
-              <CardHeader className="pb-3 border-b border-slate-100 bg-teal-50/20 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {/* Right Column: Inspector Panel details */}
+        {inspectingReport ? (
+          <Card className="border-2 border-teal-500 shadow-sm bg-white h-fit">
+            <CardHeader className="pb-3 border-b border-slate-100 bg-teal-50/10">
+              <div className="flex justify-between items-start">
                 <div>
                   <CardTitle className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
                     <Database className="h-4 w-4 text-teal-600" />
@@ -355,130 +388,273 @@ function AdminReportsDashboardContent() {
                   </span>
                 </div>
 
-                <div className="flex gap-2">
-                  <Button
-                    variant={inspectTab === 'json' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setInspectTab('json')}
-                    className={`h-8 text-xs font-semibold ${inspectTab === 'json' ? 'bg-teal-600 hover:bg-teal-700' : ''}`}
-                  >
-                    Structured JSON
-                  </Button>
-                  <Button
-                    variant={inspectTab === 'warnings' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setInspectTab('warnings')}
-                    className={`h-8 text-xs font-semibold ${inspectTab === 'warnings' ? 'bg-teal-600 hover:bg-teal-700' : ''}`}
-                  >
-                    Warnings
-                  </Button>
-                  <Button
-                    variant={inspectTab === 'ocr' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setInspectTab('ocr')}
-                    className={`h-8 text-xs font-semibold ${inspectTab === 'ocr' ? 'bg-teal-600 hover:bg-teal-700' : ''}`}
-                  >
-                    OCR Raw Text
-                  </Button>
+                <div className="flex gap-1.5 flex-wrap">
+                  {[
+                    { id: 'risk', name: 'Risk JSON' },
+                    { id: 'json', name: 'Struct JSON' },
+                    { id: 'warnings', name: 'Warnings' },
+                    { id: 'ocr', name: 'OCR Text' }
+                  ].map((tab) => (
+                    <Button
+                      key={tab.id}
+                      variant={inspectTab === tab.id ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setInspectTab(tab.id as any)}
+                      className={`h-8 text-xs font-semibold ${inspectTab === tab.id ? 'bg-teal-600 hover:bg-teal-700 text-white' : ''}`}
+                    >
+                      {tab.name}
+                    </Button>
+                  ))}
                 </div>
-              </CardHeader>
-              <CardContent className="pt-6 space-y-6">
-                {inspectTab === 'json' && (
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Clinical JSON Output</span>
-                      {inspectingReport.ocr_status === 'completed' && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleExtract(inspectingReport.id)}
-                          className="h-7 text-[10px] text-teal-700 border-teal-200"
-                          disabled={loadingExtraction}
-                        >
-                          Re-run Extraction
-                        </Button>
-                      )}
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-6">
+              {inspectTab === 'risk' && (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Calculated Diagnostic Risks Payload</span>
+                    {inspectingReport.extraction_status === 'completed' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleRunRiskAnalysis(inspectingReport.id)}
+                        className="h-7 text-[10px] text-orange-700 border-orange-200"
+                        disabled={loadingRisk}
+                      >
+                        Calculate Risks
+                      </Button>
+                    )}
+                  </div>
+
+                  {loadingRisk ? (
+                    <div className="text-center py-20 text-slate-500">
+                      <RefreshCw className="h-8 w-8 animate-spin text-teal-600 mb-2" />
+                      <p className="text-sm">Evaluating clinical diagnostic ranges & AI scores...</p>
                     </div>
+                  ) : riskData ? (
+                    <pre className="bg-slate-950 text-orange-400 p-4 rounded-lg font-mono text-[11px] overflow-auto max-h-[500px] border border-slate-800 whitespace-pre-wrap">
+                      {JSON.stringify(riskData, null, 2)}
+                    </pre>
+                  ) : (
+                    <div className="text-center py-20 border border-dashed rounded-lg text-slate-400 bg-slate-50/50">
+                      <Shield className="h-10 w-10 mx-auto text-slate-300 mb-2 stroke-1" />
+                      <p className="text-sm">No risk data compiled. Click &quot;Calculate Risks&quot; above.</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
-                    {loadingExtraction ? (
-                      <div className="text-center py-20 text-slate-500">
-                        <RefreshCw className="h-8 w-8 animate-spin text-teal-600 mb-2" />
-                        <p className="text-sm">Running structured clinical extractor model...</p>
-                      </div>
-                    ) : structuredData ? (
-                      <pre className="bg-slate-950 text-teal-400 p-4 rounded-lg font-mono text-[11px] overflow-auto max-h-[500px] border border-slate-800 whitespace-pre-wrap">
-                        {JSON.stringify(structuredData, null, 2)}
-                      </pre>
-                    ) : (
-                      <div className="text-center py-20 border border-dashed rounded-lg text-slate-400 bg-slate-50/50">
-                        <Database className="h-10 w-10 mx-auto text-slate-300 mb-2 stroke-1" />
-                        <p className="text-sm">No structured data extracted. Click &quot;Re-run Extraction&quot; above.</p>
-                      </div>
+              {inspectTab === 'json' && (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Clinical JSON Output</span>
+                    {inspectingReport.ocr_status === 'completed' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleExtract(inspectingReport.id)}
+                        className="h-7 text-[10px] text-teal-700 border-teal-200"
+                        disabled={loadingExtraction}
+                      >
+                        Re-run Extraction
+                      </Button>
                     )}
                   </div>
-                )}
 
-                {inspectTab === 'warnings' && (
-                  <div className="space-y-4">
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Pipeline Warnings & Log Stack</span>
-                    {structuredData && structuredData.extraction_warnings && structuredData.extraction_warnings.length > 0 ? (
-                      <div className="space-y-2">
-                        {structuredData.extraction_warnings.map((warn: string, idx: number) => (
-                          <div key={idx} className="p-3 bg-amber-50 border border-amber-200 text-amber-800 font-semibold rounded text-xs flex items-start gap-2">
-                            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                            <span>{warn}</span>
+                  {loadingExtraction ? (
+                    <div className="text-center py-20 text-slate-500">
+                      <RefreshCw className="h-8 w-8 animate-spin text-teal-600 mb-2" />
+                      <p className="text-sm">Running structured clinical extractor model...</p>
+                    </div>
+                  ) : structuredData ? (
+                    <pre className="bg-slate-950 text-teal-400 p-4 rounded-lg font-mono text-[11px] overflow-auto max-h-[500px] border border-slate-800 whitespace-pre-wrap">
+                      {JSON.stringify(structuredData, null, 2)}
+                    </pre>
+                  ) : (
+                    <div className="text-center py-20 border border-dashed rounded-lg text-slate-400 bg-slate-50/50">
+                      <Database className="h-10 w-10 mx-auto text-slate-300 mb-2 stroke-1" />
+                      <p className="text-sm">No structured data extracted. Click &quot;Re-run Extraction&quot; above.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {inspectTab === 'warnings' && (
+                <div className="space-y-4">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Pipeline Warnings & Log Stack</span>
+                  {structuredData && structuredData.extraction_warnings && structuredData.extraction_warnings.length > 0 ? (
+                    <div className="space-y-2">
+                      {structuredData.extraction_warnings.map((warn: string, idx: number) => (
+                        <div key={idx} className="p-3 bg-amber-50 border border-amber-200 text-amber-800 font-semibold rounded text-xs flex items-start gap-2">
+                          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                          <span>{warn}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 border border-dashed rounded-lg text-slate-400 bg-slate-50/50">
+                      <CheckCircle className="h-10 w-10 mx-auto text-emerald-500 mb-2 stroke-1" />
+                      <p className="text-xs font-semibold text-slate-600">Extraction layout clean!</p>
+                      <p className="text-[10px] text-slate-400 mt-1">No clinical validation warning alerts registered.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {inspectTab === 'ocr' && (
+                <div className="space-y-6">
+                  {loadingOcr ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+                      <RefreshCw className="h-8 w-8 animate-spin text-teal-600 mb-2" />
+                      <p className="text-sm">Loading layouts...</p>
+                    </div>
+                  ) : ocrData ? (
+                    <div className="space-y-4">
+                      {ocrData.ocr_pages && ocrData.ocr_pages.length > 0 && (
+                        <div className="space-y-2">
+                          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Pages Confidence Analysis</span>
+                          <div className="flex gap-2 flex-wrap">
+                            {ocrData.ocr_pages.map((p, idx) => (
+                              <Badge key={idx} className="bg-slate-100 hover:bg-slate-100 text-slate-700 py-1">
+                                Pg {p.page_number}: {(p.confidence * 100).toFixed(0)}%
+                              </Badge>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-12 border border-dashed rounded-lg text-slate-400 bg-slate-50/50">
-                        <CheckCircle className="h-10 w-10 mx-auto text-emerald-500 mb-2 stroke-1" />
-                        <p className="text-xs font-semibold text-slate-600">Extraction layout clean!</p>
-                        <p className="text-[10px] text-slate-400 mt-1">No clinical validation warning alerts registered.</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {inspectTab === 'ocr' && (
-                  <div className="space-y-6">
-                    {loadingOcr ? (
-                      <div className="flex flex-col items-center justify-center py-20 text-slate-500">
-                        <RefreshCw className="h-8 w-8 animate-spin text-teal-600 mb-2" />
-                        <p className="text-sm">Loading layouts...</p>
-                      </div>
-                    ) : ocrData ? (
-                      <div className="space-y-4">
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Normalized OCR Text Layout</span>
-                        <pre className="bg-slate-950 text-slate-200 p-4 rounded-lg font-mono text-[11px] overflow-auto max-h-[400px] whitespace-pre-wrap border border-slate-800">
-                          {ocrData.normalized_text}
-                        </pre>
-                      </div>
-                    ) : (
-                      <div className="text-center py-10 text-slate-400">
-                        <p>No OCR layout content found.</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="border border-slate-200 rounded-lg p-20 bg-slate-50/50 flex flex-col items-center justify-center text-slate-400 text-center h-full">
-              <Eye className="h-10 w-10 mb-2 stroke-1 text-slate-400" />
-              <p className="text-sm font-semibold">Inspect diagnostics details</p>
-              <p className="text-xs text-slate-400 mt-1 max-w-xs">
-                Select a document from the queue list to inspect parsed layout raw texts, structured JSON payloads, and warnings log lists.
-              </p>
-            </div>
-          )}
-        </div>
+                        </div>
+                      )}
+                      <pre className="bg-slate-950 text-slate-200 p-4 rounded-lg font-mono text-[11px] overflow-auto max-h-[300px] border border-slate-800 whitespace-pre-wrap">
+                        {ocrData.normalized_text}
+                      </pre>
+                    </div>
+                  ) : (
+                    <div className="text-center py-20 text-slate-400">
+                      No layout data found.
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border border-dashed border-slate-300 rounded-lg bg-slate-50/50 flex flex-col items-center justify-center py-24 text-center">
+            <Database className="h-12 w-12 text-slate-300 mb-2 stroke-1" />
+            <span className="text-sm font-semibold text-slate-500">Pipeline Inspector Panel</span>
+            <p className="text-xs text-slate-400 max-w-xs mt-1">
+              Select any report from the queue list to inspect layout text, structured extraction JSON, and calculated clinical risk outcomes.
+            </p>
+          </Card>
+        )}
       </div>
+
+      {/* Admin Clinical Risk Telemetry Section */}
+      {riskTelemetry && (
+        <Card className="border border-slate-200 shadow-sm bg-white mt-8">
+          <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
+            <CardTitle className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+              <BarChart4 className="h-5 w-5 text-teal-600" />
+              Clinical Risk Telemetry Dashboard
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Severity Distribution table */}
+              <div className="space-y-3">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Risk Severity Distribution</span>
+                <div className="border rounded overflow-hidden text-xs">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b text-slate-500 font-bold">
+                        <th className="p-2.5">Severity Category</th>
+                        <th className="p-2.5 text-right">Job Count</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {Object.entries(riskTelemetry.severity_distribution || {}).map(([sev, count]: any) => (
+                        <tr key={sev} className="hover:bg-slate-50/50">
+                          <td className="p-2.5 font-bold uppercase flex items-center gap-1.5">
+                            <span className={`w-2.5 h-2.5 rounded-full ${
+                              sev === 'CRITICAL' ? 'bg-red-600' :
+                              sev === 'HIGH' ? 'bg-orange-500' :
+                              sev === 'MEDIUM' ? 'bg-amber-400' :
+                              sev === 'LOW' ? 'bg-sky-400' :
+                              'bg-emerald-500'
+                            }`} />
+                            {sev}
+                          </td>
+                          <td className="p-2.5 text-right font-mono font-bold text-slate-800">{count}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Triggered Clinical Flags */}
+              <div className="space-y-3">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Clinical Flags Occurrences</span>
+                {Object.keys(riskTelemetry.clinical_flags_triggered || {}).length === 0 ? (
+                  <div className="p-6 border border-dashed rounded text-center text-slate-400 text-xs">
+                    No clinical risk flags triggered yet.
+                  </div>
+                ) : (
+                  <div className="border rounded overflow-hidden text-xs">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b text-slate-500 font-bold">
+                          <th className="p-2.5">Flag Name</th>
+                          <th className="p-2.5 text-right">Trigger Count</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {Object.entries(riskTelemetry.clinical_flags_triggered || {}).map(([flg, count]: any) => (
+                          <tr key={flg} className="hover:bg-slate-50/50">
+                            <td className="p-2.5 font-semibold uppercase text-slate-700">{flg.replace('_', ' ')}</td>
+                            <td className="p-2.5 text-right font-mono font-bold text-slate-800">{count}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Recommendations Metrics */}
+              <div className="space-y-3">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Actionable Suggestions Distribution</span>
+                {Object.keys(riskTelemetry.recommendation_metrics || {}).length === 0 ? (
+                  <div className="p-6 border border-dashed rounded text-center text-slate-400 text-xs">
+                    No recommendations statistics mapped yet.
+                  </div>
+                ) : (
+                  <div className="border rounded overflow-hidden text-xs">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b text-slate-500 font-bold">
+                          <th className="p-2.5">Recommendation Type</th>
+                          <th className="p-2.5 text-right">Run Count</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {Object.entries(riskTelemetry.recommendation_metrics || {}).map(([type, count]: any) => (
+                          <tr key={type} className="hover:bg-slate-50/50">
+                            <td className="p-2.5 font-semibold text-slate-700">{type}</td>
+                            <td className="p-2.5 text-right font-mono font-bold text-slate-800">{count}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
 
-export default function AdminReportsPage() {
+export default function AdminReportsDashboardPage() {
   return (
     <ProtectedRoute allowedRoles={['admin']}>
       <AdminReportsDashboardContent />

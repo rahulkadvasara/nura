@@ -837,6 +837,64 @@ def get_report_extraction_service():
     return _report_extraction_service_instance
 
 
+_laboratory_analyzer_instance = None
+_clinical_rules_instance = None
+_recommendation_engine_instance = None
+_risk_engine_instance = None
+_risk_analysis_service_instance = None
+
+
+def get_laboratory_analyzer():
+    """Retrieve singleton LaboratoryAnalyzer instance"""
+    global _laboratory_analyzer_instance
+    if _laboratory_analyzer_instance is None:
+        from app.services.report_risk.laboratory_analyzer import LaboratoryAnalyzer
+        _laboratory_analyzer_instance = LaboratoryAnalyzer()
+    return _laboratory_analyzer_instance
+
+
+def get_clinical_rules():
+    """Retrieve singleton ClinicalRules instance"""
+    global _clinical_rules_instance
+    if _clinical_rules_instance is None:
+        from app.services.report_risk.clinical_rules import ClinicalRules
+        _clinical_rules_instance = ClinicalRules()
+    return _clinical_rules_instance
+
+
+def get_recommendation_engine():
+    """Retrieve singleton RecommendationEngine instance"""
+    global _recommendation_engine_instance
+    if _recommendation_engine_instance is None:
+        from app.services.report_risk.recommendation_engine import RecommendationEngine
+        _recommendation_engine_instance = RecommendationEngine()
+    return _recommendation_engine_instance
+
+
+def get_risk_engine():
+    """Retrieve singleton RiskEngine instance"""
+    global _risk_engine_instance
+    if _risk_engine_instance is None:
+        from app.services.report_risk.risk_engine import RiskEngine
+        _risk_engine_instance = RiskEngine(ai_service=get_ai_service())
+    return _risk_engine_instance
+
+
+def get_risk_analysis_service():
+    """Retrieve singleton RiskAnalysisService instance"""
+    global _risk_analysis_service_instance
+    if _risk_analysis_service_instance is None:
+        from app.services.report_risk.risk_analysis_service import RiskAnalysisService
+        _risk_analysis_service_instance = RiskAnalysisService(
+            report_repository=get_report_repository(),
+            lab_analyzer=get_laboratory_analyzer(),
+            clinical_rules=get_clinical_rules(),
+            recommendation_engine=get_recommendation_engine(),
+            risk_engine=get_risk_engine()
+        )
+    return _risk_analysis_service_instance
+
+
 def get_report_analysis_agent() -> ReportAnalysisAgent:
     """Get singleton ReportAnalysisAgent instance"""
     global _report_analysis_agent_instance

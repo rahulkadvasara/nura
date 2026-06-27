@@ -57,6 +57,16 @@ class ReportCreateSchema(BaseModel):
     extraction_version: Optional[str] = Field(None, description="Extraction pipeline version")
     extraction_warnings: Optional[List[str]] = Field(None, description="List of validation warning logs")
 
+    # Clinical Risk Analysis Pipeline fields
+    risk_analysis: Optional[Dict[str, Any]] = Field(None, description="Detailed clinical risk analysis payload")
+    overall_risk: Optional[str] = Field(None, description="Report aggregate risk category")
+    risk_score: Optional[float] = Field(None, description="Calculated aggregate risk score")
+    risk_findings: Optional[List[Dict[str, Any]]] = Field(None, description="List of identified specific risk details")
+    recommendations: Optional[List[Dict[str, Any]]] = Field(None, description="List of structured recommendations details")
+    clinical_flags: Optional[List[str]] = Field(None, description="Badges of triggered risk markers")
+    risk_version: Optional[str] = Field(None, description="Clinical risk evaluation rule-engine version")
+    risk_generated_at: Optional[datetime] = Field(None, description="Risk calculation timestamp")
+
 
 class ReportUpdateSchema(BaseModel):
     """Request schema for updating report metadata or processing details"""
@@ -94,6 +104,16 @@ class ReportUpdateSchema(BaseModel):
     extraction_confidence: Optional[float] = None
     extraction_version: Optional[str] = None
     extraction_warnings: Optional[List[str]] = None
+
+    # Clinical Risk Analysis pipeline updates
+    risk_analysis: Optional[Dict[str, Any]] = None
+    overall_risk: Optional[str] = None
+    risk_score: Optional[float] = None
+    risk_findings: Optional[List[Dict[str, Any]]] = None
+    recommendations: Optional[List[Dict[str, Any]]] = None
+    clinical_flags: Optional[List[str]] = None
+    risk_version: Optional[str] = None
+    risk_generated_at: Optional[datetime] = None
 
 
 class ReportResponse(BaseModel):
@@ -137,6 +157,16 @@ class ReportResponse(BaseModel):
     extraction_confidence: Optional[float] = Field(None, description="Cumulative average confidence score")
     extraction_version: Optional[str] = Field(None, description="Extraction pipeline version")
     extraction_warnings: Optional[List[str]] = Field(None, description="List of validation warning logs")
+
+    # Clinical Risk Analysis Pipeline fields
+    risk_analysis: Optional[Dict[str, Any]] = Field(None, description="Detailed clinical risk analysis payload")
+    overall_risk: Optional[str] = Field(None, description="Report aggregate risk category")
+    risk_score: Optional[float] = Field(None, description="Calculated aggregate risk score")
+    risk_findings: Optional[List[Dict[str, Any]]] = Field(None, description="List of identified specific risk details")
+    recommendations: Optional[List[Dict[str, Any]]] = Field(None, description="List of structured recommendations details")
+    clinical_flags: Optional[List[str]] = Field(None, description="Badges of triggered risk markers")
+    risk_version: Optional[str] = Field(None, description="Clinical risk evaluation rule-engine version")
+    risk_generated_at: Optional[datetime] = Field(None, description="Risk calculation timestamp")
 
 
 # ---------------------------------------------------------------------------
