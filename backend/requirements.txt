@@ -50,3 +50,6 @@ google-auth==2.55.0
 
 # Razorpay Integration
 razorpay==1.4.2
+
+# PDF Processing
+pypdf==6.14.2

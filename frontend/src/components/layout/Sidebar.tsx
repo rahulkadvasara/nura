@@ -58,6 +58,7 @@ export function Sidebar() {
         { name: 'Analytics', href: '/dashboard/admin/analytics', icon: BarChart3 },
         { name: 'System Logs', href: '/dashboard/admin/logs', icon: Activity },
         { name: 'System Health', href: '/dashboard/admin/system', icon: Cpu },
+        { name: 'OCR Reports', href: '/dashboard/admin/reports', icon: FileText },
         { name: 'AI Playground', href: '/dashboard/admin/ai', icon: Sparkles },
         { name: 'AI Orchestrator', href: '/dashboard/admin/ai/orchestrator', icon: Sparkles },
         { name: 'RAG Sync', href: '/dashboard/admin/rag', icon: RefreshCw },

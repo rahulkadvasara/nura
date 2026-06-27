@@ -358,7 +358,7 @@ function OrchestratorDashboardContent() {
                     {result.citations.map((c, idx) => (
                       <div key={idx} className="p-2 border border-slate-100 rounded text-[11px] space-y-1 bg-slate-50/50">
                         <div className="font-bold text-slate-700">Source: {c.source} (score: {(c.score ?? 0).toFixed(2)})</div>
-                        <div className="text-slate-500 italic">"{c.text}"</div>
+                        <div className="text-slate-500 italic">&ldquo;{c.text}&rdquo;</div>
                       </div>
                     ))}
                   </div>

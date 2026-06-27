@@ -190,6 +190,12 @@ from app.schemas.orchestrator import (
     OrchestratorStatisticsResponse,
 )
 
+from app.schemas.report import (
+    ReportCreateSchema,
+    ReportUpdateSchema,
+    ReportResponse,
+)
+
 
 
 __all__ = [
@@ -349,4 +355,7 @@ __all__ = [
     "AIExecuteRequest",
     "StandardResponseContract",
     "OrchestratorStatisticsResponse",
+    "ReportCreateSchema",
+    "ReportUpdateSchema",
+    "ReportResponse",
 ]

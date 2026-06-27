@@ -695,6 +695,68 @@ def get_report_repository() -> ReportRepository:
     return ReportRepository(database.reports)
 
 
+_ocr_service_instance = None
+_pdf_extractor_instance = None
+_image_preprocessor_instance = None
+_document_parser_instance = None
+_report_service_instance = None
+
+
+def get_ocr_service():
+    """Retrieve singleton OCRService instance"""
+    global _ocr_service_instance
+    if _ocr_service_instance is None:
+        from app.services.report_processing.ocr_service import OCRService
+        _ocr_service_instance = OCRService()
+    return _ocr_service_instance
+
+
+def get_pdf_extractor():
+    """Retrieve singleton PDFExtractor instance"""
+    global _pdf_extractor_instance
+    if _pdf_extractor_instance is None:
+        from app.services.report_processing.pdf_extractor import PDFExtractor
+        _pdf_extractor_instance = PDFExtractor()
+    return _pdf_extractor_instance
+
+
+def get_image_preprocessor():
+    """Retrieve singleton ImagePreprocessor instance"""
+    global _image_preprocessor_instance
+    if _image_preprocessor_instance is None:
+        from app.services.report_processing.image_preprocessor import ImagePreprocessor
+        _image_preprocessor_instance = ImagePreprocessor()
+    return _image_preprocessor_instance
+
+
+def get_document_parser():
+    """Retrieve singleton DocumentParser instance"""
+    global _document_parser_instance
+    if _document_parser_instance is None:
+        from app.services.report_processing.document_parser import DocumentParser
+        _document_parser_instance = DocumentParser(
+            report_repository=get_report_repository(),
+            pdf_extractor=get_pdf_extractor(),
+            image_preprocessor=get_image_preprocessor(),
+            ocr_service=get_ocr_service()
+        )
+    return _document_parser_instance
+
+
+def get_report_service():
+    """Retrieve singleton ReportService instance"""
+    global _report_service_instance
+    if _report_service_instance is None:
+        from app.services.report_service import ReportService
+        from app.repositories.user_repository import UserRepository
+        database = get_database()
+        _report_service_instance = ReportService(
+            report_repository=get_report_repository(),
+            user_repository=UserRepository(database.users)
+        )
+    return _report_service_instance
+
+
 def get_report_analysis_agent() -> ReportAnalysisAgent:
     """Get singleton ReportAnalysisAgent instance"""
     global _report_analysis_agent_instance

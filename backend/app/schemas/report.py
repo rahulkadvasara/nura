@@ -32,6 +32,19 @@ class ReportCreateSchema(BaseModel):
     ai_summary: Optional[str] = Field(None, description="AI-generated summary of the report")
     risk_level: RiskLevel = Field(default=RiskLevel.LOW, description="Report risk classification")
     processing_status: ProcessingStatus = Field(default=ProcessingStatus.UPLOADED, description="Processing status")
+    
+    # OCR Pipeline processing fields
+    ocr_status: Optional[str] = Field(None, description="OCR processing status")
+    ocr_method: Optional[str] = Field(None, description="OCR extraction method")
+    ocr_started_at: Optional[datetime] = Field(None, description="OCR started timestamp")
+    ocr_completed_at: Optional[datetime] = Field(None, description="OCR completed timestamp")
+    ocr_duration_ms: Optional[float] = Field(None, description="OCR execution duration in milliseconds")
+    ocr_average_confidence: Optional[float] = Field(None, description="Average OCR confidence score (0.0 to 1.0)")
+    page_count: Optional[int] = Field(None, description="Total pages extracted")
+    normalized_text: Optional[str] = Field(None, description="Normalized extracted layout text")
+    ocr_version: Optional[str] = Field(None, description="OCR processing pipeline version")
+    processing_errors: Optional[List[str]] = Field(None, description="List of processing errors encountered")
+    ocr_pages: Optional[List[Dict[str, Any]]] = Field(None, description="Raw text and confidence score breakdown per page")
 
 
 class ReportUpdateSchema(BaseModel):
@@ -46,6 +59,19 @@ class ReportUpdateSchema(BaseModel):
     ai_summary: Optional[str] = None
     risk_level: Optional[RiskLevel] = None
     processing_status: Optional[ProcessingStatus] = None
+    
+    # OCR pipeline updates
+    ocr_status: Optional[str] = None
+    ocr_method: Optional[str] = None
+    ocr_started_at: Optional[datetime] = None
+    ocr_completed_at: Optional[datetime] = None
+    ocr_duration_ms: Optional[float] = None
+    ocr_average_confidence: Optional[float] = None
+    page_count: Optional[int] = None
+    normalized_text: Optional[str] = None
+    ocr_version: Optional[str] = None
+    processing_errors: Optional[List[str]] = None
+    ocr_pages: Optional[List[Dict[str, Any]]] = None
 
 
 class ReportResponse(BaseModel):
@@ -65,6 +91,19 @@ class ReportResponse(BaseModel):
     processing_status: ProcessingStatus = Field(..., description="Processing status")
     created_at: datetime = Field(..., description="Report creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
+    
+    # OCR Pipeline fields
+    ocr_status: Optional[str] = Field(None, description="OCR processing status")
+    ocr_method: Optional[str] = Field(None, description="OCR extraction method")
+    ocr_started_at: Optional[datetime] = Field(None, description="OCR started timestamp")
+    ocr_completed_at: Optional[datetime] = Field(None, description="OCR completed timestamp")
+    ocr_duration_ms: Optional[float] = Field(None, description="OCR execution duration in milliseconds")
+    ocr_average_confidence: Optional[float] = Field(None, description="Average OCR confidence score (0.0 to 1.0)")
+    page_count: Optional[int] = Field(None, description="Total pages extracted")
+    normalized_text: Optional[str] = Field(None, description="Normalized extracted layout text")
+    ocr_version: Optional[str] = Field(None, description="OCR processing pipeline version")
+    processing_errors: Optional[List[str]] = Field(None, description="List of processing errors encountered")
+    ocr_pages: Optional[List[Dict[str, Any]]] = Field(None, description="Raw text and confidence score breakdown per page")
 
 
 # ---------------------------------------------------------------------------
