@@ -757,6 +757,86 @@ def get_report_service():
     return _report_service_instance
 
 
+_document_classifier_instance = None
+_medical_entity_extractor_instance = None
+_laboratory_parser_instance = None
+_medication_parser_instance = None
+_medical_normalizer_instance = None
+_extraction_validator_instance = None
+_report_extraction_service_instance = None
+
+
+def get_document_classifier():
+    """Retrieve singleton DocumentClassifier instance"""
+    global _document_classifier_instance
+    if _document_classifier_instance is None:
+        from app.services.report_extraction.document_classifier import DocumentClassifier
+        _document_classifier_instance = DocumentClassifier(ai_service=get_ai_service())
+    return _document_classifier_instance
+
+
+def get_medical_entity_extractor():
+    """Retrieve singleton MedicalEntityExtractor instance"""
+    global _medical_entity_extractor_instance
+    if _medical_entity_extractor_instance is None:
+        from app.services.report_extraction.medical_entity_extractor import MedicalEntityExtractor
+        _medical_entity_extractor_instance = MedicalEntityExtractor(ai_service=get_ai_service())
+    return _medical_entity_extractor_instance
+
+
+def get_laboratory_parser():
+    """Retrieve singleton LaboratoryParser instance"""
+    global _laboratory_parser_instance
+    if _laboratory_parser_instance is None:
+        from app.services.report_extraction.laboratory_parser import LaboratoryParser
+        _laboratory_parser_instance = LaboratoryParser(ai_service=get_ai_service())
+    return _laboratory_parser_instance
+
+
+def get_medication_parser():
+    """Retrieve singleton MedicationParser instance"""
+    global _medication_parser_instance
+    if _medication_parser_instance is None:
+        from app.services.report_extraction.medication_parser import MedicationParser
+        _medication_parser_instance = MedicationParser(ai_service=get_ai_service())
+    return _medication_parser_instance
+
+
+def get_medical_normalizer():
+    """Retrieve singleton MedicalNormalizer instance"""
+    global _medical_normalizer_instance
+    if _medical_normalizer_instance is None:
+        from app.services.report_extraction.normalizer import MedicalNormalizer
+        _medical_normalizer_instance = MedicalNormalizer()
+    return _medical_normalizer_instance
+
+
+def get_extraction_validator():
+    """Retrieve singleton ExtractionValidator instance"""
+    global _extraction_validator_instance
+    if _extraction_validator_instance is None:
+        from app.services.report_extraction.validator import ExtractionValidator
+        _extraction_validator_instance = ExtractionValidator()
+    return _extraction_validator_instance
+
+
+def get_report_extraction_service():
+    """Retrieve singleton ReportExtractionService instance"""
+    global _report_extraction_service_instance
+    if _report_extraction_service_instance is None:
+        from app.services.report_extraction.extractor import ReportExtractionService
+        _report_extraction_service_instance = ReportExtractionService(
+            report_repository=get_report_repository(),
+            classifier=get_document_classifier(),
+            entity_extractor=get_medical_entity_extractor(),
+            lab_parser=get_laboratory_parser(),
+            med_parser=get_medication_parser(),
+            normalizer=get_medical_normalizer(),
+            validator=get_extraction_validator()
+        )
+    return _report_extraction_service_instance
+
+
 def get_report_analysis_agent() -> ReportAnalysisAgent:
     """Get singleton ReportAnalysisAgent instance"""
     global _report_analysis_agent_instance

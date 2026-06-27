@@ -6,6 +6,7 @@ import { reportService, ReportResponse, ReportOcrData } from '@/services/report.
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 import {
   FileText,
   Upload,
@@ -15,9 +16,14 @@ import {
   CheckCircle,
   AlertCircle,
   Eye,
-  Settings,
   AlertTriangle,
-  FolderOpen
+  FolderOpen,
+  Cpu,
+  User,
+  Activity,
+  Heart,
+  Shield,
+  Layers
 } from 'lucide-react'
 
 export default function PatientRecordsPage() {
@@ -28,10 +34,13 @@ export default function PatientRecordsPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [reportType, setReportType] = useState('other')
   
-  // Inspection Modal States
+  // Inspection Panel States
   const [inspectingReport, setInspectingReport] = useState<ReportResponse | null>(null)
   const [ocrData, setOcrData] = useState<ReportOcrData | null>(null)
+  const [structuredData, setStructuredData] = useState<any>(null)
   const [loadingOcr, setLoadingOcr] = useState(false)
+  const [loadingExtraction, setLoadingExtraction] = useState(false)
+  const [inspectTab, setInspectTab] = useState<'structured' | 'ocr' | 'labs' | 'meds'>('structured')
 
   const fetchReports = async () => {
     try {
@@ -53,19 +62,23 @@ export default function PatientRecordsPage() {
 
   // Poll status for processing reports periodically
   useEffect(() => {
-    const processingReports = reports.filter(r => r.ocr_status === 'processing' || r.ocr_status === 'pending')
-    if (processingReports.length === 0) return
+    const processing = reports.filter(
+      r => r.ocr_status === 'processing' || 
+           r.ocr_status === 'pending' || 
+           r.extraction_status === 'processing'
+    )
+    if (processing.length === 0) return
 
     const interval = setInterval(async () => {
       let updated = false
       const copy = [...reports]
       for (let i = 0; i < copy.length; i++) {
         const r = copy[i]
-        if (r.ocr_status === 'processing' || r.ocr_status === 'pending') {
+        if (r.ocr_status === 'processing' || r.ocr_status === 'pending' || r.extraction_status === 'processing') {
           try {
             const statusData = await reportService.getProcessingStatus(r.id)
-            if (statusData.ocr_status !== r.ocr_status) {
-              // Reload whole list to get updated texts
+            const structData = await reportService.getStructuredData(r.id)
+            if (statusData.ocr_status !== r.ocr_status || structData.extraction_status !== r.extraction_status) {
               updated = true
             }
           } catch (e) {
@@ -119,6 +132,9 @@ export default function PatientRecordsPage() {
   const handleInspect = async (report: ReportResponse) => {
     setInspectingReport(report)
     setOcrData(null)
+    setStructuredData(null)
+    setInspectTab(report.extraction_status === 'completed' ? 'structured' : 'ocr')
+
     if (report.ocr_status === 'completed') {
       try {
         setLoadingOcr(true)
@@ -130,9 +146,38 @@ export default function PatientRecordsPage() {
         setLoadingOcr(false)
       }
     }
+
+    if (report.extraction_status === 'completed') {
+      try {
+        setLoadingExtraction(true)
+        const struct = await reportService.getStructuredData(report.id)
+        setStructuredData(struct)
+      } catch (e) {
+        console.error(e)
+      } finally {
+        setLoadingExtraction(false)
+      }
+    }
   }
 
-  const handleRetry = async (reportId: string) => {
+  const handleExtract = async (reportId: string) => {
+    try {
+      setLoadingExtraction(true)
+      await reportService.extractReport(reportId)
+      fetchReports()
+      // Reload details after short wait
+      setTimeout(async () => {
+        const struct = await reportService.getStructuredData(reportId)
+        setStructuredData(struct)
+      }, 2000)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoadingExtraction(false)
+    }
+  }
+
+  const handleRetryOcr = async (reportId: string) => {
     try {
       await reportService.processReport(reportId)
       fetchReports()
@@ -147,15 +192,15 @@ export default function PatientRecordsPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
           <FileText className="h-8 w-8 text-teal-600" />
-          My Medical Reports
+          My Medical Records & Reports
         </h1>
         <p className="text-slate-500 mt-1">
-          Upload and review medical laboratory tests, scans, or prescriptions.
+          Upload laboratory investigations, prescriptions or discharge sheets to parse and structure clinical details.
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left Column: Upload New File */}
+        {/* Left Column: Upload */}
         <div className="space-y-6 lg:col-span-1">
           <Card className="border border-slate-200 shadow-sm bg-white">
             <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
@@ -250,7 +295,7 @@ export default function PatientRecordsPage() {
               ) : reports.length === 0 ? (
                 <div className="text-center py-20 text-slate-400">
                   <FolderOpen className="h-12 w-12 mx-auto mb-2 stroke-1 text-slate-400" />
-                  <p className="text-sm">No medical reports found. Upload your first document above.</p>
+                  <p className="text-sm">No medical records found. Upload a report file to start.</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -259,54 +304,99 @@ export default function PatientRecordsPage() {
                       key={report.id}
                       className="border border-slate-200 rounded-lg p-4 bg-white hover:shadow-sm transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
                     >
-                      <div className="space-y-1.5">
+                      <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-bold text-slate-900">
                             {report.file_url.split('/').pop()?.split('_').pop() || 'Medical Report'}
                           </span>
-                          <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded uppercase">
-                            {report.report_type.replace('_', ' ')}
-                          </span>
+                          {report.document_type && (
+                            <Badge className="bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-50 rounded">
+                              {report.document_type}
+                            </Badge>
+                          )}
                         </div>
-                        <div className="text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
+                        <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-4">
                           <span>Uploaded: {new Date(report.created_at).toLocaleDateString()}</span>
                           {report.page_count && <span>Pages: {report.page_count}</span>}
-                          {report.ocr_average_confidence && (
-                            <span>Confidence: {(report.ocr_average_confidence * 100).toFixed(0)}%</span>
+                          {report.extraction_confidence && (
+                            <span>Confidence: {(report.extraction_confidence * 100).toFixed(0)}%</span>
                           )}
                         </div>
                       </div>
 
                       <div className="flex items-center gap-3 justify-end">
                         {/* Process status badges */}
-                        {report.ocr_status === 'pending' && (
-                          <span className="text-xs font-semibold text-slate-500 flex items-center gap-1 bg-slate-100 px-2 py-1 rounded">
-                            <Clock className="h-3.5 w-3.5 animate-pulse" /> Pending
-                          </span>
-                        )}
-                        {report.ocr_status === 'processing' && (
-                          <span className="text-xs font-semibold text-amber-600 flex items-center gap-1 bg-amber-50 px-2 py-1 rounded">
-                            <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Processing
-                          </span>
-                        )}
-                        {report.ocr_status === 'completed' && (
-                          <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded">
-                            <CheckCircle className="h-3.5 w-3.5" /> Ready
-                          </span>
-                        )}
-                        {report.ocr_status === 'failed' && (
+                        {report.ocr_status !== 'completed' ? (
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-red-600 flex items-center gap-1 bg-red-50 px-2 py-1 rounded">
-                              <AlertCircle className="h-3.5 w-3.5" /> Failed
-                            </span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleRetry(report.id)}
-                              className="px-2 py-1 h-auto text-[10px] text-teal-700 hover:bg-teal-50 border-teal-200"
-                            >
-                              Retry
-                            </Button>
+                            {report.ocr_status === 'pending' && (
+                              <span className="text-xs font-semibold text-slate-500 flex items-center gap-1 bg-slate-100 px-2 py-1 rounded">
+                                <Clock className="h-3.5 w-3.5 animate-pulse" /> OCR Pending
+                              </span>
+                            )}
+                            {report.ocr_status === 'processing' && (
+                              <span className="text-xs font-semibold text-amber-600 flex items-center gap-1 bg-amber-50 px-2 py-1 rounded">
+                                <RefreshCw className="h-3.5 w-3.5 animate-spin" /> OCR Processing
+                              </span>
+                            )}
+                            {report.ocr_status === 'failed' && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-red-600 flex items-center gap-1 bg-red-50 px-2 py-1 rounded">
+                                  <AlertCircle className="h-3.5 w-3.5" /> OCR Failed
+                                </span>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleRetryOcr(report.id)}
+                                  className="px-2 py-1 h-auto text-[10px] text-teal-700 hover:bg-teal-50 border-teal-200"
+                                >
+                                  Retry
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            {/* Extraction status badges */}
+                            {(!report.extraction_status || report.extraction_status === 'pending') && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded flex items-center gap-1">
+                                  <Clock className="h-3 w-3" /> Struct Pending
+                                </span>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleExtract(report.id)}
+                                  className="px-2 py-1 h-auto text-[10px] text-teal-700 hover:bg-teal-50 border-teal-200"
+                                >
+                                  Extract
+                                </Button>
+                              </div>
+                            )}
+                            {report.extraction_status === 'processing' && (
+                              <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded flex items-center gap-1">
+                                <RefreshCw className="h-3 w-3 animate-spin" /> Extracting...
+                              </span>
+                            )}
+                            {report.extraction_status === 'completed' && (
+                              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded flex items-center gap-1">
+                                <CheckCircle className="h-3 w-3" /> Structured
+                              </span>
+                            )}
+                            {report.extraction_status === 'failed' && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-1 rounded flex items-center gap-1">
+                                  <AlertCircle className="h-3 w-3" /> Struct Failed
+                                </span>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleExtract(report.id)}
+                                  className="px-2 py-1 h-auto text-[10px] text-teal-700 hover:bg-teal-50 border-teal-200"
+                                >
+                                  Retry
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         )}
 
@@ -316,7 +406,7 @@ export default function PatientRecordsPage() {
                             size="sm"
                             onClick={() => handleInspect(report)}
                             className="p-1 h-auto text-slate-500 hover:text-teal-600"
-                            title="Inspect OCR results"
+                            title="Inspect Details"
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
@@ -325,7 +415,7 @@ export default function PatientRecordsPage() {
                             size="sm"
                             onClick={() => handleDelete(report.id)}
                             className="p-1 h-auto text-slate-400 hover:text-red-600"
-                            title="Delete report"
+                            title="Delete"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -338,113 +428,332 @@ export default function PatientRecordsPage() {
             </CardContent>
           </Card>
 
-          {/* Modal / Section: Document Inspection */}
+          {/* Detailed Document Inspection Panel */}
           {inspectingReport && (
             <Card className="border-2 border-teal-500 shadow-md bg-white">
-              <CardHeader className="pb-3 border-b border-slate-100 bg-teal-50/20 flex flex-row items-center justify-between">
+              <CardHeader className="pb-3 border-b border-slate-100 bg-teal-50/20 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                   <CardTitle className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                    <Eye className="h-4 w-4 text-teal-600" />
-                    Inspect OCR Details
+                    <Layers className="h-4 w-4 text-teal-600" />
+                    Structured Clinical Inspector
                   </CardTitle>
                   <span className="text-xs text-slate-500 mt-1 block">
-                    ID: {inspectingReport.id} | Status: {inspectingReport.ocr_status?.toUpperCase()}
+                    File: {inspectingReport.file_url.split('/').pop()?.substring(14) || 'record'}
                   </span>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setInspectingReport(null)}
-                  className="text-slate-400 hover:text-slate-800"
-                >
-                  Close Inspection
-                </Button>
+
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { id: 'structured', name: 'Profile Summary' },
+                    { id: 'labs', name: 'Lab Results' },
+                    { id: 'meds', name: 'Prescribed Drugs' },
+                    { id: 'ocr', name: 'Raw OCR Text' }
+                  ].map((tab) => (
+                    <Button
+                      key={tab.id}
+                      variant={inspectTab === tab.id ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setInspectTab(tab.id as any)}
+                      className={`h-8 text-xs font-semibold ${
+                        inspectTab === tab.id ? 'bg-teal-600 hover:bg-teal-700 text-white' : ''
+                      }`}
+                    >
+                      {tab.name}
+                    </Button>
+                  ))}
+                </div>
               </CardHeader>
-              <CardContent className="pt-6 space-y-6">
-                {inspectingReport.ocr_status === 'failed' && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                    <h4 className="text-xs font-bold text-red-800 uppercase flex items-center gap-1.5 mb-2">
-                      <AlertTriangle className="h-4 w-4 text-red-600" />
-                      Document Pipeline Failure Logs
-                    </h4>
-                    <ul className="list-disc pl-4 space-y-1 text-xs text-red-800 font-semibold">
-                      {inspectingReport.processing_errors && inspectingReport.processing_errors.length > 0 ? (
-                        inspectingReport.processing_errors.map((e, idx) => <li key={idx}>{e}</li>)
-                      ) : (
-                        <li>An unknown error occurred during PDF parsing.</li>
-                      )}
-                    </ul>
+
+              <CardContent className="pt-6">
+                {/* Structured Overview Tab */}
+                {inspectTab === 'structured' && (
+                  <div className="space-y-6">
+                    {loadingExtraction ? (
+                      <div className="text-center py-10">
+                        <RefreshCw className="h-6 w-6 animate-spin text-teal-600 mx-auto mb-2" />
+                        <p className="text-xs text-slate-500">Loading structured clinical metadata...</p>
+                      </div>
+                    ) : structuredData ? (
+                      <div className="space-y-6 text-xs text-slate-700">
+                        {/* Warnings banner */}
+                        {structuredData.extraction_warnings && structuredData.extraction_warnings.length > 0 && (
+                          <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                            <h4 className="font-bold text-amber-800 uppercase flex items-center gap-1.5 mb-2">
+                              <AlertTriangle className="h-4 w-4 text-amber-600" />
+                              Validation Alerts ({structuredData.extraction_warnings.length})
+                            </h4>
+                            <ul className="list-disc pl-4 space-y-1 text-amber-800 font-semibold leading-relaxed">
+                              {structuredData.extraction_warnings.map((w: string, idx: number) => (
+                                <li key={idx}>{w}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* Patient demographic details */}
+                          <Card className="border border-slate-200 shadow-none bg-slate-50/50">
+                            <CardHeader className="py-2.5 border-b bg-slate-100/35">
+                              <span className="font-bold uppercase text-slate-600 flex items-center gap-1.5">
+                                <User className="h-3.5 w-3.5 text-teal-600" />
+                                Patient Information
+                              </span>
+                            </CardHeader>
+                            <CardContent className="py-3 space-y-2">
+                              <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
+                                <span className="text-slate-400">Name</span>
+                                <strong className="text-slate-800">{structuredData.patient_information?.patient_name || 'N/A'}</strong>
+                              </div>
+                              <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
+                                <span className="text-slate-400">Age</span>
+                                <strong className="text-slate-800">{structuredData.patient_information?.age || 'N/A'}</strong>
+                              </div>
+                              <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
+                                <span className="text-slate-400">Gender</span>
+                                <strong className="text-slate-800">{structuredData.patient_information?.gender || 'N/A'}</strong>
+                              </div>
+                              <div className="flex justify-between pb-0">
+                                <span className="text-slate-400">Date of Birth</span>
+                                <strong className="text-slate-800">{structuredData.patient_information?.date_of_birth || 'N/A'}</strong>
+                              </div>
+                            </CardContent>
+                          </Card>
+
+                          {/* Clinic hospital records details */}
+                          <Card className="border border-slate-200 shadow-none bg-slate-50/50">
+                            <CardHeader className="py-2.5 border-b bg-slate-100/35">
+                              <span className="font-bold uppercase text-slate-600 flex items-center gap-1.5">
+                                <FolderOpen className="h-3.5 w-3.5 text-teal-600" />
+                                Facility & Clinic Record
+                              </span>
+                            </CardHeader>
+                            <CardContent className="py-3 space-y-2">
+                              <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
+                                <span className="text-slate-400">Hospital / Lab</span>
+                                <strong className="text-slate-800">
+                                  {structuredData.hospital_information?.hospital || structuredData.hospital_information?.laboratory || 'N/A'}
+                                </strong>
+                              </div>
+                              <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
+                                <span className="text-slate-400">Consultant Doctor</span>
+                                <strong className="text-slate-800">{structuredData.hospital_information?.doctor || 'N/A'}</strong>
+                              </div>
+                              <div className="flex justify-between border-b border-slate-200/50 pb-1.5">
+                                <span className="text-slate-400">Department</span>
+                                <strong className="text-slate-800">{structuredData.hospital_information?.department || 'N/A'}</strong>
+                              </div>
+                              <div className="flex justify-between pb-0">
+                                <span className="text-slate-400">Report Date</span>
+                                <strong className="text-slate-800">{structuredData.hospital_information?.report_date || 'N/A'}</strong>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </div>
+
+                        {/* Diagnoses and Allergies lists */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-2">
+                            <span className="font-bold uppercase text-slate-500 tracking-wide block">Extracted Diagnoses</span>
+                            {structuredData.diagnoses && structuredData.diagnoses.length > 0 ? (
+                              <div className="flex flex-wrap gap-2">
+                                {structuredData.diagnoses.map((d: string, idx: number) => (
+                                  <Badge key={idx} className="bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-50 py-1">
+                                    {d}
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 italic">No diagnoses entries extracted.</span>
+                            )}
+                          </div>
+
+                          <div className="space-y-2">
+                            <span className="font-bold uppercase text-slate-500 tracking-wide block">Extracted Allergies</span>
+                            {structuredData.allergies && structuredData.allergies.length > 0 ? (
+                              <div className="flex flex-wrap gap-2">
+                                {structuredData.allergies.map((a: string, idx: number) => (
+                                  <Badge key={idx} className="bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-50 py-1">
+                                    {a}
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 italic">No allergies entries extracted.</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Pipeline extraction telemetry info */}
+                        <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div>
+                            <span className="text-slate-400 font-semibold block uppercase text-[10px]">Extraction Method</span>
+                            <strong className="text-slate-800 font-mono block mt-0.5 uppercase">{structuredData.metadata?.extraction_method}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 font-semibold block uppercase text-[10px]">Confidence</span>
+                            <strong className="text-slate-800 block mt-0.5">{((structuredData.metadata?.confidence_score ?? 0.0) * 100.0).toFixed(0)}%</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 font-semibold block uppercase text-[10px]">Status</span>
+                            <strong className="text-slate-800 block mt-0.5 uppercase">{structuredData.extraction_status}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 font-semibold block uppercase text-[10px]">Engine Version</span>
+                            <strong className="text-slate-800 font-mono block mt-0.5">{structuredData.metadata?.extraction_version}</strong>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-10 text-slate-400">
+                        <AlertCircle className="h-8 w-8 mx-auto text-slate-400 mb-2" />
+                        <p>No structured medical profile available for this document.</p>
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {loadingOcr ? (
-                  <div className="flex flex-col items-center justify-center py-10 text-slate-500">
-                    <RefreshCw className="h-6 w-6 animate-spin text-teal-600 mb-2" />
-                    <p className="text-xs">Fetching OCR layout content...</p>
-                  </div>
-                ) : ocrData ? (
-                  <div className="space-y-6">
-                    {/* Pipeline Telemetry Card */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-lg border border-slate-200 text-xs">
-                      <div>
-                        <span className="text-slate-400 block uppercase font-semibold">Extraction Method</span>
-                        <strong className="text-slate-800 font-mono mt-0.5 block uppercase">{ocrData.metadata.ocr_method}</strong>
+                {/* Laboratory Results Table Tab */}
+                {inspectTab === 'labs' && (
+                  <div className="space-y-4">
+                    {loadingExtraction ? (
+                      <div className="text-center py-10">
+                        <RefreshCw className="h-6 w-6 animate-spin text-teal-600 mx-auto mb-2" />
+                        <p className="text-xs text-slate-500">Retrieving laboratory parameters table...</p>
                       </div>
-                      <div>
-                        <span className="text-slate-400 block uppercase font-semibold">Page Count</span>
-                        <strong className="text-slate-800 mt-0.5 block">{ocrData.metadata.page_count} pages</strong>
+                    ) : structuredData && structuredData.laboratory_results && structuredData.laboratory_results.length > 0 ? (
+                      <div className="border border-slate-200 rounded-lg overflow-hidden bg-white text-xs shadow-xs">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+                              <th className="p-3">Investigation Parameter</th>
+                              <th className="p-3">Result Value</th>
+                              <th className="p-3">Standard Units</th>
+                              <th className="p-3">Reference Range</th>
+                              <th className="p-3 text-right">Status Alerts</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 text-slate-700">
+                            {structuredData.laboratory_results.map((lab: any, idx: number) => (
+                              <tr key={idx} className="hover:bg-slate-50/40 transition-colors">
+                                <td className="p-3 font-semibold text-slate-900">{lab.test_name}</td>
+                                <td className="p-3 font-mono font-bold text-slate-800">{lab.value}</td>
+                                <td className="p-3 font-medium text-slate-500">{lab.unit || '-'}</td>
+                                <td className="p-3 font-mono text-slate-500">{lab.reference_range || '-'}</td>
+                                <td className="p-3 text-right">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wider ${
+                                    lab.status === 'HIGH' ? 'bg-red-50 border-red-200 text-red-700' :
+                                    lab.status === 'LOW' ? 'bg-amber-50 border-amber-200 text-amber-700' :
+                                    'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                  }`}>
+                                    {lab.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
-                      <div>
-                        <span className="text-slate-400 block uppercase font-semibold">Average Confidence</span>
-                        <strong className="text-slate-800 mt-0.5 block">{(ocrData.metadata.ocr_average_confidence * 100).toFixed(1)}%</strong>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block uppercase font-semibold">OCR Version</span>
-                        <strong className="text-slate-800 font-mono mt-0.5 block">{ocrData.metadata.ocr_version}</strong>
-                      </div>
-                    </div>
-
-                    {/* Page breakdown timeline */}
-                    {ocrData.ocr_pages && ocrData.ocr_pages.length > 0 && (
-                      <div className="space-y-3">
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Page Breakdown Breakdown</span>
-                        <div className="space-y-3">
-                          {ocrData.ocr_pages.map((page, idx) => (
-                            <div key={idx} className="border border-slate-200 rounded-md p-4 bg-white text-xs space-y-3 shadow-xs">
-                              <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                                <span className="font-bold text-slate-700">Page {page.page_number}</span>
-                                <div className="flex items-center gap-3 text-[10px] text-slate-500">
-                                  <span>Confidence: {(page.confidence * 100).toFixed(0)}%</span>
-                                  <span>•</span>
-                                  <span>Latency: {page.processing_time.toFixed(0)} ms</span>
-                                  <span>•</span>
-                                  <span>Words: {page.word_count}</span>
-                                </div>
-                              </div>
-                              <pre className="bg-slate-900 text-teal-400 p-3 rounded font-mono text-[11px] overflow-x-auto whitespace-pre-wrap max-h-36">
-                                {page.normalized_text}
-                              </pre>
-                            </div>
-                          ))}
-                        </div>
+                    ) : (
+                      <div className="text-center py-20 border border-dashed rounded-lg text-slate-400 bg-slate-50/50">
+                        <Activity className="h-10 w-10 mx-auto text-slate-300 mb-2 stroke-1" />
+                        <p className="text-sm">No structured laboratory parameter rows extracted from this document.</p>
                       </div>
                     )}
-
-                    {/* Full layout parsed view */}
-                    <div className="space-y-2">
-                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Full Extracted Text (Normalized)</span>
-                      <pre className="bg-slate-950 text-slate-200 p-4 rounded-lg font-mono text-[11px] overflow-auto max-h-72 whitespace-pre-wrap border border-slate-800">
-                        {ocrData.normalized_text}
-                      </pre>
-                    </div>
                   </div>
-                ) : (
-                  inspectingReport.ocr_status === 'processing' && (
-                    <div className="text-center py-8 text-slate-500">
-                      <RefreshCw className="h-6 w-6 animate-spin text-teal-600 mx-auto mb-2" />
-                      <p className="text-xs">Document parser is currently running. Results will display here automatically.</p>
-                    </div>
-                  )
+                )}
+
+                {/* Medication Details Tab */}
+                {inspectTab === 'meds' && (
+                  <div className="space-y-4">
+                    {loadingExtraction ? (
+                      <div className="text-center py-10">
+                        <RefreshCw className="h-6 w-6 animate-spin text-teal-600 mx-auto mb-2" />
+                        <p className="text-xs text-slate-500">Retrieving prescription medications list...</p>
+                      </div>
+                    ) : structuredData && structuredData.medications && structuredData.medications.length > 0 ? (
+                      <div className="border border-slate-200 rounded-lg overflow-hidden bg-white text-xs shadow-xs">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+                              <th className="p-3">Drug / Medicine Name</th>
+                              <th className="p-3">Dosage Strength</th>
+                              <th className="p-3">Administration Frequency</th>
+                              <th className="p-3">Treatment Duration</th>
+                              <th className="p-3 text-right">Intake Route</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 text-slate-700">
+                            {structuredData.medications.map((med: any, idx: number) => (
+                              <tr key={idx} className="hover:bg-slate-50/40 transition-colors">
+                                <td className="p-3 font-semibold text-slate-900">{med.medicine}</td>
+                                <td className="p-3 font-bold text-slate-800">{med.dosage || '-'}</td>
+                                <td className="p-3 font-medium text-slate-500">{med.frequency || '-'}</td>
+                                <td className="p-3 text-slate-500">{med.duration || '-'}</td>
+                                <td className="p-3 text-right text-slate-500 font-medium">{med.route || 'Oral'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-20 border border-dashed rounded-lg text-slate-400 bg-slate-50/50">
+                        <Heart className="h-10 w-10 mx-auto text-slate-300 mb-2 stroke-1" />
+                        <p className="text-sm">No structured medication records extracted from this document.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* OCR Raw Text tab */}
+                {inspectTab === 'ocr' && (
+                  <div className="space-y-6">
+                    {loadingOcr ? (
+                      <div className="flex flex-col items-center justify-center py-10 text-slate-500">
+                        <RefreshCw className="h-6 w-6 animate-spin text-teal-600 mb-2" />
+                        <p className="text-xs">Fetching OCR layouts...</p>
+                      </div>
+                    ) : ocrData ? (
+                      <div className="space-y-6">
+                        {/* Page list preview */}
+                        {ocrData.ocr_pages && ocrData.ocr_pages.length > 0 && (
+                          <div className="space-y-3">
+                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Individual Pages Breakdown</span>
+                            <div className="space-y-3">
+                              {ocrData.ocr_pages.map((page, idx) => (
+                                <div key={idx} className="border border-slate-200 rounded-md p-4 bg-white text-xs space-y-3">
+                                  <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                                    <span className="font-bold text-slate-700">Page {page.page_number}</span>
+                                    <div className="flex items-center gap-3 text-[10px] text-slate-500">
+                                      <span>Confidence: {(page.confidence * 100).toFixed(0)}%</span>
+                                      <span>•</span>
+                                      <span>Latency: {page.processing_time.toFixed(0)} ms</span>
+                                      <span>•</span>
+                                      <span>Words: {page.word_count}</span>
+                                    </div>
+                                  </div>
+                                  <pre className="bg-slate-900 text-teal-400 p-3 rounded font-mono text-[11px] overflow-x-auto whitespace-pre-wrap max-h-36 border border-slate-800">
+                                    {page.normalized_text}
+                                  </pre>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="space-y-2">
+                          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Full Extracted Text Layout</span>
+                          <pre className="bg-slate-950 text-slate-200 p-4 rounded-lg font-mono text-[11px] overflow-auto max-h-72 whitespace-pre-wrap border border-slate-800">
+                            {ocrData.normalized_text}
+                          </pre>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-10 text-slate-400">
+                        <AlertCircle className="h-8 w-8 mx-auto text-slate-400 mb-2" />
+                        <p>No OCR layout content found.</p>
+                      </div>
+                    )}
+                  </div>
                 )}
               </CardContent>
             </Card>

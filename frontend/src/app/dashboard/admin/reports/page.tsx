@@ -5,6 +5,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { reportService, ReportResponse, ReportTelemetryStats, ReportOcrData } from '@/services/report.service'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import {
   FileText,
   Activity,
@@ -18,19 +19,25 @@ import {
   Eye,
   AlertCircle,
   TrendingUp,
-  Cpu
+  Cpu,
+  Database,
+  Layers
 } from 'lucide-react'
 
 function AdminReportsDashboardContent() {
   const [reports, setReports] = useState<ReportResponse[]>([])
   const [telemetry, setTelemetry] = useState<ReportTelemetryStats | null>(null)
+  const [extractTelemetry, setExtractTelemetry] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all')
   
   // Inspecting report details
   const [inspectingReport, setInspectingReport] = useState<ReportResponse | null>(null)
   const [ocrData, setOcrData] = useState<ReportOcrData | null>(null)
+  const [structuredData, setStructuredData] = useState<any | null>(null)
   const [loadingOcr, setLoadingOcr] = useState(false)
+  const [loadingExtraction, setLoadingExtraction] = useState(false)
+  const [inspectTab, setInspectTab] = useState<'ocr' | 'json' | 'warnings'>('json')
 
   const fetchData = async () => {
     try {
@@ -40,6 +47,13 @@ function AdminReportsDashboardContent() {
       
       const stats = await reportService.getProcessingTelemetry()
       setTelemetry(stats)
+
+      try {
+        const extraStats = await reportService.getExtractionTelemetry()
+        setExtractTelemetry(extraStats)
+      } catch (err) {
+        console.error('Failed to load extraction telemetry', err)
+      }
     } catch (e) {
       console.error(e)
     } finally {
@@ -64,7 +78,7 @@ function AdminReportsDashboardContent() {
     }
   }
 
-  const handleRetry = async (reportId: string) => {
+  const handleRetryOcr = async (reportId: string) => {
     try {
       await reportService.processReport(reportId)
       fetchData()
@@ -73,9 +87,28 @@ function AdminReportsDashboardContent() {
     }
   }
 
+  const handleExtract = async (reportId: string) => {
+    try {
+      setLoadingExtraction(true)
+      await reportService.extractReport(reportId)
+      fetchData()
+      setTimeout(async () => {
+        const struct = await reportService.getStructuredData(reportId)
+        setStructuredData(struct)
+      }, 2000)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoadingExtraction(false)
+    }
+  }
+
   const handleInspect = async (report: ReportResponse) => {
     setInspectingReport(report)
     setOcrData(null)
+    setStructuredData(null)
+    setInspectTab(report.extraction_status === 'completed' ? 'json' : 'ocr')
+
     if (report.ocr_status === 'completed') {
       try {
         setLoadingOcr(true)
@@ -87,11 +120,29 @@ function AdminReportsDashboardContent() {
         setLoadingOcr(false)
       }
     }
+
+    if (report.extraction_status === 'completed') {
+      try {
+        setLoadingExtraction(true)
+        const struct = await reportService.getStructuredData(report.id)
+        setStructuredData(struct)
+      } catch (e) {
+        console.error(e)
+      } finally {
+        setLoadingExtraction(false)
+      }
+    }
   }
 
   const filteredReports = statusFilter === 'all'
     ? reports
-    : reports.filter(r => r.ocr_status === statusFilter)
+    : reports.filter(r => {
+        if (statusFilter === 'ocr_failed') return r.ocr_status === 'failed'
+        if (statusFilter === 'extract_failed') return r.extraction_status === 'failed'
+        if (statusFilter === 'completed') return r.extraction_status === 'completed'
+        if (statusFilter === 'processing') return r.ocr_status === 'processing' || r.extraction_status === 'processing'
+        return true
+      })
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-6 bg-slate-50 min-h-screen">
@@ -100,10 +151,10 @@ function AdminReportsDashboardContent() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
             <Cpu className="h-8 w-8 text-teal-600 animate-pulse" />
-            OCR Document Pipeline
+            Medical Processing Pipeline Control
           </h1>
           <p className="text-slate-500 mt-1">
-            System queue tracker, page details validation, and OCR telemetry dashboards.
+            Track OCR queues, trigger AI medical extractions, validate warning layouts, and monitor telemetry.
           </p>
         </div>
         <Button
@@ -118,27 +169,45 @@ function AdminReportsDashboardContent() {
       </div>
 
       {/* Telemetry Dashboard Stats Cards */}
-      {telemetry && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          {[
-            { name: 'Uploaded Documents', val: telemetry.uploaded_documents, desc: 'Total database reports', icon: FileText },
-            { name: 'Processed Pages', val: telemetry.processed_pages, desc: `Average: ${(telemetry.average_processing_time_ms / 1000.0).toFixed(1)}s per doc`, icon: Activity },
-            { name: 'Average Confidence', val: `${(telemetry.average_confidence * 100).toFixed(1)}%`, desc: `Average OCR latency: ${telemetry.ocr_latency_average_ms.toFixed(0)}ms`, icon: TrendingUp },
-            { name: 'Pipeline Failures', val: telemetry.failures, desc: `Total job retries: ${telemetry.retries}`, icon: AlertTriangle }
-          ].map((item, idx) => (
-            <Card key={idx} className="border border-slate-200 shadow-sm bg-white">
-              <CardContent className="pt-4 flex items-center justify-between">
-                <div>
-                  <span className="text-xs text-slate-400 block uppercase font-semibold">{item.name}</span>
-                  <span className="text-xl font-bold text-slate-900 mt-0.5 block">{item.val}</span>
-                  <span className="text-[10px] text-slate-500 block mt-0.5">{item.desc}</span>
-                </div>
-                <item.icon className="h-8 w-8 text-teal-600/30" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {[
+          {
+            name: 'OCR Processed Documents',
+            val: telemetry?.uploaded_documents ?? 0,
+            desc: `Avg latency: ${telemetry?.ocr_latency_average_ms.toFixed(0) ?? 0}ms`,
+            icon: FileText
+          },
+          {
+            name: 'Clinical Extractions Run',
+            val: extractTelemetry?.total_extractions ?? 0,
+            desc: `Success rate: ${(((extractTelemetry?.successful_extractions ?? 0) / Math.max(1, extractTelemetry?.total_extractions ?? 0)) * 100).toFixed(0)}%`,
+            icon: Layers
+          },
+          {
+            name: 'Extraction Avg Confidence',
+            val: `${((extractTelemetry?.average_extraction_confidence ?? 0.0) * 100).toFixed(1)}%`,
+            desc: `Avg execution: ${(extractTelemetry?.average_duration_ms ?? 0.0).toFixed(0)}ms`,
+            icon: TrendingUp
+          },
+          {
+            name: 'Failed Jobs',
+            val: (telemetry?.failures ?? 0) + (extractTelemetry?.failed_extractions ?? 0),
+            desc: `Extraction failures: ${extractTelemetry?.failed_extractions ?? 0}`,
+            icon: AlertTriangle
+          }
+        ].map((item, idx) => (
+          <Card key={idx} className="border border-slate-200 shadow-sm bg-white">
+            <CardContent className="pt-4 flex items-center justify-between">
+              <div>
+                <span className="text-xs text-slate-400 block uppercase font-semibold">{item.name}</span>
+                <span className="text-xl font-bold text-slate-900 mt-0.5 block">{item.val}</span>
+                <span className="text-[10px] text-slate-500 block mt-0.5">{item.desc}</span>
+              </div>
+              <item.icon className="h-8 w-8 text-teal-600/30" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
       {/* Document Queue and Inspect Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -156,10 +225,10 @@ function AdminReportsDashboardContent() {
                 className="rounded border border-slate-200 px-2 py-1 text-xs bg-white focus:outline-none"
               >
                 <option value="all">All Jobs</option>
-                <option value="pending">Pending</option>
                 <option value="processing">Processing</option>
-                <option value="completed">Completed</option>
-                <option value="failed">Failed</option>
+                <option value="completed">Completed Extract</option>
+                <option value="ocr_failed">OCR Failed</option>
+                <option value="extract_failed">Extraction Failed</option>
               </select>
             </div>
           </CardHeader>
@@ -185,9 +254,15 @@ function AdminReportsDashboardContent() {
                         <strong className="text-xs text-slate-900 font-mono">
                           {report.id.substring(report.id.length - 8)}
                         </strong>
-                        <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded font-mono font-bold uppercase">
-                          {report.report_type.replace('_', ' ')}
-                        </span>
+                        {report.document_type ? (
+                          <Badge className="bg-teal-50 text-teal-700 text-[9px] hover:bg-teal-50 border border-teal-200 rounded py-0.5">
+                            {report.document_type}
+                          </Badge>
+                        ) : (
+                          <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded font-mono font-bold uppercase">
+                            {report.report_type.replace('_', ' ')}
+                          </span>
+                        )}
                       </div>
                       <div className="text-[10px] text-slate-400">
                         File: {report.file_url.split('/').pop()?.substring(14) || 'document'}
@@ -198,25 +273,20 @@ function AdminReportsDashboardContent() {
                     </div>
 
                     <div className="flex items-center gap-2 justify-end">
-                      {/* OCR Status tag */}
-                      {report.ocr_status === 'pending' && (
-                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded flex items-center gap-1">
-                          <Clock className="h-3 w-3" /> PENDING
+                      {/* OCR and extraction status badges */}
+                      {report.ocr_status !== 'completed' ? (
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase ${
+                          report.ocr_status === 'failed' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'
+                        }`}>
+                          OCR {report.ocr_status}
                         </span>
-                      )}
-                      {report.ocr_status === 'processing' && (
-                        <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded flex items-center gap-1">
-                          <RefreshCw className="h-3 w-3 animate-spin" /> PROCESSING
-                        </span>
-                      )}
-                      {report.ocr_status === 'completed' && (
-                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded flex items-center gap-1">
-                          <CheckCircle className="h-3 w-3" /> COMPLETED
-                        </span>
-                      )}
-                      {report.ocr_status === 'failed' && (
-                        <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded flex items-center gap-1">
-                          <AlertCircle className="h-3 w-3" /> FAILED
+                      ) : (
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase ${
+                          report.extraction_status === 'completed' ? 'bg-emerald-50 text-emerald-700' :
+                          report.extraction_status === 'failed' ? 'bg-rose-50 text-rose-700' :
+                          'bg-slate-100 text-slate-600'
+                        }`}>
+                          Struct {report.extraction_status || 'Pending'}
                         </span>
                       )}
 
@@ -226,19 +296,30 @@ function AdminReportsDashboardContent() {
                           size="sm"
                           onClick={() => handleInspect(report)}
                           className="p-1 h-auto text-slate-500 hover:text-teal-600"
-                          title="Inspect OCR results"
+                          title="Inspect details"
                         >
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
+                        {report.ocr_status === 'completed' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleExtract(report.id)}
+                            className="p-1 h-auto text-teal-600 hover:text-teal-700"
+                            title="Trigger structured extraction"
+                          >
+                            <Play className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                         {report.ocr_status === 'failed' && (
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleRetry(report.id)}
+                            onClick={() => handleRetryOcr(report.id)}
                             className="p-1 h-auto text-amber-500 hover:text-amber-700"
                             title="Retry OCR pipeline"
                           >
-                            <Play className="h-3.5 w-3.5" />
+                            <RefreshCw className="h-3.5 w-3.5" />
                           </Button>
                         )}
                         <Button
@@ -259,121 +340,135 @@ function AdminReportsDashboardContent() {
           </CardContent>
         </Card>
 
-        {/* Right Column: In-depth OCR Layout Inspector */}
+        {/* Right Column: In-depth OCR Layout & Structured JSON Inspector */}
         <div className="space-y-6">
           {inspectingReport ? (
             <Card className="border-2 border-teal-500 shadow-md bg-white">
-              <CardHeader className="pb-3 border-b border-slate-100 bg-teal-50/20 flex flex-row items-center justify-between">
+              <CardHeader className="pb-3 border-b border-slate-100 bg-teal-50/20 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                   <CardTitle className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                    <Eye className="h-4 w-4 text-teal-600" />
-                    OCR Page Breakdown & Logs
+                    <Database className="h-4 w-4 text-teal-600" />
+                    Pipeline Diagnostics
                   </CardTitle>
                   <span className="text-xs text-slate-500 font-mono mt-1 block">
-                    Report Reference: {inspectingReport.id}
+                    Report ID: {inspectingReport.id}
                   </span>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setInspectingReport(null)}
-                  className="text-slate-400 hover:text-slate-800"
-                >
-                  Clear Inspect
-                </Button>
+
+                <div className="flex gap-2">
+                  <Button
+                    variant={inspectTab === 'json' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setInspectTab('json')}
+                    className={`h-8 text-xs font-semibold ${inspectTab === 'json' ? 'bg-teal-600 hover:bg-teal-700' : ''}`}
+                  >
+                    Structured JSON
+                  </Button>
+                  <Button
+                    variant={inspectTab === 'warnings' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setInspectTab('warnings')}
+                    className={`h-8 text-xs font-semibold ${inspectTab === 'warnings' ? 'bg-teal-600 hover:bg-teal-700' : ''}`}
+                  >
+                    Warnings
+                  </Button>
+                  <Button
+                    variant={inspectTab === 'ocr' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setInspectTab('ocr')}
+                    className={`h-8 text-xs font-semibold ${inspectTab === 'ocr' ? 'bg-teal-600 hover:bg-teal-700' : ''}`}
+                  >
+                    OCR Raw Text
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="pt-6 space-y-6">
-                {inspectingReport.ocr_status === 'failed' && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                    <h4 className="text-xs font-bold text-red-800 uppercase flex items-center gap-1.5 mb-2">
-                      <AlertCircle className="h-4 w-4 text-red-600" />
-                      Pipeline Processing Exceptions Logs
-                    </h4>
-                    <pre className="text-xs font-mono text-red-800 bg-white/50 p-2 rounded overflow-auto max-h-36 whitespace-pre-wrap">
-                      {inspectingReport.processing_errors && inspectingReport.processing_errors.length > 0
-                        ? inspectingReport.processing_errors.join('\n')
-                        : 'Unknown poppler/tesseract exception occurred.'}
-                    </pre>
+                {inspectTab === 'json' && (
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Clinical JSON Output</span>
+                      {inspectingReport.ocr_status === 'completed' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleExtract(inspectingReport.id)}
+                          className="h-7 text-[10px] text-teal-700 border-teal-200"
+                          disabled={loadingExtraction}
+                        >
+                          Re-run Extraction
+                        </Button>
+                      )}
+                    </div>
+
+                    {loadingExtraction ? (
+                      <div className="text-center py-20 text-slate-500">
+                        <RefreshCw className="h-8 w-8 animate-spin text-teal-600 mb-2" />
+                        <p className="text-sm">Running structured clinical extractor model...</p>
+                      </div>
+                    ) : structuredData ? (
+                      <pre className="bg-slate-950 text-teal-400 p-4 rounded-lg font-mono text-[11px] overflow-auto max-h-[500px] border border-slate-800 whitespace-pre-wrap">
+                        {JSON.stringify(structuredData, null, 2)}
+                      </pre>
+                    ) : (
+                      <div className="text-center py-20 border border-dashed rounded-lg text-slate-400 bg-slate-50/50">
+                        <Database className="h-10 w-10 mx-auto text-slate-300 mb-2 stroke-1" />
+                        <p className="text-sm">No structured data extracted. Click &quot;Re-run Extraction&quot; above.</p>
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {loadingOcr ? (
-                  <div className="flex flex-col items-center justify-center py-20 text-slate-500">
-                    <RefreshCw className="h-8 w-8 animate-spin text-teal-600 mb-2" />
-                    <p className="text-sm">Fetching document breakdown layout...</p>
-                  </div>
-                ) : ocrData ? (
-                  <div className="space-y-6">
-                    {/* Telemetry info */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 border border-slate-200 rounded-lg text-xs">
-                      <div>
-                        <span className="text-slate-400 block uppercase font-semibold">Method</span>
-                        <strong className="text-slate-800 font-mono mt-0.5 block uppercase">{ocrData.metadata.ocr_method}</strong>
+                {inspectTab === 'warnings' && (
+                  <div className="space-y-4">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Pipeline Warnings & Log Stack</span>
+                    {structuredData && structuredData.extraction_warnings && structuredData.extraction_warnings.length > 0 ? (
+                      <div className="space-y-2">
+                        {structuredData.extraction_warnings.map((warn: string, idx: number) => (
+                          <div key={idx} className="p-3 bg-amber-50 border border-amber-200 text-amber-800 font-semibold rounded text-xs flex items-start gap-2">
+                            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                            <span>{warn}</span>
+                          </div>
+                        ))}
                       </div>
-                      <div>
-                        <span className="text-slate-400 block uppercase font-semibold">Duration</span>
-                        <strong className="text-slate-800 mt-0.5 block">{(inspectingReport.ocr_duration_ms ?? 0.0).toFixed(0)} ms</strong>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block uppercase font-semibold">Pages</span>
-                        <strong className="text-slate-800 mt-0.5 block">{ocrData.metadata.page_count}</strong>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block uppercase font-semibold">Confidence</span>
-                        <strong className="text-slate-800 mt-0.5 block">{(ocrData.metadata.ocr_average_confidence * 100).toFixed(1)}%</strong>
-                      </div>
-                    </div>
-
-                    {/* Page breakdown timeline */}
-                    {ocrData.ocr_pages && ocrData.ocr_pages.length > 0 && (
-                      <div className="space-y-4">
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Individual Pages Data</span>
-                        <div className="space-y-3">
-                          {ocrData.ocr_pages.map((page, idx) => (
-                            <div key={idx} className="border border-slate-200 rounded-md p-4 bg-white text-xs space-y-3">
-                              <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                                <span className="font-bold text-slate-700">Page {page.page_number}</span>
-                                <div className="flex items-center gap-3 text-[10px] text-slate-500">
-                                  <span>Confidence: {(page.confidence * 100).toFixed(0)}%</span>
-                                  <span>•</span>
-                                  <span>Latency: {page.processing_time.toFixed(0)} ms</span>
-                                  <span>•</span>
-                                  <span>Words: {page.word_count}</span>
-                                </div>
-                              </div>
-                              <pre className="bg-slate-900 text-teal-400 p-3 rounded font-mono text-[11px] overflow-x-auto whitespace-pre-wrap max-h-36 border border-slate-800">
-                                {page.normalized_text}
-                              </pre>
-                            </div>
-                          ))}
-                        </div>
+                    ) : (
+                      <div className="text-center py-12 border border-dashed rounded-lg text-slate-400 bg-slate-50/50">
+                        <CheckCircle className="h-10 w-10 mx-auto text-emerald-500 mb-2 stroke-1" />
+                        <p className="text-xs font-semibold text-slate-600">Extraction layout clean!</p>
+                        <p className="text-[10px] text-slate-400 mt-1">No clinical validation warning alerts registered.</p>
                       </div>
                     )}
-
-                    {/* Full debug JSON view */}
-                    <div className="space-y-2">
-                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Full Document Layout Output</span>
-                      <pre className="bg-slate-950 text-slate-200 p-4 rounded-lg font-mono text-[11px] overflow-auto max-h-72 whitespace-pre-wrap border border-slate-800">
-                        {ocrData.normalized_text}
-                      </pre>
-                    </div>
                   </div>
-                ) : (
-                  inspectingReport.ocr_status === 'processing' && (
-                    <div className="text-center py-20 text-slate-500">
-                      <RefreshCw className="h-8 w-8 animate-spin text-teal-600 mx-auto mb-2" />
-                      <p className="text-sm">Running Document Parser OCR Pipeline...</p>
-                    </div>
-                  )
+                )}
+
+                {inspectTab === 'ocr' && (
+                  <div className="space-y-6">
+                    {loadingOcr ? (
+                      <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+                        <RefreshCw className="h-8 w-8 animate-spin text-teal-600 mb-2" />
+                        <p className="text-sm">Loading layouts...</p>
+                      </div>
+                    ) : ocrData ? (
+                      <div className="space-y-4">
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Normalized OCR Text Layout</span>
+                        <pre className="bg-slate-950 text-slate-200 p-4 rounded-lg font-mono text-[11px] overflow-auto max-h-[400px] whitespace-pre-wrap border border-slate-800">
+                          {ocrData.normalized_text}
+                        </pre>
+                      </div>
+                    ) : (
+                      <div className="text-center py-10 text-slate-400">
+                        <p>No OCR layout content found.</p>
+                      </div>
+                    )}
+                  </div>
                 )}
               </CardContent>
             </Card>
           ) : (
             <div className="border border-slate-200 rounded-lg p-20 bg-slate-50/50 flex flex-col items-center justify-center text-slate-400 text-center h-full">
               <Eye className="h-10 w-10 mb-2 stroke-1 text-slate-400" />
-              <p className="text-sm font-semibold">Inspect OCR results</p>
+              <p className="text-sm font-semibold">Inspect diagnostics details</p>
               <p className="text-xs text-slate-400 mt-1 max-w-xs">
-                Select a document from the queue list to inspect extracted text layout breakdowns, confidence scores, and processing logs.
+                Select a document from the queue list to inspect parsed layout raw texts, structured JSON payloads, and warnings log lists.
               </p>
             </div>
           )}

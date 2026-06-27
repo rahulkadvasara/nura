@@ -21,6 +21,57 @@ export interface ReportResponse {
   ocr_pages?: Record<string, any>[]
   created_at: string
   updated_at: string
+
+  // Medical Extraction Pipeline fields
+  document_type?: string
+  structured_data?: {
+    patient_information?: {
+      patient_name?: string | null
+      age?: number | null
+      gender?: string | null
+      date_of_birth?: string | null
+      patient_id?: string | null
+    }
+    hospital_information?: {
+      hospital?: string | null
+      laboratory?: string | null
+      doctor?: string | null
+      department?: string | null
+      report_date?: string | null
+    }
+    metadata?: {
+      extraction_method?: string
+      extraction_version?: string
+      confidence_score?: number
+    }
+  }
+  entities?: {
+    text: string
+    category: string
+    confidence: number
+    page: number
+    position?: string | null
+  }[]
+  laboratory_results?: {
+    test_name: string
+    value: number | string
+    unit: string
+    reference_range: string
+    status: string
+  }[]
+  medications?: {
+    medicine: string
+    dosage: string
+    frequency: string
+    duration: string
+    route: string
+  }[]
+  diagnoses?: string[]
+  allergies?: string[]
+  extraction_status?: string
+  extraction_confidence?: number
+  extraction_version?: string
+  extraction_warnings?: string[]
 }
 
 export interface ReportProcessingStatus {
@@ -102,6 +153,26 @@ export const reportService = {
 
   getProcessingTelemetry: async (): Promise<ReportTelemetryStats> => {
     const response = await apiClient.get<{ success: boolean; data: ReportTelemetryStats }>('/reports/telemetry/statistics')
+    return response.data.data
+  },
+
+  extractReport: async (reportId: string): Promise<boolean> => {
+    const response = await apiClient.post<{ success: boolean }>((`/reports/${reportId}/extract`))
+    return response.data.success
+  },
+
+  getStructuredData: async (reportId: string): Promise<any> => {
+    const response = await apiClient.get<{ success: boolean; data: any }>((`/reports/${reportId}/structured`))
+    return response.data.data
+  },
+
+  getEntities: async (reportId: string): Promise<{ entities: any[] }> => {
+    const response = await apiClient.get<{ success: boolean; data: { entities: any[] } }>((`/reports/${reportId}/entities`))
+    return response.data.data
+  },
+
+  getExtractionTelemetry: async (): Promise<any> => {
+    const response = await apiClient.get<{ success: boolean; data: any }>('/reports/telemetry/extraction')
     return response.data.data
   },
 }

@@ -17,7 +17,8 @@ import {
   AlertCircle,
   MessageSquare,
   FileText,
-  UserCheck
+  UserCheck,
+  RefreshCw
 } from 'lucide-react'
 
 import { useDoctorPatients, useDoctorPatient } from '@/hooks/use-doctor-patient'
@@ -25,6 +26,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
+import { reportService } from '@/services/report.service'
 
 export default function DoctorPatientsPage() {
   const [search, setSearch] = useState('')
@@ -33,6 +35,12 @@ export default function DoctorPatientsPage() {
   const [skip, setSkip] = useState(0)
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'insights' | 'history' | 'records'>('insights')
+  
+  // Reports inspection states
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null)
+  const [structuredReport, setStructuredReport] = useState<any>(null)
+  const [reportEntities, setReportEntities] = useState<any[] | null>(null)
+  const [loadingReportDetails, setLoadingReportDetails] = useState(false)
 
   const { data: listData, isLoading, isError, error, refetch } = useDoctorPatients({
     search: search || undefined,
@@ -61,10 +69,37 @@ export default function DoctorPatientsPage() {
   const handleOpenDetail = (patientId: string) => {
     setSelectedPatientId(patientId)
     setActiveTab('insights')
+    handleCloseReportDetails()
   }
 
   const handleCloseDetail = () => {
     setSelectedPatientId(null)
+    handleCloseReportDetails()
+  }
+
+  const handleOpenReportDetails = async (reportId: string) => {
+    try {
+      setSelectedReportId(reportId)
+      setStructuredReport(null)
+      setReportEntities(null)
+      setLoadingReportDetails(true)
+      
+      const struct = await reportService.getStructuredData(reportId)
+      setStructuredReport(struct)
+      
+      const ents = await reportService.getEntities(reportId)
+      setReportEntities(ents.entities)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoadingReportDetails(false)
+    }
+  }
+
+  const handleCloseReportDetails = () => {
+    setSelectedReportId(null)
+    setStructuredReport(null)
+    setReportEntities(null)
   }
 
   return (
@@ -589,11 +624,17 @@ export default function DoctorPatientsPage() {
                                             {report.risk_level} Risk
                                           </Badge>
                                         )}
+                                        <button
+                                          onClick={() => handleOpenReportDetails(report.id)}
+                                          className="text-xs font-semibold text-teal-600 hover:text-teal-700 hover:underline mr-3"
+                                        >
+                                          Inspect
+                                        </button>
                                         <a
                                           href={report.file_url}
                                           target="_blank"
                                           rel="noreferrer"
-                                          className="text-xs font-semibold text-teal-600 hover:text-teal-700 hover:underline"
+                                          className="text-xs font-semibold text-slate-400 hover:text-slate-600 hover:underline"
                                         >
                                           View File
                                         </a>
@@ -603,6 +644,125 @@ export default function DoctorPatientsPage() {
                                 </div>
                               )}
                             </div>
+
+                            {/* Reports Sub-Inspector */}
+                            {selectedReportId && (
+                              <Card className="border-2 border-teal-500 bg-white p-4 space-y-4">
+                                <div className="flex justify-between items-center border-b pb-2">
+                                  <div>
+                                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Structured Report Inspection</h4>
+                                    <span className="text-[10px] text-slate-400 font-mono">ID: {selectedReportId}</span>
+                                  </div>
+                                  <Button variant="ghost" size="sm" onClick={handleCloseReportDetails} className="text-xs text-slate-400 hover:text-slate-700">
+                                    Close Details
+                                  </Button>
+                                </div>
+
+                                {loadingReportDetails ? (
+                                  <div className="text-center py-6">
+                                    <RefreshCw className="h-5 w-5 animate-spin text-teal-600 mx-auto mb-2" />
+                                    <p className="text-[10px] text-slate-500">Loading clinical results...</p>
+                                  </div>
+                                ) : structuredReport ? (
+                                  <div className="space-y-4 text-xs">
+                                    {/* Warnings */}
+                                    {structuredReport.extraction_warnings && structuredReport.extraction_warnings.length > 0 && (
+                                      <div className="p-3 bg-amber-50 border border-amber-200 rounded text-amber-800 font-semibold leading-relaxed">
+                                        Warnings: {structuredReport.extraction_warnings.join(' | ')}
+                                      </div>
+                                    )}
+
+                                    {/* Lab Results Table */}
+                                    {structuredReport.laboratory_results && structuredReport.laboratory_results.length > 0 && (
+                                      <div className="space-y-2">
+                                        <span className="font-bold text-slate-500 uppercase block text-[10px]">Extracted Laboratory Results</span>
+                                        <div className="border rounded overflow-hidden">
+                                          <table className="w-full text-left border-collapse">
+                                            <thead>
+                                              <tr className="bg-slate-50 border-b text-slate-500 font-bold text-[10px]">
+                                                <th className="p-2">Test Name</th>
+                                                <th className="p-2">Value</th>
+                                                <th className="p-2">Unit</th>
+                                                <th className="p-2">Ref Range</th>
+                                                <th className="p-2 text-right">Status</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                              {structuredReport.laboratory_results.map((lab: any, idx: number) => (
+                                                <tr key={idx}>
+                                                  <td className="p-2 font-semibold text-slate-900">{lab.test_name}</td>
+                                                  <td className="p-2 font-mono font-bold">{lab.value}</td>
+                                                  <td className="p-2 text-slate-500">{lab.unit}</td>
+                                                  <td className="p-2 font-mono text-slate-500">{lab.reference_range}</td>
+                                                  <td className="p-2 text-right">
+                                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${
+                                                      lab.status === 'HIGH' ? 'bg-red-50 border-red-200 text-red-700' :
+                                                      lab.status === 'LOW' ? 'bg-amber-50 border-amber-200 text-amber-700' :
+                                                      'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                                    }`}>
+                                                      {lab.status}
+                                                    </span>
+                                                  </td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Medications */}
+                                    {structuredReport.medications && structuredReport.medications.length > 0 && (
+                                      <div className="space-y-2">
+                                        <span className="font-bold text-slate-500 uppercase block text-[10px]">Extracted Medications</span>
+                                        <div className="border rounded overflow-hidden">
+                                          <table className="w-full text-left border-collapse">
+                                            <thead>
+                                              <tr className="bg-slate-50 border-b text-slate-500 font-bold text-[10px]">
+                                                <th className="p-2">Medicine</th>
+                                                <th className="p-2">Dosage</th>
+                                                <th className="p-2">Frequency</th>
+                                                <th className="p-2">Duration</th>
+                                                <th className="p-2 text-right">Route</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                              {structuredReport.medications.map((med: any, idx: number) => (
+                                                <tr key={idx}>
+                                                  <td className="p-2 font-semibold text-slate-900">{med.medicine}</td>
+                                                  <td className="p-2 font-bold">{med.dosage}</td>
+                                                  <td className="p-2 text-slate-500">{med.frequency}</td>
+                                                  <td className="p-2 text-slate-500">{med.duration}</td>
+                                                  <td className="p-2 text-right text-slate-500">{med.route}</td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Entity list */}
+                                    {reportEntities && reportEntities.length > 0 && (
+                                      <div className="space-y-2">
+                                        <span className="font-bold text-slate-500 uppercase block text-[10px]">Extracted Medical Entities</span>
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {reportEntities.map((ent: any, idx: number) => (
+                                            <span key={idx} className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[10px] font-medium border border-slate-200">
+                                              {ent.text} ({ent.category})
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="text-center py-4 text-slate-400">
+                                    Structured clinical data extraction is not completed for this report.
+                                  </div>
+                                )}
+                              </Card>
+                            )}
 
                             {/* Prescriptions issued */}
                             <div className="space-y-3">

@@ -19,6 +19,7 @@ from app.core.dependencies import (
     get_report_service,
     get_document_parser,
     get_database,
+    get_report_extraction_service,
 )
 from app.services.report_service import ReportService
 from app.services.report_processing.document_parser import DocumentParser
@@ -338,3 +339,132 @@ async def get_processing_telemetry(
         message="Report processing telemetry fetched successfully",
         data=stats
     )
+
+
+@router.post(
+    "/{report_id}/extract",
+    response_model=SuccessResponse,
+    summary="Trigger clinical information extraction for OCR text. Guarded: Authenticated Users.",
+)
+async def extract_medical_report(
+    report_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: UserInDB = Depends(get_current_user),
+    report_service: ReportService = Depends(get_report_service),
+    extraction_service = Depends(get_report_extraction_service),
+) -> SuccessResponse:
+    report = await report_service.get_report_by_id(report_id)
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found"
+        )
+
+    # Authorize access
+    await verify_report_access(report, current_user)
+
+    # Trigger medical extraction in background tasks
+    background_tasks.add_task(extraction_service.extract_medical_information, report_id)
+
+    return SuccessResponse(
+        success=True,
+        message="Medical information extraction task triggered successfully"
+    )
+
+
+@router.get(
+    "/{report_id}/structured",
+    response_model=SuccessResponse,
+    summary="Get structured clinical results dataset. Guarded: Authorized Users.",
+)
+async def get_structured_data(
+    report_id: str,
+    current_user: UserInDB = Depends(get_current_user),
+    report_service: ReportService = Depends(get_report_service),
+) -> SuccessResponse:
+    report = await report_service.get_report_by_id(report_id)
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found"
+        )
+
+    # Authorize access
+    await verify_report_access(report, current_user)
+
+    structured = {
+        "patient_information": getattr(report, "structured_data", {}).get("patient_information") if report.structured_data else None,
+        "hospital_information": getattr(report, "structured_data", {}).get("hospital_information") if report.structured_data else None,
+        "laboratory_results": getattr(report, "laboratory_results", []) or [],
+        "medications": getattr(report, "medications", []) or [],
+        "diagnoses": getattr(report, "diagnoses", []) or [],
+        "allergies": getattr(report, "allergies", []) or [],
+        "metadata": getattr(report, "structured_data", {}).get("metadata") if report.structured_data else {
+            "extraction_method": "none",
+            "extraction_version": "1.0.0",
+            "confidence_score": 0.0
+        },
+        "extraction_warnings": getattr(report, "extraction_warnings", []) or [],
+        "extraction_status": getattr(report, "extraction_status", "pending") or "pending",
+        "document_type": getattr(report, "document_type", "Other") or "Other"
+    }
+
+    return SuccessResponse(
+        success=True,
+        message="Structured clinical report details fetched successfully",
+        data=structured
+    )
+
+
+@router.get(
+    "/{report_id}/entities",
+    response_model=SuccessResponse,
+    summary="Get extracted clinical entities list. Guarded: Authorized Users.",
+)
+async def get_report_entities(
+    report_id: str,
+    current_user: UserInDB = Depends(get_current_user),
+    report_service: ReportService = Depends(get_report_service),
+) -> SuccessResponse:
+    report = await report_service.get_report_by_id(report_id)
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found"
+        )
+
+    # Authorize access
+    await verify_report_access(report, current_user)
+
+    entities_list = getattr(report, "entities", []) or []
+
+    return SuccessResponse(
+        success=True,
+        message="Extracted clinical entities list fetched successfully",
+        data={"entities": entities_list}
+    )
+
+
+@router.get(
+    "/telemetry/extraction",
+    response_model=SuccessResponse,
+    summary="Retrieve cumulative clinical extraction telemetry statistics. Guarded: Admin Only.",
+)
+async def get_extraction_telemetry(
+    current_user: UserInDB = Depends(get_current_user),
+) -> SuccessResponse:
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admin accounts are authorized to view telemetry stats"
+        )
+    
+    from app.services.report_extraction.telemetry import get_report_extraction_telemetry
+    stats = get_report_extraction_telemetry().get_stats()
+    
+    return SuccessResponse(
+        success=True,
+        message="Report extraction telemetry fetched successfully",
+        data=stats
+    )
+

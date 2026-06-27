@@ -46,6 +46,17 @@ class ReportCreateSchema(BaseModel):
     processing_errors: Optional[List[str]] = Field(None, description="List of processing errors encountered")
     ocr_pages: Optional[List[Dict[str, Any]]] = Field(None, description="Raw text and confidence score breakdown per page")
 
+    # Medical Extraction Pipeline fields
+    document_type: Optional[str] = Field(None, description="Automatically classified report type")
+    laboratory_results: Optional[List[Dict[str, Any]]] = Field(None, description="List of parsed laboratory test result objects")
+    medications: Optional[List[Dict[str, Any]]] = Field(None, description="List of parsed medication prescription objects")
+    diagnoses: Optional[List[str]] = Field(None, description="Consolidated list of diagnoses strings")
+    allergies: Optional[List[str]] = Field(None, description="Consolidated list of allergies strings")
+    extraction_status: Optional[str] = Field(None, description="Extraction pipeline status")
+    extraction_confidence: Optional[float] = Field(None, description="Cumulative average confidence score")
+    extraction_version: Optional[str] = Field(None, description="Extraction pipeline version")
+    extraction_warnings: Optional[List[str]] = Field(None, description="List of validation warning logs")
+
 
 class ReportUpdateSchema(BaseModel):
     """Request schema for updating report metadata or processing details"""
@@ -72,6 +83,17 @@ class ReportUpdateSchema(BaseModel):
     ocr_version: Optional[str] = None
     processing_errors: Optional[List[str]] = None
     ocr_pages: Optional[List[Dict[str, Any]]] = None
+
+    # Medical Extraction pipeline updates
+    document_type: Optional[str] = None
+    laboratory_results: Optional[List[Dict[str, Any]]] = None
+    medications: Optional[List[Dict[str, Any]]] = None
+    diagnoses: Optional[List[str]] = None
+    allergies: Optional[List[str]] = None
+    extraction_status: Optional[str] = None
+    extraction_confidence: Optional[float] = None
+    extraction_version: Optional[str] = None
+    extraction_warnings: Optional[List[str]] = None
 
 
 class ReportResponse(BaseModel):
@@ -104,6 +126,17 @@ class ReportResponse(BaseModel):
     ocr_version: Optional[str] = Field(None, description="OCR processing pipeline version")
     processing_errors: Optional[List[str]] = Field(None, description="List of processing errors encountered")
     ocr_pages: Optional[List[Dict[str, Any]]] = Field(None, description="Raw text and confidence score breakdown per page")
+
+    # Medical Extraction Pipeline fields
+    document_type: Optional[str] = Field(None, description="Automatically classified report type")
+    laboratory_results: Optional[List[Dict[str, Any]]] = Field(None, description="List of parsed laboratory test result objects")
+    medications: Optional[List[Dict[str, Any]]] = Field(None, description="List of parsed medication prescription objects")
+    diagnoses: Optional[List[str]] = Field(None, description="Consolidated list of diagnoses strings")
+    allergies: Optional[List[str]] = Field(None, description="Consolidated list of allergies strings")
+    extraction_status: Optional[str] = Field(None, description="Extraction pipeline status")
+    extraction_confidence: Optional[float] = Field(None, description="Cumulative average confidence score")
+    extraction_version: Optional[str] = Field(None, description="Extraction pipeline version")
+    extraction_warnings: Optional[List[str]] = Field(None, description="List of validation warning logs")
 
 
 # ---------------------------------------------------------------------------
