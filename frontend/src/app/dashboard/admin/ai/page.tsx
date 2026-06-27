@@ -30,7 +30,11 @@ import {
   useRetrievalAgent,
   useRetrievalAgentDebug,
   useBuildContext,
-  useContextAssemblyStatistics
+  useContextAssemblyStatistics,
+  useGraphHealth,
+  useGraphNodes,
+  useGraphStatistics,
+  useGraphTestRun
 } from '@/hooks/use-ai'
 import { 
   Sparkles, 
@@ -4601,8 +4605,489 @@ function RetrievalAgentPlaygroundView() {
   )
 }
 
+function GraphHealthSummaryBadge() {
+  const { data: health, isLoading, isError, refetch } = useGraphHealth()
+
+  return (
+    <Card className="shadow-sm border-slate-200 bg-white px-4 py-2 flex items-center gap-3">
+      <div className="flex flex-col">
+        <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Workflow Engine Status</span>
+        {isLoading ? (
+          <span className="text-sm font-medium text-slate-500 flex items-center gap-1.5 mt-0.5">
+            <RefreshCw className="h-3 w-3 animate-spin" />
+            Loading...
+          </span>
+        ) : isError ? (
+          <span className="text-sm font-medium text-red-500 flex items-center gap-1.5 mt-0.5">
+            <AlertTriangle className="h-4 w-4" />
+            Connection Error
+          </span>
+        ) : health?.graph_compiled ? (
+          <span className="text-sm font-medium text-teal-600 flex items-center gap-1.5 mt-0.5">
+            <CheckCircle2 className="h-4 w-4 text-teal-500" />
+            Compiled & Live (v{health.graph_version})
+          </span>
+        ) : (
+          <span className="text-sm font-medium text-amber-500 flex items-center gap-1.5 mt-0.5">
+            <AlertTriangle className="h-4 w-4" />
+            Uncompiled
+          </span>
+        )}
+      </div>
+      <Button 
+        variant="ghost" 
+        size="icon" 
+        onClick={() => refetch()} 
+        disabled={isLoading}
+        className="h-8 w-8 text-slate-400 hover:text-slate-600"
+      >
+        <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+      </Button>
+    </Card>
+  )
+}
+
+function WorkflowEngineView() {
+  const { data: health, isLoading: isHealthLoading, refetch: refetchHealth } = useGraphHealth()
+  const { data: stats, isLoading: isStatsLoading, refetch: refetchStats } = useGraphStatistics()
+  const testRunMutation = useGraphTestRun()
+
+  const [queryInput, setQueryInput] = useState('Analyse my lab report for high cholesterol')
+  const [patientIdInput, setPatientIdInput] = useState('')
+  const [debugMode, setDebugMode] = useState(false)
+  const [customMetadata, setCustomMetadata] = useState('{\n  "source": "admin_console"\n}')
+  const [activeTraceTab, setActiveTraceTab] = useState<'timeline' | 'timings' | 'json'>('timeline')
+
+  const handleMockExecute = () => {
+    let parsedMetadata = {}
+    try {
+      parsedMetadata = JSON.parse(customMetadata)
+    } catch (e) {
+      alert('Invalid custom metadata JSON format.')
+      return
+    }
+
+    testRunMutation.mutate({
+      query: queryInput || undefined,
+      patient_id: patientIdInput || undefined,
+      debug_mode: debugMode,
+      metadata: parsedMetadata
+    })
+  }
+
+  const handleRefreshAll = () => {
+    refetchHealth()
+    refetchStats()
+  }
+
+  const successRate = stats ? (stats.successful_executions / (stats.total_executions || 1)) * 100 : 100
+
+  return (
+    <div className="space-y-6">
+      {/* Top action bar */}
+      <div className="flex justify-between items-center bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl shadow-sm">
+        <div className="flex items-center gap-2.5">
+          <Activity className="h-5 w-5 text-teal-600 animate-pulse" />
+          <span className="font-semibold text-slate-800 text-sm">Stateful Orchestration Workflow Sandbox</span>
+        </div>
+        <Button
+          onClick={handleRefreshAll}
+          disabled={isHealthLoading || isStatsLoading}
+          variant="outline"
+          size="sm"
+          className="h-8 text-xs flex items-center gap-1.5 hover:bg-slate-100"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${isHealthLoading || isStatsLoading ? 'animate-spin' : ''}`} />
+          Live Refresh Metrics
+        </Button>
+      </div>
+
+      {/* Metrics Row */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="bg-white border-slate-200 shadow-sm relative overflow-hidden group">
+          <CardHeader className="pb-2">
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Compiled Status</span>
+            <CardTitle className="text-xl font-bold flex items-center gap-2 mt-1">
+              {health?.graph_compiled ? (
+                <>
+                  <CheckCircle2 className="h-5 w-5 text-teal-500" />
+                  <span className="text-teal-700">Compiled</span>
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="h-5 w-5 text-amber-500 animate-bounce" />
+                  <span className="text-amber-700">Uncompiled</span>
+                </>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-xs text-slate-500">Version: <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-600 font-mono text-[10px]">{health?.graph_version || '1.0.0'}</code></p>
+          </CardContent>
+          <div className="absolute top-0 right-0 h-full w-1.5 bg-teal-500" />
+        </Card>
+
+        <Card className="bg-white border-slate-200 shadow-sm">
+          <CardHeader className="pb-2">
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Total Executions</span>
+            <CardTitle className="text-2xl font-black text-slate-800 mt-1">
+              {stats?.total_executions || 0}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-xs text-slate-500">Active Execs: <span className="font-semibold text-slate-700">{stats?.active_executions || 0}</span></p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white border-slate-200 shadow-sm">
+          <CardHeader className="pb-2">
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Success Rate</span>
+            <CardTitle className="text-2xl font-black mt-1 text-teal-600">
+              {successRate.toFixed(1)}%
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-xs text-slate-500">Failed: <span className="font-semibold text-red-600">{stats?.failed_executions || 0}</span></p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white border-slate-200 shadow-sm">
+          <CardHeader className="pb-2">
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Avg Latency</span>
+            <CardTitle className="text-2xl font-black text-slate-800 mt-1 flex items-baseline gap-1">
+              {stats?.avg_latency ? stats.avg_latency.toFixed(1) : '0.0'}
+              <span className="text-xs text-slate-400 font-normal">ms</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-xs text-slate-500">Timeouts: <span className="font-semibold text-amber-600">{stats?.timeout_count || 0}</span> | Cancelled: <span className="font-semibold text-indigo-600">{stats?.cancelled_count || 0}</span></p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Col: Setup & Sandbox */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Active Nodes Setup config */}
+          <Card className="bg-white border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100 pb-3 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <Cpu className="h-4.5 w-4.5 text-teal-600" />
+                  Stateful Graph Nodes Layout
+                </CardTitle>
+                <CardDescription className="text-xs mt-0.5">
+                  Static visual graph of currently compiled pipeline nodes and transitions rules.
+                </CardDescription>
+              </div>
+              <span className="text-[10px] bg-teal-50 border border-teal-100 text-teal-700 px-2 py-0.5 rounded-full font-bold uppercase font-mono">
+                {health?.registered_nodes.length || 0} Nodes
+              </span>
+            </CardHeader>
+            <CardContent className="p-4 space-y-4">
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Registered Nodes Directory</h4>
+                <div className="flex flex-wrap gap-2">
+                  {health?.registered_nodes.map((nodeName) => (
+                    <span 
+                      key={nodeName} 
+                      className={`text-xs px-2.5 py-1 rounded-lg border font-mono font-medium flex items-center gap-1.5 ${
+                        nodeName === '__start__' 
+                          ? 'bg-teal-50 border-teal-200 text-teal-700' 
+                          : nodeName === '__finish__'
+                          ? 'bg-slate-100 border-slate-300 text-slate-700'
+                          : nodeName === 'initialize_state'
+                          ? 'bg-blue-50 border-blue-200 text-blue-700'
+                          : 'bg-amber-50 border-amber-200 text-amber-700'
+                      }`}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+                      {nodeName}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Configured Directed Transitions</h4>
+                <div className="border border-slate-200 rounded-lg overflow-hidden divide-y divide-slate-100">
+                  {health?.registered_transitions && health.registered_transitions.length > 0 ? (
+                    health.registered_transitions.map((t, idx) => (
+                      <div key={idx} className="p-2.5 text-xs flex justify-between items-center gap-4 bg-white hover:bg-slate-50/50 transition-all font-mono">
+                        <div className="flex items-center gap-2 text-slate-700 font-semibold">
+                          <code className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">{t.source}</code>
+                          <span className="text-slate-400 font-bold">➔</span>
+                          <code className="text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100">{t.target || 'Conditional'}</code>
+                        </div>
+                        <div className="text-right">
+                          <span className={`text-[10px] px-2 py-0.5 rounded border font-semibold ${
+                            t.type === 'normal' 
+                              ? 'bg-slate-100 border-slate-200 text-slate-600'
+                              : t.type === 'conditional'
+                              ? 'bg-amber-100 border-amber-200 text-amber-700'
+                              : 'bg-teal-100 border-teal-200 text-teal-700'
+                          }`}>
+                            {t.type}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-4 text-center text-slate-400 text-xs font-mono bg-white">No active transitions registered</div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Sandbox console sandbox card */}
+          <Card className="bg-white border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100 pb-3">
+              <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <Terminal className="h-4.5 w-4.5 text-teal-600" />
+                Workflow Execution Sandbox Console
+              </CardTitle>
+              <CardDescription className="text-xs mt-0.5">
+                Trigger validation execution using custom queries payload to verify state variables updates.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-5 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Query Input String</label>
+                  <input
+                    type="text"
+                    value={queryInput}
+                    onChange={(e) => setQueryInput(e.target.value)}
+                    placeholder="Enter query..."
+                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 font-medium transition-all"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Associated Patient ID (Optional)</label>
+                  <input
+                    type="text"
+                    value={patientIdInput}
+                    onChange={(e) => setPatientIdInput(e.target.value)}
+                    placeholder="Patient ObjectId reference..."
+                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 font-mono transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Custom State Metadata JSON</label>
+                  <span className="text-[10px] text-slate-400 block font-mono">Parsed at execution</span>
+                </div>
+                <textarea
+                  value={customMetadata}
+                  onChange={(e) => setCustomMetadata(e.target.value)}
+                  rows={3}
+                  className="w-full text-xs bg-slate-900 text-slate-300 font-mono border border-slate-950 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-teal-500 shadow-inner"
+                />
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center gap-3">
+                  <input
+                    id="debugModeGraph"
+                    type="checkbox"
+                    checked={debugMode}
+                    onChange={(e) => setDebugMode(e.target.checked)}
+                    className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-slate-300 rounded"
+                  />
+                  <label htmlFor="debugModeGraph" className="text-xs font-semibold text-slate-600 block cursor-pointer">
+                    Bypass Execution Caches (Debug Mode)
+                  </label>
+                </div>
+
+                <Button
+                  onClick={handleMockExecute}
+                  disabled={testRunMutation.isPending}
+                  className="h-9 px-4 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm flex items-center gap-1.5 transition-all"
+                >
+                  {testRunMutation.isPending ? (
+                    <>
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      Executing...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="h-3.5 w-3.5 fill-current" />
+                      Trigger Mock Execution
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Col: Cumulative execution analytics */}
+        <div className="space-y-6">
+          <Card className="bg-white border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100 pb-3">
+              <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <Activity className="h-4.5 w-4.5 text-teal-600" />
+                Traversal Statistics Mapping
+              </CardTitle>
+              <CardDescription className="text-xs mt-0.5">
+                Lifetime invocation metrics for nodes and transitions keys.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 space-y-4">
+              <div className="space-y-2">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Node Executions Counts</span>
+                <div className="border border-slate-150 rounded-lg divide-y divide-slate-100 overflow-hidden text-xs bg-white font-mono max-h-[160px] overflow-y-auto">
+                  {stats?.node_execution_count && Object.keys(stats.node_execution_count).length > 0 ? (
+                    Object.entries(stats.node_execution_count).map(([node, count]) => (
+                      <div key={node} className="p-2 flex justify-between bg-white hover:bg-slate-50/50">
+                        <span className="text-slate-600">{node}</span>
+                        <span className="font-bold text-slate-800">{count} runs</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-4 text-center text-slate-400 text-xs">No metrics data logged yet</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Transition Traversals Counts</span>
+                <div className="border border-slate-150 rounded-lg divide-y divide-slate-100 overflow-hidden text-xs bg-white font-mono max-h-[160px] overflow-y-auto">
+                  {stats?.transition_count && Object.keys(stats.transition_count).length > 0 ? (
+                    Object.entries(stats.transition_count).map(([transition, count]) => (
+                      <div key={transition} className="p-2 flex justify-between bg-white hover:bg-slate-50/50">
+                        <span className="text-slate-600">{transition}</span>
+                        <span className="font-bold text-slate-800">{count} hits</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-4 text-center text-slate-400 text-xs">No metrics data logged yet</div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Mock run execution output panel */}
+      {testRunMutation.data && (
+        <Card className="bg-white border-slate-200 shadow-md">
+          <CardHeader className="border-b border-slate-100 pb-3 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                <Terminal className="h-4 w-4 text-teal-600" />
+                Execution Results Trace Log Output
+              </CardTitle>
+              <CardDescription className="text-xs mt-0.5">
+                Traversed step timelines and finalized state variables payload.
+              </CardDescription>
+            </div>
+            {/* View selector tabs */}
+            <div className="flex border border-slate-200 rounded-lg overflow-hidden p-0.5 bg-slate-50 text-[11px] font-semibold">
+              <button
+                onClick={() => setActiveTraceTab('timeline')}
+                className={`px-3 py-1.5 rounded-md transition-all ${
+                  activeTraceTab === 'timeline'
+                    ? 'bg-white shadow-sm font-bold text-teal-600'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Timeline
+              </button>
+              <button
+                onClick={() => setActiveTraceTab('timings')}
+                className={`px-3 py-1.5 rounded-md transition-all ${
+                  activeTraceTab === 'timings'
+                    ? 'bg-white shadow-sm font-bold text-teal-600'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Timings
+              </button>
+              <button
+                onClick={() => setActiveTraceTab('json')}
+                className={`px-3 py-1.5 rounded-md transition-all ${
+                  activeTraceTab === 'json'
+                    ? 'bg-white shadow-sm font-bold text-teal-600'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                State JSON
+              </button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-4 bg-slate-50 rounded-b-lg">
+            {activeTraceTab === 'timeline' && (
+              <div className="py-2.5 space-y-4">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Execution Path Timeline</h4>
+                <div className="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-4 overflow-x-auto py-2">
+                  {testRunMutation.data.trace.map((nodeName, idx) => (
+                    <div key={idx} className="flex items-center gap-3 md:gap-4">
+                      <div className="flex flex-col items-center border border-slate-200 bg-white p-3 rounded-lg shadow-sm font-mono text-center min-w-[130px] relative">
+                        <span className="text-[10px] text-slate-400 font-semibold block uppercase">Step #{idx + 1}</span>
+                        <span className="font-bold text-xs text-slate-700 block mt-1">{nodeName}</span>
+                      </div>
+                      {idx < testRunMutation.data.trace.length - 1 && (
+                        <span className="text-slate-400 font-black text-lg block rotate-90 md:rotate-0 self-center">➔</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {activeTraceTab === 'timings' && (
+              <div className="py-2.5 space-y-3">
+                <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Node Performance Execution Times</span>
+                  <span className="text-xs font-bold text-teal-700 font-mono bg-teal-50 border border-teal-100 px-2 py-0.5 rounded">
+                    Total: {testRunMutation.data.timings.overall?.toFixed(1) || '0.0'}ms
+                  </span>
+                </div>
+                <div className="space-y-2 max-w-xl text-xs font-mono">
+                  {Object.entries(testRunMutation.data.timings).map(([nodeName, timeVal]) => {
+                    if (nodeName === 'overall') return null
+                    const percent = testRunMutation.data.timings.overall ? (timeVal / testRunMutation.data.timings.overall) * 100 : 0
+                    return (
+                      <div key={nodeName} className="space-y-1 bg-white p-2.5 rounded-lg border border-slate-200">
+                        <div className="flex justify-between">
+                          <span className="font-semibold text-slate-700">{nodeName}</span>
+                          <span className="font-semibold text-slate-500">{timeVal.toFixed(1)}ms</span>
+                        </div>
+                        <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                          <div className="bg-teal-500 h-full rounded-full" style={{ width: `${percent}%` }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {activeTraceTab === 'json' && (
+              <div className="space-y-2 py-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Finalized State Variables JSON</span>
+                  <span className="text-[10px] text-slate-400 font-mono">Output State Dict</span>
+                </div>
+                <pre className="p-4 bg-slate-900 border border-slate-950 rounded-lg text-[11px] font-mono text-slate-300 overflow-x-auto max-h-[300px] leading-relaxed shadow-inner">
+                  {JSON.stringify(testRunMutation.data.state, null, 2)}
+                </pre>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}
+
 function AIPlaygroundContent() {
-  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent'>('llm')
+  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent' | 'workflow-engine'>('llm')
 
   return (
     <div className="space-y-6">
@@ -4635,6 +5120,8 @@ function AIPlaygroundContent() {
           <ContextBuilderHealthBadge />
         ) : activeTab === 'retrieval-agent' ? (
           <RetrievalAgentHealthBadge />
+        ) : activeTab === 'workflow-engine' ? (
+          <GraphHealthSummaryBadge />
         ) : (
           <IntegrationHealthSummaryBadge />
         )}
@@ -4731,6 +5218,17 @@ function AIPlaygroundContent() {
           Retrieval Agent
         </button>
         <button
+          onClick={() => setActiveTab('workflow-engine')}
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
+            activeTab === 'workflow-engine'
+              ? 'border-teal-600 text-teal-600 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Activity className="h-4 w-4" />
+          Workflow Engine
+        </button>
+        <button
           onClick={() => setActiveTab('integration')}
           className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
             activeTab === 'integration'
@@ -4759,6 +5257,8 @@ function AIPlaygroundContent() {
         <ContextBuilderPlaygroundView />
       ) : activeTab === 'retrieval-agent' ? (
         <RetrievalAgentPlaygroundView />
+      ) : activeTab === 'workflow-engine' ? (
+        <WorkflowEngineView />
       ) : (
         <IntegrationPlaygroundView />
       )}

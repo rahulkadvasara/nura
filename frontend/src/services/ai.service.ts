@@ -326,6 +326,26 @@ export const aiService = {
       token_budget: tokenBudget
     })
     return response.data
+  },
+
+  getGraphHealth: async (): Promise<GraphHealthResponse> => {
+    const response = await apiClient.get<GraphHealthResponse>('/ai/graph/health')
+    return response.data
+  },
+
+  getGraphNodes: async (): Promise<GraphNodesResponse> => {
+    const response = await apiClient.get<GraphNodesResponse>('/ai/graph/nodes')
+    return response.data
+  },
+
+  getGraphStatistics: async (): Promise<GraphStatisticsResponse> => {
+    const response = await apiClient.get<GraphStatisticsResponse>('/ai/graph/statistics')
+    return response.data
+  },
+
+  testGraphExecution: async (request: GraphTestRunRequest): Promise<GraphTestRunResponse> => {
+    const response = await apiClient.post<GraphTestRunResponse>('/ai/graph/test', request)
+    return response.data
   }
 }
 
@@ -706,6 +726,50 @@ export interface RagEvaluateResponse {
     duplicates_removed: number
     assembled_sections: string[]
   }
+}
+
+export interface GraphHealthResponse {
+  graph_compiled: boolean
+  graph_version: string
+  registered_nodes: string[]
+  registered_transitions: {
+    source: string
+    target?: string
+    type: string
+    mapping: Record<string, string>
+  }[]
+  active_executions: number
+}
+
+export interface GraphNodesResponse {
+  nodes: string[]
+}
+
+export interface GraphTestRunRequest {
+  query?: string
+  patient_id?: string
+  debug_mode?: boolean
+  metadata?: Record<string, any>
+}
+
+export interface GraphTestRunResponse {
+  trace: string[]
+  timings: Record<string, number>
+  execution_metadata: Record<string, any>
+  state: Record<string, any>
+}
+
+export interface GraphStatisticsResponse {
+  total_executions: number
+  successful_executions: number
+  failed_executions: number
+  avg_latency: number
+  timeout_count: number
+  cancelled_count: number
+  active_executions: number
+  graph_version: string
+  node_execution_count: Record<string, number>
+  transition_count: Record<string, number>
 }
 
 

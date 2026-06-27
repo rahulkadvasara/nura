@@ -57,6 +57,13 @@ class AISettings(BaseSettings):
     RETRIEVAL_CACHE_TTL: int = Field(default=300, description="TTL for semantic search retrieval cache in seconds")
     CONTEXT_CACHE_TTL: int = Field(default=300, description="TTL for context assembly cache in seconds")
 
+    # Graph configurations
+    GRAPH_VERSION: str = Field(default="1.0.0", description="Active LangGraph orchestrator schema version")
+    GRAPH_TIMEOUT: float = Field(default=30.0, description="Max execution timeout limit for running graph in seconds")
+    GRAPH_MAX_RETRIES: int = Field(default=3, description="Maximum execution retries for node workflow failures")
+    GRAPH_STREAMING_ENABLED: bool = Field(default=True, description="Enables streaming state updates during execution")
+    GRAPH_TRACE_ENABLED: bool = Field(default=True, description="Enables path traversal tracing in the finalized state")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -98,6 +105,14 @@ class AISettings(BaseSettings):
         
         if self.QDRANT_DEFAULT_VECTOR_SIZE <= 0:
             raise AIConfigurationError("QDRANT_DEFAULT_VECTOR_SIZE must be a positive integer")
+
+        # Validate Graph configurations
+        if not self.GRAPH_VERSION or self.GRAPH_VERSION.strip() == "":
+            raise AIConfigurationError("GRAPH_VERSION configuration is required")
+        if self.GRAPH_TIMEOUT <= 0:
+            raise AIConfigurationError("GRAPH_TIMEOUT must be a positive number")
+        if self.GRAPH_MAX_RETRIES < 0:
+            raise AIConfigurationError("GRAPH_MAX_RETRIES must be a non-negative integer")
 
 
 # Singleton instance

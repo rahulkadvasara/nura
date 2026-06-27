@@ -156,6 +156,14 @@ from app.schemas.ai import (
     AIPlaygroundHealthResponse,
 )
 
+from app.schemas.graph import (
+    GraphHealthResponse,
+    GraphNodesResponse,
+    GraphTestRunRequest,
+    GraphTestRunResponse,
+    GraphStatisticsResponse,
+)
+
 
 
 __all__ = [
@@ -289,4 +297,11 @@ __all__ = [
     "AIPlaygroundChatRequest",
     "AIPlaygroundChatResponse",
     "AIPlaygroundHealthResponse",
+    
+    # Graph schemas
+    "GraphHealthResponse",
+    "GraphNodesResponse",
+    "GraphTestRunRequest",
+    "GraphTestRunResponse",
+    "GraphStatisticsResponse",
 ]

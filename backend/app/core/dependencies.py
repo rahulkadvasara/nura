@@ -806,6 +806,24 @@ def get_rag_benchmark_service():
     return get_rag_benchmark_service_impl()
 
 
+def get_graph_registry():
+    """Get NodeRegistry singleton instance"""
+    from app.graph.registry import get_graph_registry as get_registry_impl
+    return get_registry_impl()
+
+
+def get_graph_builder():
+    """Get GraphBuilder singleton instance"""
+    from app.graph.builder import get_graph_builder as get_builder_impl
+    return get_builder_impl()
+
+
+def get_graph_engine():
+    """Get LangGraphEngine singleton instance"""
+    from app.graph.engine import get_graph_engine as get_engine_impl
+    return get_engine_impl()
+
+
 
 
 

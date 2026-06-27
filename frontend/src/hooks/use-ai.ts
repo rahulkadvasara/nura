@@ -25,7 +25,12 @@ import {
   RetrievalAgentStatisticsResponse,
   ContextAssemblyRequest,
   ContextAssemblyResponse,
-  ContextAssemblyStatisticsResponse
+  ContextAssemblyStatisticsResponse,
+  GraphHealthResponse,
+  GraphNodesResponse,
+  GraphTestRunRequest,
+  GraphTestRunResponse,
+  GraphStatisticsResponse
 } from '@/services/ai.service'
 
 /**
@@ -346,6 +351,60 @@ export function useContextAssemblyStatistics() {
       return await aiService.getContextAssemblyStatistics()
     },
     refetchInterval: 15000 // Refresh assembly stats every 15 seconds
+  })
+}
+
+/**
+ * Custom hook to monitor backend Graph compilation and health status periodically.
+ */
+export function useGraphHealth() {
+  return useQuery<GraphHealthResponse, Error>({
+    queryKey: ['admin', 'ai', 'graph', 'health'],
+    queryFn: async () => {
+      return await aiService.getGraphHealth()
+    },
+    refetchInterval: 10000, // Refresh health status check every 10 seconds
+  })
+}
+
+/**
+ * Custom hook to list all registered workflow nodes.
+ */
+export function useGraphNodes() {
+  return useQuery<GraphNodesResponse, Error>({
+    queryKey: ['admin', 'ai', 'graph', 'nodes'],
+    queryFn: async () => {
+      return await aiService.getGraphNodes()
+    }
+  })
+}
+
+/**
+ * Custom hook to monitor graph execution performance statistics periodically.
+ */
+export function useGraphStatistics() {
+  return useQuery<GraphStatisticsResponse, Error>({
+    queryKey: ['admin', 'ai', 'graph', 'statistics'],
+    queryFn: async () => {
+      return await aiService.getGraphStatistics()
+    },
+    refetchInterval: 10000, // Refresh stats check every 10 seconds
+  })
+}
+
+/**
+ * Custom hook to trigger mock execution run on the state graph.
+ */
+export function useGraphTestRun() {
+  const queryClient = useQueryClient()
+  return useMutation<GraphTestRunResponse, Error, GraphTestRunRequest>({
+    mutationFn: async (request: GraphTestRunRequest) => {
+      return await aiService.testGraphExecution(request)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'graph', 'statistics'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'graph', 'health'] })
+    }
   })
 }
 
