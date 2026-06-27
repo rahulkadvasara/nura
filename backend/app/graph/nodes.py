@@ -7,7 +7,18 @@ import time
 import uuid
 from typing import Dict, Any
 from app.graph.state import GraphState
-from app.graph.constants import START_NODE, INIT_STATE_NODE, ROUTER_AGENT_NODE, FINISH_NODE
+from app.graph.constants import (
+    START_NODE,
+    INIT_STATE_NODE,
+    ROUTER_AGENT_NODE,
+    FINISH_NODE,
+    INTENT_DETECTION_NODE,
+    PATIENT_CONTEXT_BUILDER_NODE,
+    RETRIEVAL_AGENT_NODE,
+    RESPONSE_VALIDATION_NODE,
+    MEMORY_UPDATE_NODE,
+    TELEMETRY_NODE,
+)
 
 
 class StartNode:
@@ -482,4 +493,223 @@ class AppointmentAgentNode:
             "response": appointment_data.message if hasattr(appointment_data, "message") else str(appointment_data),
             "metadata": meta,
             "token_usage": getattr(appointment_data, "usage", {})
+        }
+
+
+class IntentDetectionNode:
+    """Verifies and logs the classified intent mapped during the routing stage"""
+
+    async def __call__(self, state: GraphState) -> Dict[str, Any]:
+        trace = list(state.execution_trace) if state.execution_trace else []
+        trace.append(INTENT_DETECTION_NODE)
+        
+        # Ensure intent is logged in metadata
+        meta = dict(state.metadata or {})
+        meta["final_intent"] = state.detected_intent or "UNKNOWN"
+        meta["final_agent"] = state.selected_agent or "UnknownAgent"
+        
+        return {
+            "current_node": INTENT_DETECTION_NODE,
+            "previous_node": state.current_node,
+            "execution_trace": trace,
+            "metadata": meta
+        }
+
+
+class PatientContextBuilderNode:
+    """Compiles MongoDB clinical longitudinal record metrics summary context"""
+
+    async def __call__(self, state: GraphState) -> Dict[str, Any]:
+        trace = list(state.execution_trace) if state.execution_trace else []
+        trace.append(PATIENT_CONTEXT_BUILDER_NODE)
+        
+        patient_context_str = "No patient context provided."
+        meta = dict(state.metadata or {})
+        
+        if state.patient_id:
+            try:
+                from app.core.dependencies import get_patient_context_service
+                context_service = get_patient_context_service()
+                context_res = await context_service.assemble_context(state.patient_id)
+                
+                parts = []
+                if context_res.patient_profile:
+                    parts.append(f"Name: {context_res.patient_profile.get('full_name')}")
+                if context_res.medical_summary:
+                    parts.append(f"Summary: {context_res.medical_summary}")
+                if context_res.current_conditions:
+                    parts.append(f"Conditions: {', '.join(context_res.current_conditions)}")
+                if context_res.current_medications:
+                    parts.append(f"Medications: {', '.join(context_res.current_medications)}")
+                if context_res.medication_allergies:
+                    parts.append(f"Allergies: {', '.join(context_res.medication_allergies)}")
+                
+                patient_context_str = "\n".join(parts) if parts else "No records available for this patient."
+                meta["patient_context_sections"] = context_res.metadata.sections_returned
+            except Exception as e:
+                # Never crash the node, log and fall back gracefully
+                patient_context_str = f"Error compiling patient context: {str(e)}"
+                meta["patient_context_error"] = str(e)
+                
+        return {
+            "current_node": PATIENT_CONTEXT_BUILDER_NODE,
+            "previous_node": state.current_node,
+            "patient_context": patient_context_str,
+            "execution_trace": trace,
+            "metadata": meta
+        }
+
+
+class RetrievalAgentNode:
+    """Executes RetrievalAgent to pull relevant knowledge base vector chunks"""
+
+    async def __call__(self, state: GraphState) -> Dict[str, Any]:
+        trace = list(state.execution_trace) if state.execution_trace else []
+        trace.append(RETRIEVAL_AGENT_NODE)
+        
+        retrieved_context_str = ""
+        citations = []
+        meta = dict(state.metadata or {})
+        
+        # Only perform retrieval if there is a search query
+        if state.query:
+            try:
+                from app.core.dependencies import get_retrieval_agent
+                from app.agents.base.context import AgentContext
+                
+                retrieval_agent = get_retrieval_agent()
+                ctx = AgentContext(
+                    request_id=state.request_id,
+                    session_id=state.session_id,
+                    conversation_id=state.conversation_id,
+                    patient_id=state.patient_id,
+                    doctor_id=state.doctor_id,
+                    user_id=state.user_id,
+                    role=state.role,
+                    metadata=dict(state.metadata or {})
+                )
+                
+                res = await retrieval_agent.run(state.query, ctx)
+                if res.success and res.response:
+                    retrieved_context_str = res.response.get("context", "")
+                    retrieved_chunks = res.response.get("retrieved_chunks", [])
+                    citations = [
+                        {
+                            "source": chunk.get("metadata", {}).get("source", "unknown"),
+                            "text": chunk.get("text", ""),
+                            "score": chunk.get("score", 0.0)
+                        }
+                        for chunk in retrieved_chunks
+                    ]
+                    meta["collections_used"] = res.response.get("collections_used", [])
+            except Exception as e:
+                retrieved_context_str = f"Partial retrieval failure: {str(e)}"
+                meta["retrieval_error"] = str(e)
+                
+        return {
+            "current_node": RETRIEVAL_AGENT_NODE,
+            "previous_node": state.current_node,
+            "retrieved_context": retrieved_context_str,
+            "citations": citations,
+            "execution_trace": trace,
+            "metadata": meta
+        }
+
+
+class ResponseValidationNode:
+    """Validates structural correctness of downstream responses and handles error recovery fallbacks"""
+
+    async def __call__(self, state: GraphState) -> Dict[str, Any]:
+        trace = list(state.execution_trace) if state.execution_trace else []
+        trace.append(RESPONSE_VALIDATION_NODE)
+        
+        response_text = state.response
+        error_msg = state.error
+        meta = dict(state.metadata or {})
+        
+        # Error recovery/timeout fallbacks
+        if error_msg:
+            meta["validation_error"] = error_msg
+            if not response_text:
+                # Structure graceful recovery fallback error message
+                response_text = f"An error occurred during workflow execution: {error_msg}. Please try rephrasing or contact support."
+        elif not response_text:
+            response_text = "Work completed, but no standard output was returned by the selected agent."
+            
+        return {
+            "current_node": RESPONSE_VALIDATION_NODE,
+            "previous_node": state.current_node,
+            "response": response_text,
+            "execution_trace": trace,
+            "metadata": meta
+        }
+
+
+class MemoryUpdateNode:
+    """Triggers Phase 9 Incremental Memory Synchronization Pipeline for write events"""
+
+    async def __call__(self, state: GraphState) -> Dict[str, Any]:
+        trace = list(state.execution_trace) if state.execution_trace else []
+        trace.append(MEMORY_UPDATE_NODE)
+        
+        meta = dict(state.metadata or {})
+        
+        # Synchronization is triggered upon successful run of core/operations agents
+        if state.patient_id and not state.error:
+            trigger_agents = {
+                "ReportAnalysisAgent",
+                "ReminderAgent",
+                "AppointmentAgent",
+                "MedicalKnowledgeAgent",
+                "SymptomAgent",
+                "MemoryAgent"
+            }
+            if state.selected_agent in trigger_agents:
+                try:
+                    from app.core.dependencies import get_memory_sync_service
+                    sync_service = get_memory_sync_service()
+                    await sync_service.sync_patient(state.patient_id)
+                    meta["memory_sync_triggered"] = True
+                except Exception as e:
+                    # Do not crash the graph on memory sync failure; log it in metadata
+                    meta["memory_sync_error"] = str(e)
+                    
+        return {
+            "current_node": MEMORY_UPDATE_NODE,
+            "previous_node": state.current_node,
+            "execution_trace": trace,
+            "metadata": meta
+        }
+
+
+class TelemetryNode:
+    """Aggregates latency, cost estimation, and token counts thread-safely"""
+
+    async def __call__(self, state: GraphState) -> Dict[str, Any]:
+        trace = list(state.execution_trace) if state.execution_trace else []
+        trace.append(TELEMETRY_NODE)
+        
+        # Fetch cost and token estimations
+        usage = dict(state.token_usage or {})
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        total_tokens = usage.get("total_tokens", 0)
+        
+        from app.utils.ai import estimate_cost
+        cost = 0.0
+        if state.metadata and "model" in state.metadata:
+            cost = estimate_cost(state.metadata["model"], prompt_tokens, completion_tokens)
+        else:
+            # Fall back to standard model cost estimation
+            from app.core.ai_config import ai_settings
+            cost = estimate_cost(ai_settings.GROQ_MODEL, prompt_tokens, completion_tokens)
+            
+        meta = dict(state.metadata or {})
+        meta["estimated_cost"] = cost
+        
+        return {
+            "current_node": TELEMETRY_NODE,
+            "previous_node": state.current_node,
+            "execution_trace": trace,
+            "metadata": meta
         }

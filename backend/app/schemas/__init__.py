@@ -184,6 +184,12 @@ from app.agents.operations.schemas import (
     AppointmentAgentResponse,
 )
 
+from app.schemas.orchestrator import (
+    AIExecuteRequest,
+    StandardResponseContract,
+    OrchestratorStatisticsResponse,
+)
+
 
 
 __all__ = [
@@ -340,4 +346,7 @@ __all__ = [
     "DoctorRecommendationAgentResponse",
     "ReminderAgentResponse",
     "AppointmentAgentResponse",
+    "AIExecuteRequest",
+    "StandardResponseContract",
+    "OrchestratorStatisticsResponse",
 ]

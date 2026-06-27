@@ -797,6 +797,19 @@ def get_ai_orchestrator() -> AIOrchestrator:
     )
 
 
+_multi_agent_orchestrator_instance = None
+
+def get_multi_agent_orchestrator():
+    """Retrieve singleton instance of MultiAgentOrchestrator"""
+    global _multi_agent_orchestrator_instance
+    if _multi_agent_orchestrator_instance is None:
+        from app.services.multi_agent_orchestrator import MultiAgentOrchestrator
+        _multi_agent_orchestrator_instance = MultiAgentOrchestrator(
+            engine=get_graph_engine()
+        )
+    return _multi_agent_orchestrator_instance
+
+
 def get_index_version_service() -> IndexVersionService:
     """Get IndexVersionService instance"""
     from app.services.index_version_service import get_index_version_service as get_index_version_service_impl

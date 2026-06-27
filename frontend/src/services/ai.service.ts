@@ -421,6 +421,26 @@ export const aiService = {
   getOperationsAgentsStatistics: async (): Promise<Record<string, any>> => {
     const response = await apiClient.get<Record<string, any>>('/ai/agents/operations/statistics')
     return response.data
+  },
+
+  executeOrchestrator: async (request: AIExecuteRequest): Promise<StandardResponseContract> => {
+    const response = await apiClient.post<StandardResponseContract>('/ai/execute', request)
+    return response.data
+  },
+
+  debugOrchestrator: async (request: AIExecuteRequest): Promise<StandardResponseContract> => {
+    const response = await apiClient.post<StandardResponseContract>('/ai/execution/debug', request)
+    return response.data
+  },
+
+  getOrchestratorStatistics: async (): Promise<OrchestratorStatisticsResponse> => {
+    const response = await apiClient.get<OrchestratorStatisticsResponse>('/ai/execution/statistics')
+    return response.data
+  },
+
+  getOrchestratorHealth: async (): Promise<Record<string, any>> => {
+    const response = await apiClient.get<Record<string, any>>('/ai/execution/health')
+    return response.data
   }
 }
 
@@ -982,6 +1002,46 @@ export interface AppointmentAgentResponse {
   reasoning?: string
   usage: Record<string, number>
   metadata: Record<string, any>
+}
+
+export interface AIExecuteRequest {
+  query: string
+  patient_id?: string
+  session_id?: string
+  conversation_id?: string
+  debug_mode?: boolean
+  metadata?: Record<string, any>
+}
+
+export interface StandardResponseContract {
+  success: boolean
+  agent?: string
+  intent?: string
+  response?: string
+  citations: Record<string, any>[]
+  metadata: Record<string, any>
+  usage: Record<string, number>
+  execution_trace: string[]
+  execution_time: number
+  cost: number
+  warnings: string[]
+}
+
+export interface OrchestratorStatisticsResponse {
+  total_executions: number
+  intent_distribution: Record<string, number>
+  agent_usage: Record<string, number>
+  average_latency_ms: number
+  total_token_usage: {
+    prompt_tokens: number
+    completion_tokens: number
+    total_tokens: number
+  }
+  total_costs: number
+  failures: number
+  retries: number
+  cache_hit_rate: number
+  retrieval_metrics: Record<string, any>
 }
 
 

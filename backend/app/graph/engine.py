@@ -11,7 +11,18 @@ from app.core.ai_config import ai_settings
 from app.graph.registry import NodeRegistry
 from app.graph.transitions import TransitionManager
 from app.graph.state import GraphState
-from app.graph.constants import START_NODE, INIT_STATE_NODE, ROUTER_AGENT_NODE, FINISH_NODE
+from app.graph.constants import (
+    START_NODE,
+    INIT_STATE_NODE,
+    ROUTER_AGENT_NODE,
+    FINISH_NODE,
+    INTENT_DETECTION_NODE,
+    PATIENT_CONTEXT_BUILDER_NODE,
+    RETRIEVAL_AGENT_NODE,
+    RESPONSE_VALIDATION_NODE,
+    MEMORY_UPDATE_NODE,
+    TELEMETRY_NODE,
+)
 from app.graph.telemetry import GraphTelemetryTracker, get_graph_telemetry
 
 logger = logging.getLogger("nura.graph.engine")
@@ -220,6 +231,24 @@ def get_graph_engine() -> LangGraphEngine:
             builder.add_node(INIT_STATE_NODE, InitializeStateNode())
         if ROUTER_AGENT_NODE not in registered_nodes:
             builder.add_node(ROUTER_AGENT_NODE, RouterAgentNode())
+        if INTENT_DETECTION_NODE not in registered_nodes:
+            from app.graph.nodes import IntentDetectionNode
+            builder.add_node(INTENT_DETECTION_NODE, IntentDetectionNode())
+        if PATIENT_CONTEXT_BUILDER_NODE not in registered_nodes:
+            from app.graph.nodes import PatientContextBuilderNode
+            builder.add_node(PATIENT_CONTEXT_BUILDER_NODE, PatientContextBuilderNode())
+        if RETRIEVAL_AGENT_NODE not in registered_nodes:
+            from app.graph.nodes import RetrievalAgentNode
+            builder.add_node(RETRIEVAL_AGENT_NODE, RetrievalAgentNode())
+        if RESPONSE_VALIDATION_NODE not in registered_nodes:
+            from app.graph.nodes import ResponseValidationNode
+            builder.add_node(RESPONSE_VALIDATION_NODE, ResponseValidationNode())
+        if MEMORY_UPDATE_NODE not in registered_nodes:
+            from app.graph.nodes import MemoryUpdateNode
+            builder.add_node(MEMORY_UPDATE_NODE, MemoryUpdateNode())
+        if TELEMETRY_NODE not in registered_nodes:
+            from app.graph.nodes import TelemetryNode
+            builder.add_node(TELEMETRY_NODE, TelemetryNode())
         if FINISH_NODE not in registered_nodes:
             builder.add_node(FINISH_NODE, FinishNode())
             
@@ -256,10 +285,13 @@ def get_graph_engine() -> LangGraphEngine:
         builder.transitions.clear()
         builder.add_transition(START_NODE, INIT_STATE_NODE)
         builder.add_transition(INIT_STATE_NODE, ROUTER_AGENT_NODE)
+        builder.add_transition(ROUTER_AGENT_NODE, INTENT_DETECTION_NODE)
+        builder.add_transition(INTENT_DETECTION_NODE, PATIENT_CONTEXT_BUILDER_NODE)
+        builder.add_transition(PATIENT_CONTEXT_BUILDER_NODE, RETRIEVAL_AGENT_NODE)
         
-        # Dynamic dispatch transition from Router based on state.selected_agent
+        # Dynamic dispatch transition from Retrieval Agent based on state.selected_agent
         builder.add_conditional_transition(
-            source=ROUTER_AGENT_NODE,
+            source=RETRIEVAL_AGENT_NODE,
             condition_func=lambda state: state.selected_agent or "UnknownAgent",
             mapping={
                 "MedicalKnowledgeAgent": "MedicalKnowledgeAgent",
@@ -274,16 +306,21 @@ def get_graph_engine() -> LangGraphEngine:
             }
         )
         
-        # Finalize execution transitions from agent executors to Finish node
-        builder.add_transition("MedicalKnowledgeAgent", FINISH_NODE)
-        builder.add_transition("SymptomAgent", FINISH_NODE)
-        builder.add_transition("MemoryAgent", FINISH_NODE)
-        builder.add_transition("ReportAnalysisAgent", FINISH_NODE)
-        builder.add_transition("DrugInteractionAgent", FINISH_NODE)
-        builder.add_transition("DoctorRecommendationAgent", FINISH_NODE)
-        builder.add_transition("ReminderAgent", FINISH_NODE)
-        builder.add_transition("AppointmentAgent", FINISH_NODE)
-        builder.add_transition("UnknownAgent", FINISH_NODE)
+        # Finalize execution transitions from agent executors to Response Validation
+        builder.add_transition("MedicalKnowledgeAgent", RESPONSE_VALIDATION_NODE)
+        builder.add_transition("SymptomAgent", RESPONSE_VALIDATION_NODE)
+        builder.add_transition("MemoryAgent", RESPONSE_VALIDATION_NODE)
+        builder.add_transition("ReportAnalysisAgent", RESPONSE_VALIDATION_NODE)
+        builder.add_transition("DrugInteractionAgent", RESPONSE_VALIDATION_NODE)
+        builder.add_transition("DoctorRecommendationAgent", RESPONSE_VALIDATION_NODE)
+        builder.add_transition("ReminderAgent", RESPONSE_VALIDATION_NODE)
+        builder.add_transition("AppointmentAgent", RESPONSE_VALIDATION_NODE)
+        builder.add_transition("UnknownAgent", RESPONSE_VALIDATION_NODE)
+        
+        # Connect validation output to memory update, telemetry node, and finish
+        builder.add_transition(RESPONSE_VALIDATION_NODE, MEMORY_UPDATE_NODE)
+        builder.add_transition(MEMORY_UPDATE_NODE, TELEMETRY_NODE)
+        builder.add_transition(TELEMETRY_NODE, FINISH_NODE)
         
         # Compile engine
         _engine_instance = builder.compile()

@@ -45,6 +45,9 @@ import {
   DoctorRecommendationAgentResponse,
   ReminderAgentResponse,
   AppointmentAgentResponse,
+  AIExecuteRequest,
+  StandardResponseContract,
+  OrchestratorStatisticsResponse,
 } from '@/services/ai.service'
 
 /**
@@ -629,6 +632,62 @@ export function useOperationsAgentsStatistics() {
       return await aiService.getOperationsAgentsStatistics()
     },
     refetchInterval: 10000, // Refresh metrics every 10 seconds
+  })
+}
+
+/**
+ * Custom hook to execute the unified Multi-Agent Orchestrator pipeline.
+ */
+export function useOrchestratorExecute() {
+  const queryClient = useQueryClient()
+  return useMutation<StandardResponseContract, Error, AIExecuteRequest>({
+    mutationFn: async (request: AIExecuteRequest) => {
+      return await aiService.executeOrchestrator(request)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'orchestrator', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to run a debug trace against the orchestrator pipeline.
+ */
+export function useOrchestratorDebug() {
+  const queryClient = useQueryClient()
+  return useMutation<StandardResponseContract, Error, AIExecuteRequest>({
+    mutationFn: async (request: AIExecuteRequest) => {
+      return await aiService.debugOrchestrator(request)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'orchestrator', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to monitor cumulative orchestrator performance metrics periodically.
+ */
+export function useOrchestratorStatistics() {
+  return useQuery<OrchestratorStatisticsResponse, Error>({
+    queryKey: ['admin', 'ai', 'orchestrator', 'statistics'],
+    queryFn: async () => {
+      return await aiService.getOrchestratorStatistics()
+    },
+    refetchInterval: 10000, // Refresh metrics every 10 seconds
+  })
+}
+
+/**
+ * Custom hook to verify connectivity status across backend AI subsystems.
+ */
+export function useOrchestratorHealth() {
+  return useQuery<Record<string, any>, Error>({
+    queryKey: ['admin', 'ai', 'orchestrator', 'health'],
+    queryFn: async () => {
+      return await aiService.getOrchestratorHealth()
+    },
+    refetchInterval: 30000, // Check health status every 30 seconds
   })
 }
 

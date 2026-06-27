@@ -40,6 +40,7 @@ from app.core.dependencies import (
     get_doctor_recommendation_agent,
     get_reminder_agent,
     get_appointment_agent,
+    get_multi_agent_orchestrator,
 )
 from app.models import UserRole, UserInDB
 from app.schemas.ai import (
@@ -96,7 +97,13 @@ from app.schemas.vector import (
     VectorTestResultItem
 )
 from app.schemas.patient_context import PatientContextResponse
-from app.schemas import ReminderAgentResponse, AppointmentAgentResponse
+from app.schemas import (
+    ReminderAgentResponse,
+    AppointmentAgentResponse,
+    AIExecuteRequest,
+    StandardResponseContract,
+    OrchestratorStatisticsResponse,
+)
 from app.services.ai_service import AIService
 from app.services.groq_service import GroqService
 from app.services.embedding_service import EmbeddingService
@@ -1663,6 +1670,101 @@ async def get_operations_agents_statistics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch operations agents statistics: {str(e)}"
+        )
+
+
+@router.post(
+    "/execute",
+    response_model=StandardResponseContract,
+    summary="Unified production AI multi-agent workflow execution pipeline. Guarded: Authenticated Users.",
+)
+async def execute_multi_agent(
+    payload: AIExecuteRequest,
+    current_user: UserInDB = Depends(get_current_user),
+    orchestrator = Depends(get_multi_agent_orchestrator),
+):
+    try:
+        # Override patient_id to be self-associated if user is a PATIENT and hasn't specified patient_id
+        patient_id = payload.patient_id
+        if current_user.role == UserRole.PATIENT:
+            # Patients can only run checks for themselves
+            patient_id = str(current_user.id)
+            
+        # Standardize payload overrides
+        payload.patient_id = patient_id
+        
+        return await orchestrator.execute(
+            request=payload,
+            user_id=str(current_user.id),
+            role=current_user.role.value
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Multi-Agent pipeline execution run failed: {str(e)}"
+        )
+
+
+@router.post(
+    "/execution/debug",
+    response_model=StandardResponseContract,
+    summary="Verbose debug execution of the multi-agent graph pipeline. Guarded: Admin Only.",
+)
+async def debug_multi_agent(
+    payload: AIExecuteRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    orchestrator = Depends(get_multi_agent_orchestrator),
+):
+    try:
+        # Force debug_mode true
+        payload.debug_mode = True
+        return await orchestrator.execute(
+            request=payload,
+            user_id=str(current_user.id),
+            role=current_user.role.value
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Orchestrator debug execution run failed: {str(e)}"
+        )
+
+
+@router.get(
+    "/execution/statistics",
+    response_model=OrchestratorStatisticsResponse,
+    summary="Retrieve cumulative system-wide multi-agent telemetry statistics. Guarded: Admin Only.",
+)
+async def get_orchestrator_statistics(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+):
+    try:
+        from app.services.multi_agent_orchestrator import get_multi_agent_telemetry
+        return get_multi_agent_telemetry().get_stats()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch multi-agent telemetry statistics: {str(e)}"
+        )
+
+
+@router.get(
+    "/execution/health",
+    summary="Verify operational health of AI sub-services integrations. Guarded: Admin Only.",
+)
+async def get_orchestrator_health(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    orchestrator = Depends(get_multi_agent_orchestrator),
+):
+    try:
+        # Reuse existing AIOrchestrator health check logic
+        from app.core.dependencies import get_ai_orchestrator
+        ai_orch = get_ai_orchestrator()
+        return await ai_orch.health_check()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Orchestrator health check validation failed: {str(e)}"
         )
 
 
