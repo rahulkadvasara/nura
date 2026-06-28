@@ -28,6 +28,7 @@ class DrugInteractionAgent(BaseAgent):
         patient_memory_repository: PatientMemoryRepository,
         ai_service: AIService,
         validation_service: Optional[Any] = None,
+        explanation_service: Optional[Any] = None,
         settings=None
     ):
         super().__init__(name="DrugInteractionAgent", settings=settings or ai_settings)
@@ -35,6 +36,7 @@ class DrugInteractionAgent(BaseAgent):
         self.patient_memory_repository = patient_memory_repository
         self.ai_service = ai_service
         self.validation_service = validation_service
+        self.explanation_service = explanation_service
         self.telemetry = get_healthcare_agents_telemetry()
 
     def _format_patient_memory(self, memory: Any) -> str:
@@ -50,11 +52,8 @@ class DrugInteractionAgent(BaseAgent):
 
     async def execute(self, input_data: Any, context: Optional[AgentContext] = None) -> Any:
         """
-        Execute Drug Interaction safety diagnostic using deterministic MedicationValidationService:
-        - Parses medication name from query input.
-        - Resolves patient_id from agent context.
-        - Runs validation service checks.
-        - Formulates deterministic DrugInteractionAgentResponse.
+        Execute Drug Interaction safety diagnostic using deterministic MedicationValidationService
+        followed by rich narrative AI explanations via DrugExplanationService.
         """
         query_str = str(input_data).strip()
         patient_id = context.patient_id if context else None
@@ -65,7 +64,6 @@ class DrugInteractionAgent(BaseAgent):
             patient_id = "system_test" # Fallback for local sandbox runs without explicit context
 
         # 1. Parse incoming medication names from input query string
-        # Clean prefix like "Check safety parameters for:"
         prefix = "Check safety parameters for:"
         if query_str.lower().startswith(prefix.lower()):
             query_str = query_str[len(prefix):].strip()
@@ -79,6 +77,10 @@ class DrugInteractionAgent(BaseAgent):
             from app.core.dependencies import get_medication_validation_service
             self.validation_service = get_medication_validation_service()
 
+        if not self.explanation_service:
+            from app.core.dependencies import get_drug_explanation_service
+            self.explanation_service = get_drug_explanation_service()
+
         # 2. Run MedicationValidationService check
         val_res = await self.validation_service.validate_medications(
             patient_id=patient_id,
@@ -91,22 +93,45 @@ class DrugInteractionAgent(BaseAgent):
         recommendations = val_res["recommendations"]
         detected_interactions = val_res["detected_interactions"]
         
+        # 3. Call explanation service to get AI explanations
+        explain_res = await self.explanation_service.explain_safety(
+            medications=incoming_meds,
+            severity=severity,
+            recommendations=recommendations,
+            interactions=detected_interactions
+        )
+
+        patient_explanation = explain_res.get("patient_explanation", "")
+        doctor_explanation = explain_res.get("doctor_explanation", "")
+        precautions = explain_res.get("precautions", "")
+        summary = explain_res.get("summary", "")
+        fallback_used = explain_res.get("fallback_used", False)
+        
         # Build warnings list
-        warnings = [item.description for item in detected_interactions]
+        warnings = [item.get("description") if isinstance(item, dict) else getattr(item, "description", "") for item in detected_interactions]
 
         # Build citations
         citations = []
         for inter in detected_interactions:
+            d_a = inter.get("drug_a") if isinstance(inter, dict) else getattr(inter, "drug_a", "")
+            d_b = inter.get("drug_b") if isinstance(inter, dict) else getattr(inter, "drug_b", "")
+            desc = inter.get("description") if isinstance(inter, dict) else getattr(inter, "description", "")
             citations.append({
                 "source": "drug_interactions",
-                "text": f"{inter.drug_a} and {inter.drug_b} interaction: {inter.description}",
+                "text": f"{d_a} and {d_b} interaction: {desc}",
                 "score": 1.0
             })
 
-        # Enforce clinical disclaimers in the interaction summary
+        # Combine descriptions into interaction_summary
         notice = "This drug safety check is for informational purposes only. It is not a substitute for professional medical advice, diagnosis, or treatment. Always consult your physician before starting, stopping, or changing any medication."
-        interaction_summary = " ".join(recommendations)
-        interaction_summary = f"{interaction_summary}\n\nDisclaimer: {notice}"
+        
+        interaction_summary = (
+            f"Summary: {summary}\n\n"
+            f"Patient Advice:\n{patient_explanation}\n\n"
+            f"Precautions:\n{precautions}\n\n"
+            f"Clinical Details (for Clinicians):\n{doctor_explanation}\n\n"
+            f"Disclaimer: {notice}"
+        )
 
         # Standardize severity formatting for legacy agent schemas
         if severity == "NONE":
@@ -115,6 +140,10 @@ class DrugInteractionAgent(BaseAgent):
             severity = "LOW"
 
         total_latency = (time.perf_counter() - start_time) * 1000.0
+        prompt_tokens = explain_res.get("prompt_tokens", 0)
+        completion_tokens = explain_res.get("completion_tokens", 0)
+        total_tokens = prompt_tokens + completion_tokens
+        cost = explain_res.get("estimated_cost", 0.0)
 
         agent_res = DrugInteractionAgentResponse(
             interaction_found=interaction_found,
@@ -125,14 +154,15 @@ class DrugInteractionAgent(BaseAgent):
             citations=citations,
             metadata={
                 "retrieval_latency_ms": 0.0,
-                "groq_latency_ms": 0.0,
+                "groq_latency_ms": explain_res.get("latency_ms", 0.0),
                 "total_latency_ms": total_latency,
-                "prompt_version": "1.0.0-deterministic"
+                "prompt_version": "1.0.0-ai-explanation",
+                "fallback_used": fallback_used
             },
             usage={
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "total_tokens": 0
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": total_tokens
             }
         )
 
@@ -140,14 +170,14 @@ class DrugInteractionAgent(BaseAgent):
         self.telemetry.record_run(
             agent_name=self.name,
             latency_ms=total_latency,
-            prompt_tokens=0,
-            completion_tokens=0,
-            total_tokens=0,
-            estimated_cost=0.0,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            estimated_cost=cost,
             success=True,
             retrieval_latency_ms=0.0,
-            groq_latency_ms=0.0,
-            citation_count=0
+            groq_latency_ms=explain_res.get("latency_ms", 0.0),
+            citation_count=len(citations)
         )
         
         return agent_res

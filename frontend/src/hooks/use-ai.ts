@@ -54,6 +54,8 @@ import {
   DrugCheckResponse,
   MedicationValidateRequest,
   MedicationValidateResponse,
+  DrugAIExplanationResponse,
+  DrugAITelemetryResponse,
 } from '@/services/ai.service'
 
 /**
@@ -792,6 +794,34 @@ export function useMedicationValidationStatistics() {
     queryKey: ['admin', 'ai', 'drug-validation', 'statistics'],
     queryFn: async () => {
       return await aiService.getMedicationValidationStatistics()
+    },
+    refetchInterval: 10000, // Refresh statistics every 10 seconds
+  })
+}
+
+/**
+ * Custom hook to trigger AI narrative explanation generation for medications against a patient's context.
+ */
+export function useExplainDrugSafety() {
+  const queryClient = useQueryClient()
+  return useMutation<DrugAIExplanationResponse, Error, MedicationValidateRequest>({
+    mutationFn: async (request: MedicationValidateRequest) => {
+      return await aiService.explainDrugSafety(request)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'drug-ai-explanation', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to monitor cumulative Drug AI explanation telemetry metrics periodically.
+ */
+export function useDrugAISafetyStatistics() {
+  return useQuery<DrugAITelemetryResponse, Error>({
+    queryKey: ['admin', 'ai', 'drug-ai-explanation', 'statistics'],
+    queryFn: async () => {
+      return await aiService.getDrugAISafetyStatistics()
     },
     refetchInterval: 10000, // Refresh statistics every 10 seconds
   })

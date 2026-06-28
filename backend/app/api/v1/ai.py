@@ -45,6 +45,7 @@ from app.core.dependencies import (
     get_drug_lookup_service,
     get_drug_interaction_engine,
     get_medication_validation_service,
+    get_drug_explanation_service,
 )
 from app.models import UserRole, UserInDB
 from app.schemas.ai import (
@@ -63,6 +64,8 @@ from app.schemas.ai import (
     DrugCheckResponse,
     MedicationValidateRequest,
     MedicationValidateResponse,
+    DrugAIExplanationResponse,
+    DrugAITelemetryResponse,
     DocumentIndexRequest,
     DocumentIndexResponse,
     BatchDocumentIndexRequest,
@@ -1917,6 +1920,90 @@ async def get_medication_validation_statistics(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch medication validation statistics: {str(e)}"
         )
+
+
+@router.post(
+    "/drug/explain",
+    response_model=DrugAIExplanationResponse,
+    summary="Validate medications and generate patient-friendly and professional AI explanations. Guarded: Admin Only.",
+)
+async def explain_medications(
+    payload: MedicationValidateRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    validation_service = Depends(get_medication_validation_service),
+    explanation_service = Depends(get_drug_explanation_service),
+):
+    try:
+        import time
+        start_time = time.perf_counter()
+        
+        # 1. Validation pipeline (source of truth)
+        val_res = await validation_service.validate_medications(
+            patient_id=payload.patient_id,
+            incoming_medications=payload.incoming_medications,
+            source="api"
+        )
+        
+        # 2. Extract deterministic validation results
+        severity = val_res.get("severity")
+        recommendations = val_res.get("recommendations", [])
+        interactions = val_res.get("detected_interactions", [])
+        
+        # 3. Request narrative explanations from AI explanation service
+        # Format interactions dict to simple structures if needed
+        explain_res = await explanation_service.explain_safety(
+            medications=payload.incoming_medications,
+            severity=severity,
+            recommendations=recommendations,
+            interactions=interactions
+        )
+        
+        total_latency_ms = (time.perf_counter() - start_time) * 1000.0
+        
+        token_usage_dict = {
+            "prompt_tokens": explain_res.get("prompt_tokens", 0),
+            "completion_tokens": explain_res.get("completion_tokens", 0),
+            "total_tokens": explain_res.get("prompt_tokens", 0) + explain_res.get("completion_tokens", 0)
+        }
+        
+        return DrugAIExplanationResponse(
+            severity=severity,
+            deterministic_recommendation=recommendations,
+            patient_explanation=explain_res.get("patient_explanation", ""),
+            doctor_explanation=explain_res.get("doctor_explanation", ""),
+            precautions=explain_res.get("precautions", ""),
+            summary=explain_res.get("summary", ""),
+            citations=[],
+            fallback_used=explain_res.get("fallback_used", False),
+            latency_ms=round(total_latency_ms, 2),
+            token_usage=token_usage_dict,
+            estimated_cost=explain_res.get("estimated_cost", 0.0)
+        )
+    except Exception as e:
+        logger.error(f"AI drug safety explanation failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"AI drug safety explanation failed: {str(e)}"
+        )
+
+
+@router.get(
+    "/drug/ai/statistics",
+    response_model=DrugAITelemetryResponse,
+    summary="Retrieve cumulative drug AI explanation statistics. Guarded: Admin Only.",
+)
+async def get_drug_ai_statistics(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    explanation_service = Depends(get_drug_explanation_service),
+):
+    try:
+        return explanation_service.telemetry.get_statistics()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch Drug AI statistics: {str(e)}"
+        )
+
 
 
 

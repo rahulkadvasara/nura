@@ -54,7 +54,9 @@ import {
   useCheckDrugInteractions,
   useDrugInteractionsStatistics,
   useValidateMedications,
-  useMedicationValidationStatistics
+  useMedicationValidationStatistics,
+  useExplainDrugSafety,
+  useDrugAISafetyStatistics
 } from '@/hooks/use-ai'
 import { HealthcareAgentsView } from './healthcare_agents_view'
 import { OperationsAgentsView } from './operations_agents_view'
@@ -6782,9 +6784,289 @@ function MedicationValidationPlaygroundView() {
     </div>
   )
 }
+function DrugAIExplanationPlaygroundView() {
+  const [patientId, setPatientId] = useState('patient-123')
+  const [medsList, setMedsList] = useState<string[]>(['Aspirin', 'Warfarin'])
+  const [newMed, setNewMed] = useState('')
+  const [explainResult, setExplainResult] = useState<any>(null)
+
+  const explainMutation = useExplainDrugSafety()
+  const { data: stats, refetch: refetchStats } = useDrugAISafetyStatistics()
+
+  const handleAddMed = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (newMed.trim() && !medsList.includes(newMed.trim())) {
+      setMedsList([...medsList, newMed.trim()])
+      setNewMed('')
+    }
+  }
+
+  const handleRemoveMed = (index: number) => {
+    setMedsList(medsList.filter((_, i) => i !== index))
+  }
+
+  const handleExplain = async () => {
+    if (medsList.length === 0 || !patientId.trim()) return
+    try {
+      const res = await explainMutation.mutateAsync({
+        patient_id: patientId.trim(),
+        incoming_medications: medsList
+      })
+      setExplainResult(res)
+      refetchStats()
+    } catch (err) {
+      setExplainResult(null)
+    }
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
+      <div className="lg:col-span-2 space-y-6">
+        <Card className="border-slate-200 shadow-md bg-white">
+          <CardHeader className="border-b border-slate-100 bg-slate-50/50">
+            <CardTitle className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+              <Brain className="h-5 w-5 text-teal-600 animate-pulse" />
+              Drug AI Explanation Engine
+            </CardTitle>
+            <CardDescription>
+              Validate safety metrics and generate AI-driven narrative safety warnings for patients and clinicians.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6 space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">Patient Identifier</label>
+              <Input
+                placeholder="Enter Patient ID (e.g. patient-123)..."
+                value={patientId}
+                onChange={(e) => setPatientId(e.target.value)}
+                className="border-slate-200 focus:border-teal-500 focus:ring-teal-500"
+              />
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <label className="text-sm font-semibold text-slate-700">Incoming Medications list</label>
+              <form onSubmit={handleAddMed} className="flex gap-2">
+                <Input
+                  placeholder="Type medication name (e.g. Aspirin, Warfarin, Metformin)..."
+                  value={newMed}
+                  onChange={(e) => setNewMed(e.target.value)}
+                  className="border-slate-200 focus:border-teal-500 focus:ring-teal-500"
+                />
+                <Button type="submit" variant="outline" className="border-slate-200 text-slate-700 hover:bg-slate-50 font-medium">
+                  Add Medication
+                </Button>
+              </form>
+            </div>
+
+            <div className="flex flex-wrap gap-2 py-2">
+              {medsList.length === 0 ? (
+                <span className="text-sm text-slate-400 italic">No medications selected.</span>
+              ) : (
+                medsList.map((med, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-800 border border-slate-200"
+                  >
+                    {med}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveMed(idx)}
+                      className="text-slate-400 hover:text-red-500 transition-colors"
+                    >
+                      &times;
+                    </button>
+                  </span>
+                ))
+              )}
+            </div>
+
+            <div className="pt-4 border-t border-slate-100 flex justify-end">
+              <Button
+                onClick={handleExplain}
+                disabled={medsList.length === 0 || !patientId.trim() || explainMutation.isPending}
+                className="bg-teal-600 hover:bg-teal-700 text-white font-medium shadow-sm transition-all"
+              >
+                {explainMutation.isPending ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Generating Explanations...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="h-4 w-4 mr-2" />
+                    Generate AI Safety Explanations
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {explainResult && (
+          <Card className="border-slate-200 shadow-md bg-white overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+            <CardHeader className="border-b border-slate-100 bg-slate-50/50">
+              <div className="flex flex-wrap justify-between items-center gap-4">
+                <div>
+                  <CardTitle className="text-lg font-semibold text-slate-800">
+                    Clinical Narrative & Safety Advisory
+                  </CardTitle>
+                  <CardDescription>
+                    AI-powered narrative safety check results.
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  {explainResult.fallback_used && (
+                    <span className="px-3 py-1.5 rounded-full text-xs font-bold uppercase bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      Fallback Used
+                    </span>
+                  )}
+                  <span
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider ${
+                      explainResult.severity === 'HIGH'
+                        ? 'bg-red-100 text-red-800 border border-red-200'
+                        : explainResult.severity === 'MEDIUM'
+                        ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                        : 'bg-teal-100 text-teal-800 border border-teal-200'
+                    }`}
+                  >
+                    Severity: {explainResult.severity}
+                  </span>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-6">
+              {/* Summary Sentence */}
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                <h4 className="text-xs font-semibold uppercase text-slate-400 tracking-wider">Summary</h4>
+                <p className="mt-1.5 text-sm font-medium text-slate-800 leading-relaxed">
+                  {explainResult.summary}
+                </p>
+              </div>
+
+              {/* Patient Explanation */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold uppercase text-teal-600 tracking-wider">Patient Explanation</h4>
+                <div className="text-sm text-slate-700 whitespace-pre-line leading-relaxed bg-teal-50/20 border border-teal-100/50 p-4 rounded-lg">
+                  {explainResult.patient_explanation}
+                </div>
+              </div>
+
+              {/* Clinical Doctor Explanation */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold uppercase text-violet-600 tracking-wider">Doctor Clinical Details</h4>
+                <div className="text-sm text-slate-700 whitespace-pre-line leading-relaxed bg-violet-50/20 border border-violet-100/50 p-4 rounded-lg font-mono text-[13px]">
+                  {explainResult.doctor_explanation}
+                </div>
+              </div>
+
+              {/* Precautions */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold uppercase text-amber-600 tracking-wider">Lifestyle & Clinical Precautions</h4>
+                <div className="text-sm text-slate-700 whitespace-pre-line leading-relaxed bg-amber-50/20 border border-amber-100/50 p-4 rounded-lg">
+                  {explainResult.precautions}
+                </div>
+              </div>
+
+              {/* Recommendations */}
+              {explainResult.deterministic_recommendation?.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-semibold uppercase text-slate-400 tracking-wider">Deterministic Clinical Advisory</h4>
+                  <ul className="space-y-1.5">
+                    {explainResult.deterministic_recommendation.map((rec: string, idx: number) => (
+                      <li key={idx} className="text-sm text-slate-600 flex items-start gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-teal-500 shrink-0 mt-0.5" />
+                        {rec}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      <div className="space-y-6">
+        <Card className="border-slate-200 shadow-md bg-white">
+          <CardHeader className="pb-3 border-b border-slate-100">
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-sm font-semibold text-slate-700">
+                Drug Safety AI Telemetry
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => refetchStats()}
+                className="h-8 w-8 text-slate-400 hover:text-slate-600"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4 space-y-4 text-sm text-slate-600">
+            <div className="flex justify-between items-center">
+              <span>Total Requests:</span>
+              <span className="font-semibold text-slate-800">{stats?.explanation_requests ?? 0}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span>Successful Runs:</span>
+              <span className="font-semibold text-slate-800">{stats?.successful_generations ?? 0}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span>Fallback Executions:</span>
+              <span className="font-semibold text-amber-600">{stats?.fallback_executions ?? 0}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span>Average Generation Latency:</span>
+              <span className="font-semibold text-slate-800">
+                {stats?.avg_latency_ms ? `${stats.avg_latency_ms} ms` : '0 ms'}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span>Estimated Cost:</span>
+              <span className="font-semibold text-teal-600">
+                {stats?.estimated_cost ? `$${stats.estimated_cost.toFixed(6)}` : '$0.00'}
+              </span>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 space-y-2">
+              <h5 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Token Totals</h5>
+              <div className="flex justify-between items-center text-xs">
+                <span>Prompt Tokens:</span>
+                <span className="font-semibold text-slate-800">{stats?.prompt_tokens ?? 0}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span>Completion Tokens:</span>
+                <span className="font-semibold text-slate-800">{stats?.completion_tokens ?? 0}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span>Total Tokens:</span>
+                <span className="font-semibold text-slate-800">{stats?.total_tokens ?? 0}</span>
+              </div>
+            </div>
+
+            {stats && stats.model_usage && Object.keys(stats.model_usage).length > 0 && (
+              <div className="pt-2 border-t border-slate-100 space-y-2">
+                <h5 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Model Distribution</h5>
+                {Object.entries(stats.model_usage).map(([model, count]) => (
+                  <div key={model} className="flex justify-between items-center text-xs">
+                    <span className="font-mono text-[10px]">{model}:</span>
+                    <span className="font-semibold">{count} runs</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
 
 function AIPlaygroundContent() {
-  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent' | 'workflow-engine' | 'router-agent' | 'core-agents' | 'healthcare-agents' | 'operations-agents' | 'drug-lookup' | 'drug-interactions' | 'drug-validation'>('llm')
+  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent' | 'workflow-engine' | 'router-agent' | 'core-agents' | 'healthcare-agents' | 'operations-agents' | 'drug-lookup' | 'drug-interactions' | 'drug-validation' | 'drug-explain'>('llm')
 
   return (
     <div className="space-y-6">
@@ -7005,6 +7287,17 @@ function AIPlaygroundContent() {
           Medication Validation
         </button>
         <button
+          onClick={() => setActiveTab('drug-explain')}
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
+            activeTab === 'drug-explain'
+              ? 'border-teal-600 text-teal-600 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Brain className="h-4 w-4" />
+          Drug AI Explanation
+        </button>
+        <button
           onClick={() => setActiveTab('integration')}
           className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
             activeTab === 'integration'
@@ -7049,6 +7342,8 @@ function AIPlaygroundContent() {
         <DrugInteractionPlaygroundView />
       ) : activeTab === 'drug-validation' ? (
         <MedicationValidationPlaygroundView />
+      ) : activeTab === 'drug-explain' ? (
+        <DrugAIExplanationPlaygroundView />
       ) : (
         <IntegrationPlaygroundView />
       )}

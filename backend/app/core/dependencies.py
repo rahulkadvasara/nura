@@ -677,6 +677,24 @@ def get_medication_validation_service(
     )
 
 
+def get_groq_service():
+    """Retrieve singleton instance of GroqService"""
+    from app.services.groq_service import get_groq_service as get_groq_service_impl
+    return get_groq_service_impl()
+
+
+def get_drug_explanation_service(
+    groq_service = Depends(get_groq_service)
+):
+    """Get DrugExplanationService instance"""
+    from fastapi.params import Depends as DependsType
+    if isinstance(groq_service, DependsType):
+        groq_service = get_groq_service()
+    from app.services.drug_ai.explanation_service import get_drug_explanation_service as get_explanation_service_impl
+    return get_explanation_service_impl(groq_service)
+
+
+
 
 
 
@@ -1042,7 +1060,8 @@ def get_drug_interaction_agent() -> DrugInteractionAgent:
             retrieval_agent=get_retrieval_agent(),
             patient_memory_repository=get_patient_memory_repository(),
             ai_service=get_ai_service(),
-            validation_service=get_medication_validation_service()
+            validation_service=get_medication_validation_service(),
+            explanation_service=get_drug_explanation_service()
         )
     return _drug_interaction_agent_instance
 

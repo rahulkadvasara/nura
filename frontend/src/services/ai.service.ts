@@ -476,6 +476,16 @@ export const aiService = {
   getMedicationValidationStatistics: async (): Promise<DrugTelemetryResponse> => {
     const response = await apiClient.get<DrugTelemetryResponse>('/ai/drug/validation/statistics')
     return response.data
+  },
+
+  explainDrugSafety: async (request: MedicationValidateRequest): Promise<DrugAIExplanationResponse> => {
+    const response = await apiClient.post<DrugAIExplanationResponse>('/ai/drug/explain', request)
+    return response.data
+  },
+
+  getDrugAISafetyStatistics: async (): Promise<DrugAITelemetryResponse> => {
+    const response = await apiClient.get<DrugAITelemetryResponse>('/ai/drug/ai/statistics')
+    return response.data
   }
 }
 
@@ -1158,6 +1168,38 @@ export interface MedicationValidateResponse {
   decision: string
   recommendations: string[]
   latency_ms: number
+}
+
+export interface DrugAIExplanationTokenUsage {
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+}
+
+export interface DrugAIExplanationResponse {
+  severity: string
+  deterministic_recommendation: string[]
+  patient_explanation: string
+  doctor_explanation: string
+  precautions: string
+  summary: string
+  citations: string[]
+  fallback_used: boolean
+  latency_ms: number
+  token_usage: DrugAIExplanationTokenUsage
+  estimated_cost: number
+}
+
+export interface DrugAITelemetryResponse {
+  explanation_requests: number
+  successful_generations: number
+  fallback_executions: number
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+  estimated_cost: number
+  avg_latency_ms: number
+  model_usage: Record<string, number>
 }
 
 
