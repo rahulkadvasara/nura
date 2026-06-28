@@ -5,6 +5,15 @@ asyncio coroutine without needing the @pytest.mark.asyncio decorator.
 """
 
 import pytest
+import httpx
+
+# Monkeypatch httpx.Client to work around starlette testclient compatibility issues
+original_init = httpx.Client.__init__
+def patched_init(self, *args, **kwargs):
+    kwargs.pop("app", None)
+    original_init(self, *args, **kwargs)
+httpx.Client.__init__ = patched_init
+
 
 
 # Make every async test auto-wrapped by pytest-asyncio

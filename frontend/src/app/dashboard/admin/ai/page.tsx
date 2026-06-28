@@ -52,7 +52,9 @@ import {
   useDrugNormalize,
   useDrugStatistics,
   useCheckDrugInteractions,
-  useDrugInteractionsStatistics
+  useDrugInteractionsStatistics,
+  useValidateMedications,
+  useMedicationValidationStatistics
 } from '@/hooks/use-ai'
 import { HealthcareAgentsView } from './healthcare_agents_view'
 import { OperationsAgentsView } from './operations_agents_view'
@@ -6469,8 +6471,320 @@ function DrugInteractionPlaygroundView() {
   )
 }
 
+function MedicationValidationPlaygroundView() {
+  const [patientId, setPatientId] = useState('patient-123')
+  const [medsList, setMedsList] = useState<string[]>(['Aspirin'])
+  const [newMed, setNewMed] = useState('')
+  const [validationResult, setValidationResult] = useState<any>(null)
+
+  const validateMutation = useValidateMedications()
+  const { data: stats, refetch: refetchStats } = useMedicationValidationStatistics()
+
+  const handleAddMed = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (newMed.trim() && !medsList.includes(newMed.trim())) {
+      setMedsList([...medsList, newMed.trim()])
+      setNewMed('')
+    }
+  }
+
+  const handleRemoveMed = (index: number) => {
+    setMedsList(medsList.filter((_, i) => i !== index))
+  }
+
+  const handleValidate = async () => {
+    if (medsList.length === 0 || !patientId.trim()) return
+    try {
+      const res = await validateMutation.mutateAsync({
+        patient_id: patientId.trim(),
+        incoming_medications: medsList
+      })
+      setValidationResult(res)
+      refetchStats()
+    } catch (err) {
+      setValidationResult(null)
+    }
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
+      <div className="lg:col-span-2 space-y-6">
+        <Card className="border-slate-200 shadow-md bg-white">
+          <CardHeader className="border-b border-slate-100 bg-slate-50/50">
+            <CardTitle className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-teal-600" />
+              Medication Validation Pipeline
+            </CardTitle>
+            <CardDescription>
+              Validate incoming medications against a patient's active drug profile and audit interaction triggers.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6 space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">Patient Identifier</label>
+              <Input
+                placeholder="Enter Patient ID (e.g. patient-123)..."
+                value={patientId}
+                onChange={(e) => setPatientId(e.target.value)}
+                className="border-slate-200 focus:border-teal-500 focus:ring-teal-500"
+              />
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <label className="text-sm font-semibold text-slate-700">Incoming Medications to Validate</label>
+              <form onSubmit={handleAddMed} className="flex gap-2">
+                <Input
+                  placeholder="Type medication name (e.g. Aspirin, Warfarin)..."
+                  value={newMed}
+                  onChange={(e) => setNewMed(e.target.value)}
+                  className="border-slate-200 focus:border-teal-500 focus:ring-teal-500"
+                />
+                <Button type="submit" variant="outline" className="border-slate-200 text-slate-700 hover:bg-slate-50 font-medium">
+                  Add
+                </Button>
+              </form>
+            </div>
+
+            <div className="flex flex-wrap gap-2 py-2">
+              {medsList.length === 0 ? (
+                <span className="text-sm text-slate-400 italic">No incoming medications added yet.</span>
+              ) : (
+                medsList.map((med, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-800 border border-slate-200"
+                  >
+                    {med}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveMed(idx)}
+                      className="text-slate-400 hover:text-red-500 transition-colors"
+                    >
+                      &times;
+                    </button>
+                  </span>
+                ))
+              )}
+            </div>
+
+            <div className="pt-4 border-t border-slate-100 flex justify-end">
+              <Button
+                onClick={handleValidate}
+                disabled={medsList.length === 0 || !patientId.trim() || validateMutation.isPending}
+                className="bg-teal-600 hover:bg-teal-700 text-white font-medium shadow-sm transition-all"
+              >
+                {validateMutation.isPending ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Validating...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="h-4 w-4 mr-2" />
+                    Run Validation Pipeline
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {validationResult && (
+          <Card className="border-slate-200 shadow-md bg-white overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+            <CardHeader className="border-b border-slate-100 bg-slate-50/50">
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle className="text-lg font-semibold text-slate-800">
+                    Validation Results
+                  </CardTitle>
+                  <CardDescription>
+                    Pipeline evaluation outputs and clinician advisory.
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">
+                    Latency: {validationResult.latency_ms} ms
+                  </span>
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                      validationResult.decision === 'ALLOW'
+                        ? 'bg-teal-100 text-teal-800 border border-teal-200'
+                        : validationResult.decision === 'WARNING'
+                        ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                        : 'bg-red-100 text-red-800 border border-red-200'
+                    }`}
+                  >
+                    {validationResult.decision}
+                  </span>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-6">
+              {/* Collected active medications */}
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-slate-700">Collected Active Patient Medications:</h4>
+                <div className="flex flex-wrap gap-1.5">
+                  {validationResult.collected_medications?.length === 0 ? (
+                    <span className="text-sm text-slate-400 italic">No existing medications active in patient memory.</span>
+                  ) : (
+                    validationResult.collected_medications?.map((med: string, idx: number) => (
+                      <span key={idx} className="px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 font-mono">
+                        {med}
+                      </span>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Recommendations list */}
+              {validationResult.recommendations?.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-slate-700">Clinician Advisory Recommendations:</h4>
+                  <ul className="space-y-1.5">
+                    {validationResult.recommendations.map((rec: string, idx: number) => (
+                      <li key={idx} className="text-sm text-slate-600 flex items-start gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-teal-500 shrink-0 mt-0.5" />
+                        {rec}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Interaction Details Table */}
+              <div className="space-y-3 pt-2">
+                <h4 className="text-sm font-semibold text-slate-700">Detected Interaction Details:</h4>
+                {validationResult.detected_interactions?.length === 0 ? (
+                  <div className="p-4 rounded-lg bg-teal-50 text-teal-800 text-sm border border-teal-100 text-center font-medium">
+                    No potential safety conflicts or drug-drug interactions detected.
+                  </div>
+                ) : (
+                  <div className="border border-slate-200 rounded-lg overflow-hidden">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+                        <tr>
+                          <th className="p-3">Medication A</th>
+                          <th className="p-3">Medication B</th>
+                          <th className="p-3">Severity</th>
+                          <th className="p-3">Clinical Description</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {validationResult.detected_interactions.map((pair: any, idx: number) => (
+                          <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="p-3 font-medium text-slate-800 font-mono">
+                              {pair.drug_a}
+                              <span className="block text-[10px] text-slate-400">{pair.drug_a_normalized}</span>
+                            </td>
+                            <td className="p-3 font-medium text-slate-800 font-mono">
+                              {pair.drug_b}
+                              <span className="block text-[10px] text-slate-400">{pair.drug_b_normalized}</span>
+                            </td>
+                            <td className="p-3">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                  pair.severity === 'HIGH'
+                                    ? 'bg-red-100 text-red-800'
+                                    : pair.severity === 'MEDIUM'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : pair.severity === 'LOW'
+                                    ? 'bg-yellow-100 text-yellow-800'
+                                    : 'bg-slate-100 text-slate-800'
+                                }`}
+                              >
+                                {pair.severity}
+                              </span>
+                            </td>
+                            <td className="p-3 text-slate-600 leading-relaxed text-xs">
+                              {pair.description}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      <div className="space-y-6">
+        <Card className="border-slate-200 shadow-md bg-white">
+          <CardHeader className="pb-3 border-b border-slate-100">
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-sm font-semibold text-slate-700">
+                Pipeline Telemetry
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => refetchStats()}
+                className="h-8 w-8 text-slate-400 hover:text-slate-600"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4 space-y-4 text-sm text-slate-600">
+            <div className="flex justify-between items-center">
+              <span>Validation Queries:</span>
+              <span className="font-semibold text-slate-800">{stats?.validation_checks ?? 0}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span>Average Latency:</span>
+              <span className="font-semibold text-slate-800">
+                {stats?.validation_avg_latency_ms ? `${stats.validation_avg_latency_ms} ms` : '0 ms'}
+              </span>
+            </div>
+            <div className="pt-2 border-t border-slate-100 space-y-2">
+              <h5 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Decision Breakdown</h5>
+              <div className="flex justify-between items-center text-xs">
+                <span>ALLOW:</span>
+                <span className="font-semibold text-teal-600">{stats?.allow_decisions ?? 0}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span>WARNING:</span>
+                <span className="font-semibold text-amber-600">{stats?.warning_decisions ?? 0}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span>BLOCK:</span>
+                <span className="font-semibold text-red-600">{stats?.blocked_decisions ?? 0}</span>
+              </div>
+            </div>
+            <div className="pt-2 border-t border-slate-100 space-y-2">
+              <h5 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Trigger Sources</h5>
+              <div className="flex justify-between items-center text-xs">
+                <span>Reminder Agent:</span>
+                <span className="font-semibold text-slate-800">{stats?.reminder_validations ?? 0}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span>Prescription API:</span>
+                <span className="font-semibold text-slate-800">{stats?.prescription_validations ?? 0}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span>Report Sync:</span>
+                <span className="font-semibold text-slate-800">{stats?.report_validations ?? 0}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span>Patient Memory Summary:</span>
+                <span className="font-semibold text-slate-800">{stats?.patient_memory_validations ?? 0}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span>Other:</span>
+                <span className="font-semibold text-slate-800">{stats?.other_validations ?? 0}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
 function AIPlaygroundContent() {
-  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent' | 'workflow-engine' | 'router-agent' | 'core-agents' | 'healthcare-agents' | 'operations-agents' | 'drug-lookup' | 'drug-interactions'>('llm')
+  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent' | 'workflow-engine' | 'router-agent' | 'core-agents' | 'healthcare-agents' | 'operations-agents' | 'drug-lookup' | 'drug-interactions' | 'drug-validation'>('llm')
 
   return (
     <div className="space-y-6">
@@ -6680,6 +6994,17 @@ function AIPlaygroundContent() {
           Drug Interaction Engine
         </button>
         <button
+          onClick={() => setActiveTab('drug-validation')}
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
+            activeTab === 'drug-validation'
+              ? 'border-teal-600 text-teal-600 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Sparkles className="h-4 w-4" />
+          Medication Validation
+        </button>
+        <button
           onClick={() => setActiveTab('integration')}
           className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
             activeTab === 'integration'
@@ -6722,6 +7047,8 @@ function AIPlaygroundContent() {
         <DrugLookupPlaygroundView />
       ) : activeTab === 'drug-interactions' ? (
         <DrugInteractionPlaygroundView />
+      ) : activeTab === 'drug-validation' ? (
+        <MedicationValidationPlaygroundView />
       ) : (
         <IntegrationPlaygroundView />
       )}

@@ -44,6 +44,7 @@ from app.core.dependencies import (
     get_drug_normalizer,
     get_drug_lookup_service,
     get_drug_interaction_engine,
+    get_medication_validation_service,
 )
 from app.models import UserRole, UserInDB
 from app.schemas.ai import (
@@ -60,6 +61,8 @@ from app.schemas.ai import (
     DrugTelemetryResponse,
     DrugCheckRequest,
     DrugCheckResponse,
+    MedicationValidateRequest,
+    MedicationValidateResponse,
     DocumentIndexRequest,
     DocumentIndexResponse,
     BatchDocumentIndexRequest,
@@ -1873,6 +1876,48 @@ async def get_drug_interactions_statistics(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch drug interaction statistics: {str(e)}"
         )
+
+
+@router.post(
+    "/drug/validate",
+    response_model=MedicationValidateResponse,
+    summary="Validate incoming medications against a patient's active drugs. Guarded: Admin Only.",
+)
+async def validate_medications(
+    payload: MedicationValidateRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    validation_service = Depends(get_medication_validation_service),
+):
+    try:
+        return await validation_service.validate_medications(
+            patient_id=payload.patient_id,
+            incoming_medications=payload.incoming_medications,
+            source="api"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Medication validation failed: {str(e)}"
+        )
+
+
+@router.get(
+    "/drug/validation/statistics",
+    response_model=DrugTelemetryResponse,
+    summary="Retrieve cumulative medication validation statistics. Guarded: Admin Only.",
+)
+async def get_medication_validation_statistics(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+):
+    try:
+        from app.services.drug_safety.telemetry import drug_safety_telemetry
+        return drug_safety_telemetry.get_statistics()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch medication validation statistics: {str(e)}"
+        )
+
 
 
 

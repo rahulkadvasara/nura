@@ -2,7 +2,7 @@ import threading
 from typing import Dict, Any
 
 class DrugSafetyTelemetry:
-    """Thread-safe telemetry tracker for Drug Safety lookup, normalization, and interaction checking."""
+    """Thread-safe telemetry tracker for Drug Safety lookup, normalization, interaction checking, and validations."""
     
     def __init__(self):
         self._lock = threading.Lock()
@@ -26,6 +26,19 @@ class DrugSafetyTelemetry:
             "UNKNOWN": 0,
             "NONE": 0
         }
+        
+        # Validation statistics
+        self.validation_checks = 0
+        self.validation_avg_latency_ms = 0.0
+        self.reminder_validations = 0
+        self.prescription_validations = 0
+        self.report_validations = 0
+        self.patient_memory_validations = 0
+        self.other_validations = 0
+        
+        self.allow_decisions = 0
+        self.warning_decisions = 0
+        self.blocked_decisions = 0
 
     def record_normalization(self) -> None:
         """Increment count of normalization operations performed."""
@@ -70,6 +83,37 @@ class DrugSafetyTelemetry:
             else:
                 self.severity_distribution["UNKNOWN"] += 1
 
+    def record_validation(self, source: str, decision: str, latency_ms: float) -> None:
+        """Record telemetry for a medication validation query."""
+        with self._lock:
+            self.validation_checks += 1
+            
+            # Running average latency
+            n = self.validation_checks
+            self.validation_avg_latency_ms = (self.validation_avg_latency_ms * (n - 1) + latency_ms) / n
+            
+            # Increment source counters
+            src = source.lower()
+            if src == "reminder":
+                self.reminder_validations += 1
+            elif src == "prescription":
+                self.prescription_validations += 1
+            elif src == "report":
+                self.report_validations += 1
+            elif src == "patient_memory":
+                self.patient_memory_validations += 1
+            else:
+                self.other_validations += 1
+                
+            # Increment decision counters
+            dec = decision.upper()
+            if dec == "ALLOW":
+                self.allow_decisions += 1
+            elif dec == "WARNING":
+                self.warning_decisions += 1
+            elif dec == "BLOCK":
+                self.blocked_decisions += 1
+
     def get_statistics(self) -> Dict[str, Any]:
         """Return a snapshot dictionary of the current telemetry metrics."""
         with self._lock:
@@ -91,7 +135,19 @@ class DrugSafetyTelemetry:
                 "interaction_checks": self.interaction_checks,
                 "pairs_evaluated": self.pairs_evaluated,
                 "interaction_avg_latency_ms": round(self.interaction_avg_latency_ms, 2),
-                "severity_distribution": dict(self.severity_distribution)
+                "severity_distribution": dict(self.severity_distribution),
+                
+                # Validation Stats
+                "validation_checks": self.validation_checks,
+                "validation_avg_latency_ms": round(self.validation_avg_latency_ms, 2),
+                "reminder_validations": self.reminder_validations,
+                "prescription_validations": self.prescription_validations,
+                "report_validations": self.report_validations,
+                "patient_memory_validations": self.patient_memory_validations,
+                "other_validations": self.other_validations,
+                "allow_decisions": self.allow_decisions,
+                "warning_decisions": self.warning_decisions,
+                "blocked_decisions": self.blocked_decisions
             }
 
     def reset(self) -> None:
@@ -114,6 +170,17 @@ class DrugSafetyTelemetry:
                 "UNKNOWN": 0,
                 "NONE": 0
             }
+            
+            self.validation_checks = 0
+            self.validation_avg_latency_ms = 0.0
+            self.reminder_validations = 0
+            self.prescription_validations = 0
+            self.report_validations = 0
+            self.patient_memory_validations = 0
+            self.other_validations = 0
+            self.allow_decisions = 0
+            self.warning_decisions = 0
+            self.blocked_decisions = 0
 
 
 # Global telemetry tracker instance

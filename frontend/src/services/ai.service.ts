@@ -466,6 +466,16 @@ export const aiService = {
   getDrugInteractionsStatistics: async (): Promise<DrugTelemetryResponse> => {
     const response = await apiClient.get<DrugTelemetryResponse>('/ai/drug/interactions/statistics')
     return response.data
+  },
+
+  validateMedications: async (request: MedicationValidateRequest): Promise<MedicationValidateResponse> => {
+    const response = await apiClient.post<MedicationValidateResponse>('/ai/drug/validate', request)
+    return response.data
+  },
+
+  getMedicationValidationStatistics: async (): Promise<DrugTelemetryResponse> => {
+    const response = await apiClient.get<DrugTelemetryResponse>('/ai/drug/validation/statistics')
+    return response.data
   }
 }
 
@@ -1103,6 +1113,18 @@ export interface DrugTelemetryResponse {
   pairs_evaluated: number
   interaction_avg_latency_ms: number
   severity_distribution: Record<string, number>
+
+  // Validation stats
+  validation_checks: number
+  validation_avg_latency_ms: number
+  reminder_validations: number
+  prescription_validations: number
+  report_validations: number
+  patient_memory_validations: number
+  other_validations: number
+  allow_decisions: number
+  warning_decisions: number
+  blocked_decisions: number
 }
 
 export interface InteractionPairDetail {
@@ -1121,6 +1143,20 @@ export interface DrugCheckResponse {
   severity: string
   recommendations: string[]
   statistics: DrugTelemetryResponse
+  latency_ms: number
+}
+
+export interface MedicationValidateRequest {
+  patient_id: string
+  incoming_medications: string[]
+}
+
+export interface MedicationValidateResponse {
+  collected_medications: string[]
+  detected_interactions: InteractionPairDetail[]
+  severity: string
+  decision: string
+  recommendations: string[]
   latency_ms: number
 }
 

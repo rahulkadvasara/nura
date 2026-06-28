@@ -162,6 +162,8 @@ from app.schemas.ai import (
     DrugCheckRequest,
     DrugCheckResponse,
     InteractionPairDetail,
+    MedicationValidateRequest,
+    MedicationValidateResponse,
 )
 
 from app.schemas.graph import (
@@ -374,4 +376,6 @@ __all__ = [
     "DrugCheckRequest",
     "DrugCheckResponse",
     "InteractionPairDetail",
+    "MedicationValidateRequest",
+    "MedicationValidateResponse",
 ]

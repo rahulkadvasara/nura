@@ -620,9 +620,62 @@ def get_drug_interaction_engine(
     lookup_service = Depends(get_drug_lookup_service)
 ):
     """Get DrugInteractionEngine instance"""
+    from fastapi.params import Depends as DependsType
+    if isinstance(lookup_service, DependsType):
+        lookup_service = get_drug_lookup_service()
     from app.services.drug_safety.interaction_engine import DrugInteractionEngine
     database = get_database()
     return DrugInteractionEngine(database, lookup_service)
+
+
+def get_medication_collector(
+    normalizer = Depends(get_drug_normalizer)
+):
+    """Get MedicationCollector instance"""
+    from fastapi.params import Depends as DependsType
+    if isinstance(normalizer, DependsType):
+        normalizer = get_drug_normalizer()
+    from app.services.drug_safety.medication_collector import MedicationCollector
+    from app.repositories.prescription_repository import PrescriptionRepository
+    from app.repositories.reminder_repository import ReminderRepository
+    from app.repositories.report_repository import ReportRepository
+    from app.repositories.patient_memory_repository import PatientMemoryRepository
+    
+    database = get_database()
+    return MedicationCollector(
+        prescription_repository=PrescriptionRepository(database.prescriptions),
+        reminder_repository=ReminderRepository(database.reminders),
+        report_repository=ReportRepository(database.reports),
+        patient_memory_repository=PatientMemoryRepository(database.patient_memory),
+        normalizer=normalizer
+    )
+
+
+def get_medication_validation_service(
+    collector = Depends(get_medication_collector),
+    interaction_engine = Depends(get_drug_interaction_engine),
+    normalizer = Depends(get_drug_normalizer)
+):
+    """Get MedicationValidationService instance"""
+    from fastapi.params import Depends as DependsType
+    if isinstance(collector, DependsType):
+        collector = get_medication_collector()
+    if isinstance(interaction_engine, DependsType):
+        interaction_engine = get_drug_interaction_engine()
+    if isinstance(normalizer, DependsType):
+        normalizer = get_drug_normalizer()
+    from app.services.drug_safety.validation_service import MedicationValidationService
+    from app.services.drug_safety.decision_engine import ValidationDecisionEngine
+    
+    database = get_database()
+    decision_engine = ValidationDecisionEngine(interaction_engine, normalizer)
+    return MedicationValidationService(
+        database=database,
+        collector=collector,
+        decision_engine=decision_engine,
+        interaction_engine=interaction_engine
+    )
+
 
 
 
@@ -988,7 +1041,8 @@ def get_drug_interaction_agent() -> DrugInteractionAgent:
         _drug_interaction_agent_instance = DrugInteractionAgent(
             retrieval_agent=get_retrieval_agent(),
             patient_memory_repository=get_patient_memory_repository(),
-            ai_service=get_ai_service()
+            ai_service=get_ai_service(),
+            validation_service=get_medication_validation_service()
         )
     return _drug_interaction_agent_instance
 

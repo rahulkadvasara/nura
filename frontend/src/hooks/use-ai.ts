@@ -52,6 +52,8 @@ import {
   DrugNormalizeResponse,
   DrugTelemetryResponse,
   DrugCheckResponse,
+  MedicationValidateRequest,
+  MedicationValidateResponse,
 } from '@/services/ai.service'
 
 /**
@@ -762,6 +764,34 @@ export function useDrugInteractionsStatistics() {
     queryKey: ['admin', 'ai', 'drug-interactions', 'statistics'],
     queryFn: async () => {
       return await aiService.getDrugInteractionsStatistics()
+    },
+    refetchInterval: 10000, // Refresh statistics every 10 seconds
+  })
+}
+
+/**
+ * Custom hook to execute a medication validation check for incoming drugs against a patient context.
+ */
+export function useValidateMedications() {
+  const queryClient = useQueryClient()
+  return useMutation<MedicationValidateResponse, Error, MedicationValidateRequest>({
+    mutationFn: async (request: MedicationValidateRequest) => {
+      return await aiService.validateMedications(request)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'drug-validation', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to fetch cumulative medication validation statistics periodically.
+ */
+export function useMedicationValidationStatistics() {
+  return useQuery<DrugTelemetryResponse, Error>({
+    queryKey: ['admin', 'ai', 'drug-validation', 'statistics'],
+    queryFn: async () => {
+      return await aiService.getMedicationValidationStatistics()
     },
     refetchInterval: 10000, // Refresh statistics every 10 seconds
   })

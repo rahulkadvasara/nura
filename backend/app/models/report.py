@@ -119,6 +119,7 @@ class ReportBase(BaseModel):
     summary_confidence: Optional[float] = Field(None, description="Overall LLM generation confidence score")
     summary_version: Optional[str] = Field(None, description="AI summary prompt template version")
     summary_generated_at: Optional[datetime] = Field(None, description="AI summary generation timestamp")
+    interaction_findings: Optional[List[Dict[str, Any]]] = Field(None, description="Detailed interaction findings discovered during sync validation")
 
 
 class ReportCreate(ReportBase):
@@ -182,6 +183,7 @@ class ReportUpdate(BaseModel):
     summary_confidence: Optional[float] = None
     summary_version: Optional[str] = None
     summary_generated_at: Optional[datetime] = None
+    interaction_findings: Optional[List[Dict[str, Any]]] = None
 
 
 class ReportInDB(ReportBase):

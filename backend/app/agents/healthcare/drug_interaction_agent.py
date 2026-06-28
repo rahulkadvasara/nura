@@ -1,172 +1,153 @@
 """
 Nura - Drug Interaction Agent
-Concrete AI Agent for validating medication safety, allergy conflicts, and drug-drug interactions.
+Concrete deterministic Agent for validating medication safety and drug-drug interactions.
 """
 
 import time
+import logging
 from typing import Any, Optional, Dict, List
 
 from app.agents.base.base_agent import BaseAgent
 from app.agents.base.context import AgentContext
 from app.agents.healthcare.schemas import DrugInteractionAgentResponse
-from app.agents.healthcare.prompts import render_healthcare_prompt
 from app.agents.healthcare.telemetry import get_healthcare_agents_telemetry
-from app.agents.healthcare.utils import clean_json_response
 from app.core.ai_config import ai_settings
 from app.services.ai_service import AIService
 from app.agents.retrieval_agent import RetrievalAgent
 from app.repositories.patient_memory_repository import PatientMemoryRepository
 
+logger = logging.getLogger("nura.agents.healthcare.drug_interaction_agent")
+
 
 class DrugInteractionAgent(BaseAgent):
-    """Production agent analyzing drug-drug interactions, allergy conflicts, and safety disclaimers"""
+    """Deterministic agent analyzing drug-drug interactions and safety disclaimers using ValidationService."""
 
     def __init__(
         self,
         retrieval_agent: RetrievalAgent,
         patient_memory_repository: PatientMemoryRepository,
         ai_service: AIService,
+        validation_service: Optional[Any] = None,
         settings=None
     ):
         super().__init__(name="DrugInteractionAgent", settings=settings or ai_settings)
         self.retrieval_agent = retrieval_agent
         self.patient_memory_repository = patient_memory_repository
         self.ai_service = ai_service
+        self.validation_service = validation_service
         self.telemetry = get_healthcare_agents_telemetry()
 
     def _format_patient_memory(self, memory: Any) -> str:
-        """Helper to format memory details for prompt usage"""
+        """Helper to format memory details for telemetry/logging if needed"""
         if not memory:
             return "No profile memory aggregated."
             
         lines = []
-        lines.append(f"AI longitudinal Summary: {memory.ai_summary or 'None'}")
         lines.append(f"Chronic Conditions: {', '.join(memory.chronic_conditions or [])}")
         lines.append(f"Allergies: {', '.join(memory.allergies or [])}")
         lines.append(f"Active Medications: {', '.join(memory.medications or [])}")
-        lines.append(f"Diagnoses: {', '.join(memory.diagnoses or [])}")
         return "\n".join(lines)
 
     async def execute(self, input_data: Any, context: Optional[AgentContext] = None) -> Any:
         """
-        Execute Drug Interaction safety diagnostic:
-        - Query Qdrant via RetrievalAgent
-        - Load patient memory from MongoDB PatientMemoryRepository
-        - Render prompt
-        - Call Groq in structured JSON format
-        - Parse outcomes and enforce safety disclosures
+        Execute Drug Interaction safety diagnostic using deterministic MedicationValidationService:
+        - Parses medication name from query input.
+        - Resolves patient_id from agent context.
+        - Runs validation service checks.
+        - Formulates deterministic DrugInteractionAgentResponse.
         """
-        query = str(input_data).strip()
+        query_str = str(input_data).strip()
         patient_id = context.patient_id if context else None
         
         start_time = time.perf_counter()
-        retrieval_start = time.perf_counter()
         
-        # 1. Query Qdrant drug safety guidelines (Force intent to drug_question)
-        retrieval_ctx = context.model_copy(update={
-            "metadata": {
-                **(context.metadata or {}),
-                "intent": "drug_question"
-            }
-        }) if context else AgentContext(metadata={"intent": "drug_question"})
+        if not patient_id:
+            patient_id = "system_test" # Fallback for local sandbox runs without explicit context
 
-        retrieval_res = await self.retrieval_agent.run(query, retrieval_ctx)
-        retrieval_latency = (time.perf_counter() - retrieval_start) * 1000.0
-        
-        retrieval_data = retrieval_res.response or {}
-        retrieved_context = retrieval_data.get("context", "")
-        citations_raw = retrieval_data.get("retrieved_chunks", [])
-        
-        citations = []
-        for c in citations_raw:
-            citations.append({
-                "source": c.get("metadata", {}).get("source", "drug_knowledge"),
-                "text": c.get("text", "")[:200] + "...",
-                "score": c.get("score", 0.0)
-            })
+        # 1. Parse incoming medication names from input query string
+        # Clean prefix like "Check safety parameters for:"
+        prefix = "Check safety parameters for:"
+        if query_str.lower().startswith(prefix.lower()):
+            query_str = query_str[len(prefix):].strip()
+            
+        incoming_meds = [med.strip() for med in query_str.split(",") if med.strip()]
+        if not incoming_meds:
+            incoming_meds = ["medication"]
 
-        # 2. Query patient memory details
-        patient_memory_str = "No patient memory details available."
-        if patient_id:
-            try:
-                patient_mem = await self.patient_memory_repository.get_by_patient_id(patient_id)
-                patient_memory_str = self._format_patient_memory(patient_mem)
-            except Exception as e:
-                self.logger.warning(f"Failed to load patient memory: {str(e)}")
+        # Ensure validation service is available
+        if not self.validation_service:
+            from app.core.dependencies import get_medication_validation_service
+            self.validation_service = get_medication_validation_service()
 
-        # 3. Formulate prompts
-        try:
-            rendered_system = render_healthcare_prompt("drug_interaction_system", {}, is_system=True)
-            rendered_user = render_healthcare_prompt("drug_interaction_user", {
-                "patient_context": patient_memory_str,
-                "retrieved_context": retrieved_context or "No drug interaction guidelines retrieved.",
-                "query": query
-            })
-        except Exception as e:
-            self.logger.error(f"Failed to render drug templates: {str(e)}")
-            rendered_system = "You are a clinical medication safety agent. Return valid JSON containing interaction_found, severity, interaction_summary, warnings, and alternatives."
-            rendered_user = f"Context:\n{retrieved_context}\n\nPatient Memory:\n{patient_memory_str}\n\nQuery: {query}"
-
-        # 4. Invoke LLM structured JSON output
-        groq_start = time.perf_counter()
-        ai_res = await self.ai_service.generate(
-            prompt=rendered_user,
-            system_prompt=rendered_system,
-            request_id=context.request_id if context else None
+        # 2. Run MedicationValidationService check
+        val_res = await self.validation_service.validate_medications(
+            patient_id=patient_id,
+            incoming_medications=incoming_meds,
+            source="reminder" # Trace validation source
         )
-        groq_latency = (time.perf_counter() - groq_start) * 1000.0
-        
-        total_latency = (time.perf_counter() - start_time) * 1000.0
 
-        # Parse structured output variables
-        parsed_json = clean_json_response(ai_res.response) or {}
+        interaction_found = val_res["decision"] in ("WARNING", "BLOCK")
+        severity = val_res["severity"]
+        recommendations = val_res["recommendations"]
+        detected_interactions = val_res["detected_interactions"]
         
-        interaction_found = bool(parsed_json.get("interaction_found", False))
-        severity = parsed_json.get("severity", "LOW").upper()
-        interaction_summary = parsed_json.get("interaction_summary", "Medication validation completed.")
-        warnings = parsed_json.get("warnings", [])
-        alternatives = parsed_json.get("alternatives", [])
+        # Build warnings list
+        warnings = [item.description for item in detected_interactions]
 
-        # Enforce clinical disclaimers
+        # Build citations
+        citations = []
+        for inter in detected_interactions:
+            citations.append({
+                "source": "drug_interactions",
+                "text": f"{inter.drug_a} and {inter.drug_b} interaction: {inter.description}",
+                "score": 1.0
+            })
+
+        # Enforce clinical disclaimers in the interaction summary
         notice = "This drug safety check is for informational purposes only. It is not a substitute for professional medical advice, diagnosis, or treatment. Always consult your physician before starting, stopping, or changing any medication."
-        if notice.lower() not in interaction_summary.lower():
-            interaction_summary = f"{interaction_summary}\n\nDisclaimer: {notice}"
+        interaction_summary = " ".join(recommendations)
+        interaction_summary = f"{interaction_summary}\n\nDisclaimer: {notice}"
 
-        if severity not in ("LOW", "MEDIUM", "HIGH", "CRITICAL"):
+        # Standardize severity formatting for legacy agent schemas
+        if severity == "NONE":
             severity = "LOW"
+        elif severity == "UNKNOWN":
+            severity = "LOW"
+
+        total_latency = (time.perf_counter() - start_time) * 1000.0
 
         agent_res = DrugInteractionAgentResponse(
             interaction_found=interaction_found,
             severity=severity,
             interaction_summary=interaction_summary,
             warnings=warnings,
-            alternatives=alternatives,
+            alternatives=[],
             citations=citations,
             metadata={
-                "retrieval_latency_ms": retrieval_latency,
-                "groq_latency_ms": groq_latency,
+                "retrieval_latency_ms": 0.0,
+                "groq_latency_ms": 0.0,
                 "total_latency_ms": total_latency,
-                "prompt_version": "1.0.0"
+                "prompt_version": "1.0.0-deterministic"
             },
             usage={
-                "prompt_tokens": ai_res.prompt_tokens,
-                "completion_tokens": ai_res.completion_tokens,
-                "total_tokens": ai_res.total_tokens
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0
             }
         )
 
-        # 5. Record telemetry
+        # 3. Record telemetry on the legacy agent telemetry dashboard
         self.telemetry.record_run(
             agent_name=self.name,
             latency_ms=total_latency,
-            prompt_tokens=ai_res.prompt_tokens,
-            completion_tokens=ai_res.completion_tokens,
-            total_tokens=ai_res.total_tokens,
-            estimated_cost=ai_res.estimated_cost,
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            estimated_cost=0.0,
             success=True,
-            retrieval_latency_ms=retrieval_latency,
-            groq_latency_ms=groq_latency,
-            citation_count=len(citations)
+            retrieval_latency_ms=0.0,
+            groq_latency_ms=0.0,
+            citation_count=0
         )
         
         return agent_res

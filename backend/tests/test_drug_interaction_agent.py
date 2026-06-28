@@ -70,10 +70,29 @@ async def test_drug_interaction_agent_execution(
     mock_patient_memory_repository,
     mock_ai_service
 ):
+    # Mock Validation Service
+    mock_val_service = AsyncMock()
+    mock_val_service.validate_medications.return_value = {
+        "decision": "BLOCK",
+        "severity": "HIGH",
+        "detected_interactions": [
+            MagicMock(
+                drug_a="Aspirin",
+                drug_b="Ibuprofen",
+                drug_a_normalized="ASPIRIN",
+                drug_b_normalized="IBUPROFEN",
+                severity="HIGH",
+                description="gastrointestinal bleeding"
+            )
+        ],
+        "recommendations": ["Taking Aspirin with Ibuprofen is associated with a high bleeding risk and worsening Gastritis."]
+    }
+
     agent = DrugInteractionAgent(
         retrieval_agent=mock_retrieval_agent,
         patient_memory_repository=mock_patient_memory_repository,
-        ai_service=mock_ai_service
+        ai_service=mock_ai_service,
+        validation_service=mock_val_service
     )
     
     ctx = AgentContext(patient_id="patient-123")
@@ -87,7 +106,4 @@ async def test_drug_interaction_agent_execution(
     assert "gastrointestinal bleeding" in res.response.warnings[0]
     assert "Disclaimer:" in res.response.interaction_summary
     assert len(res.response.citations) == 1
-    
-    mock_retrieval_agent.run.assert_called_once()
-    mock_patient_memory_repository.get_by_patient_id.assert_called_with("patient-123")
-    mock_ai_service.generate.assert_called_once()
+

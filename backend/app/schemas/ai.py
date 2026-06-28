@@ -214,9 +214,38 @@ class DrugTelemetryResponse(BaseModel):
     pairs_evaluated: int = Field(..., description="Count of medication pairs evaluated")
     interaction_avg_latency_ms: float = Field(..., description="Running average interaction check latency in milliseconds")
     severity_distribution: Dict[str, int] = Field(..., description="Frequency counts of overall severity levels detected")
+    
+    # Validation stats
+    validation_checks: int = Field(..., description="Count of validation queries executed")
+    validation_avg_latency_ms: float = Field(..., description="Running average validation check latency in milliseconds")
+    reminder_validations: int = Field(..., description="Count of validations from reminders")
+    prescription_validations: int = Field(..., description="Count of validations from prescriptions")
+    report_validations: int = Field(..., description="Count of validations from clinical reports")
+    patient_memory_validations: int = Field(..., description="Count of validations from patient memory summary builds")
+    other_validations: int = Field(..., description="Count of validations from other sources")
+    allow_decisions: int = Field(..., description="Count of ALLOW decisions returned")
+    warning_decisions: int = Field(..., description="Count of WARNING decisions returned")
+    blocked_decisions: int = Field(..., description="Count of BLOCK decisions returned")
 
 
 from app.services.drug_safety.models import DrugCheckRequest, DrugCheckResponse, InteractionPairDetail
+
+
+class MedicationValidateRequest(BaseModel):
+    """Request schema to validate incoming medications against a patient's context"""
+    patient_id: str = Field(..., description="Patient identifier to evaluate against")
+    incoming_medications: List[str] = Field(..., description="List of raw medication names to validate")
+
+
+class MedicationValidateResponse(BaseModel):
+    """Response schema containing validation results and interactions"""
+    collected_medications: List[str] = Field(..., description="List of currently active patient medications")
+    detected_interactions: List[InteractionPairDetail] = Field(..., description="Matched drug-drug interactions")
+    severity: str = Field(..., description="Overall severity of the validation check")
+    decision: str = Field(..., description="Evaluation decision: ALLOW, WARNING, or BLOCK")
+    recommendations: List[str] = Field(..., description="Actionable health recommendations")
+    latency_ms: float = Field(..., description="Validation query execution time in milliseconds")
+
 
 
 

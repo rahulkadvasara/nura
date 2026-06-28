@@ -90,6 +90,50 @@ class ReportSyncService:
                 updated_mem.summary_version = 1
                 await self.patient_memory_repository.create(updated_mem)
 
+            # 2.5 Medication Validation Integration
+            try:
+                from app.core.dependencies import get_medication_validation_service
+                validation_service = get_medication_validation_service()
+                
+                # Extract raw medication names from the report
+                report_meds = [
+                    med.get("drug_name") or med.get("medicine")
+                    for med in getattr(report, "medications", []) or []
+                    if med.get("drug_name") or med.get("medicine")
+                ]
+                
+                if report_meds:
+                    val_res = await validation_service.validate_medications(
+                        patient_id=patient_id,
+                        incoming_medications=report_meds,
+                        source="report"
+                    )
+                    
+                    # Store interaction findings on the report document
+                    findings = []
+                    for inter in val_res.get("detected_interactions", []):
+                        findings.append({
+                            "drug_a": inter.drug_a,
+                            "drug_b": inter.drug_b,
+                            "drug_a_normalized": inter.drug_a_normalized,
+                            "drug_b_normalized": inter.drug_b_normalized,
+                            "severity": inter.severity,
+                            "description": inter.description
+                        })
+                    
+                    # Save interaction findings directly to the report document
+                    await self.report_repository.collection.update_one(
+                        {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id},
+                        {"$set": {"interaction_findings": findings}}
+                    )
+
+                # Re-evaluate the patient's full active list and update validation_summary inside patient_memory
+                await validation_service.validate_and_update_patient_memory(patient_id)
+
+            except Exception as validation_err:
+                logger.error(f"Error executing medication safety validation during report sync for report {report_id}: {validation_err}")
+
+
             # 3. Build optimized semantic report chunks
             chunks = self.chunk_builder.build_report_chunks(report)
             content_hash = self.calculate_chunks_hash(chunks)

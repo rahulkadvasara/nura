@@ -43,6 +43,7 @@ class PatientMemoryBase(BaseModel):
     procedures: List[str] = Field(default_factory=list, description="Extracted clinical procedures history")
     medical_history: List[str] = Field(default_factory=list, description="Textual patient history records")
     report_summaries: List[Dict[str, Any]] = Field(default_factory=list, description="History log of individual report summaries")
+    validation_summary: Optional[Dict[str, Any]] = Field(default=None, description="Latest drug interaction validation summary")
 
 
 class PatientMemoryCreate(PatientMemoryBase):
@@ -77,6 +78,7 @@ class PatientMemoryUpdate(BaseModel):
     procedures: Optional[List[str]] = None
     medical_history: Optional[List[str]] = None
     report_summaries: Optional[List[Dict[str, Any]]] = None
+    validation_summary: Optional[Dict[str, Any]] = None
 
 
 class PatientMemoryInDB(PatientMemoryBase):
