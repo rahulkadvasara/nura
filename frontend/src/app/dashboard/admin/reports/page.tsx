@@ -34,8 +34,13 @@ function AdminReportsDashboardContent() {
   const [aiTelemetry, setAiTelemetry] = useState<any | null>(null)
   const [syncTelemetry, setSyncTelemetry] = useState<any | null>(null)
   const [pipelineTelemetry, setPipelineTelemetry] = useState<any | null>(null)
+  const [systemHealth, setSystemHealth] = useState<any | null>(null)
+  const [workerStatus, setWorkerStatus] = useState<any | null>(null)
+  const [queueStats, setQueueStats] = useState<any | null>(null)
+  const [cacheStats, setCacheStats] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all')
+  const [systemMonitorTab, setSystemMonitorTab] = useState<'workers' | 'queue' | 'cache' | 'failures'>('workers')
   
   // Inspecting report details
   const [inspectingReport, setInspectingReport] = useState<ReportResponse | null>(null)
@@ -94,6 +99,32 @@ function AdminReportsDashboardContent() {
         setPipelineTelemetry(pipeStats)
       } catch (err) {
         console.error('Failed to load pipeline telemetry', err)
+      }
+
+      // Sprint 7: System monitoring
+      try {
+        const health = await reportService.getSystemHealth()
+        setSystemHealth(health)
+      } catch (err) {
+        console.error('Failed to load system health', err)
+      }
+      try {
+        const workers = await reportService.getWorkerStatus()
+        setWorkerStatus(workers)
+      } catch (err) {
+        console.error('Failed to load worker status', err)
+      }
+      try {
+        const queue = await reportService.getQueueStats()
+        setQueueStats(queue)
+      } catch (err) {
+        console.error('Failed to load queue stats', err)
+      }
+      try {
+        const cache = await reportService.getCacheStats()
+        setCacheStats(cache)
+      } catch (err) {
+        console.error('Failed to load cache stats', err)
       }
     } catch (e) {
       console.error(e)
@@ -409,6 +440,195 @@ function AdminReportsDashboardContent() {
           </CardContent>
         </Card>
       )}
+
+      {/* Sprint 7: System Health Monitoring Console */}
+      <Card className="border border-slate-200 shadow-sm bg-white mb-8">
+        <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+              <Cpu className="w-4 h-4 text-indigo-500" />
+              System Health Monitor
+              {systemHealth && (
+                <span className={`ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  systemHealth.health === 'healthy' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                }`}>
+                  {systemHealth.health?.toUpperCase() || 'UNKNOWN'}
+                </span>
+              )}
+            </CardTitle>
+            {/* Tab switcher */}
+            <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
+              {(['workers', 'queue', 'cache', 'failures'] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setSystemMonitorTab(tab)}
+                  className={`text-[10px] font-bold px-3 py-1 rounded-md capitalize transition-all ${
+                    systemMonitorTab === tab ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-4">
+          {systemMonitorTab === 'workers' && (
+            <div>
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="border rounded-lg p-3 bg-indigo-50 border-indigo-100 text-center">
+                  <p className="text-[10px] font-bold text-indigo-500 uppercase mb-1">Total Workers</p>
+                  <p className="text-2xl font-extrabold text-indigo-700">{workerStatus?.total_workers ?? systemHealth?.workers?.total ?? '—'}</p>
+                </div>
+                <div className="border rounded-lg p-3 bg-emerald-50 border-emerald-100 text-center">
+                  <p className="text-[10px] font-bold text-emerald-500 uppercase mb-1">Active</p>
+                  <p className="text-2xl font-extrabold text-emerald-700">{workerStatus?.active_workers ?? systemHealth?.workers?.active ?? '—'}</p>
+                </div>
+                <div className="border rounded-lg p-3 bg-slate-50 border-slate-200 text-center">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Idle</p>
+                  <p className="text-2xl font-extrabold text-slate-700">{workerStatus?.idle_workers ?? systemHealth?.workers?.idle ?? '—'}</p>
+                </div>
+              </div>
+              {workerStatus?.workers && workerStatus.workers.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase">Worker Details</p>
+                  {workerStatus.workers.map((w: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between text-xs bg-slate-50 border border-slate-200 rounded px-3 py-2">
+                      <span className="font-mono text-slate-600">{w.worker_id}</span>
+                      <div className="flex items-center gap-2">
+                        {w.current_job_id && <span className="text-[10px] text-amber-600 font-semibold">Job: {w.current_job_id.slice(-8)}</span>}
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          w.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                        }`}>
+                          {w.is_active ? 'ACTIVE' : 'IDLE'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {(!workerStatus?.workers || workerStatus.workers.length === 0) && (
+                <p className="text-xs text-slate-400 italic">No worker heartbeat data — workers may be starting up</p>
+              )}
+            </div>
+          )}
+
+          {systemMonitorTab === 'queue' && (
+            <div>
+              <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-4">
+                {[['Pending', queueStats?.stats?.pending ?? 0, 'bg-slate-50 border-slate-200 text-slate-700'],
+                  ['Queued', queueStats?.stats?.queued ?? 0, 'bg-blue-50 border-blue-100 text-blue-700'],
+                  ['Processing', queueStats?.stats?.processing ?? 0, 'bg-amber-50 border-amber-100 text-amber-700'],
+                  ['Completed', queueStats?.stats?.completed ?? 0, 'bg-emerald-50 border-emerald-100 text-emerald-700'],
+                  ['Failed', queueStats?.stats?.failed ?? 0, 'bg-red-50 border-red-100 text-red-700'],
+                  ['Dead Letter', queueStats?.stats?.dead_letter ?? 0, 'bg-rose-50 border-rose-200 text-rose-700'],
+                ].map(([label, val, cls]) => (
+                  <div key={label as string} className={`border rounded-lg p-3 text-center ${cls}`}>
+                    <p className="text-[9px] font-bold uppercase opacity-70 mb-1">{label}</p>
+                    <p className="text-xl font-extrabold">{val as number}</p>
+                  </div>
+                ))}
+              </div>
+              {queueStats?.recent_failures?.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Recent Queue Failures</p>
+                  <div className="space-y-1">
+                    {queueStats.recent_failures.slice(0, 5).map((f: any, i: number) => (
+                      <div key={i} className="flex items-start justify-between text-xs bg-red-50 border border-red-100 rounded px-3 py-2">
+                        <span className="text-red-700 truncate flex-1 mr-2">{f.errors?.[f.errors.length - 1] || 'Unknown error'}</span>
+                        <span className="text-[10px] text-red-500 font-bold shrink-0">{f.report_id?.slice(-8)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {systemMonitorTab === 'cache' && (
+            <div className="space-y-4">
+              {[['OCR Cache', 'ocr', 'bg-sky-50 border-sky-100'],
+                ['Embedding Cache', 'embedding', 'bg-violet-50 border-violet-100'],
+                ['Summary Cache', 'summary', 'bg-teal-50 border-teal-100'],
+              ].map(([label, type, cls]) => {
+                const ratio = cacheStats?.hit_ratios?.[type]?.hit_ratio ?? 0
+                const pct = Math.round(ratio * 100)
+                const size = cacheStats?.sizes?.[type]?.size ?? 0
+                const ttl = cacheStats?.sizes?.[type]?.ttl_seconds
+                return (
+                  <div key={type as string} className={`border rounded-lg p-4 ${cls}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-bold text-slate-700">{label}</p>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[10px] text-slate-500">{size} entries</span>
+                        {ttl && <span className="text-[10px] text-slate-400">TTL: {ttl / 3600}h</span>}
+                        <span className="text-sm font-extrabold text-slate-800">{pct}% hit</span>
+                      </div>
+                    </div>
+                    <div className="w-full bg-white/60 rounded-full h-2 overflow-hidden border border-white">
+                      <div
+                        className="h-full bg-gradient-to-r from-teal-400 to-teal-600 rounded-full transition-all duration-700"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[9px] text-slate-400 mt-1">
+                      <span>Hits: {cacheStats?.hit_ratios?.[type]?.hits ?? 0}</span>
+                      <span>Misses: {cacheStats?.hit_ratios?.[type]?.misses ?? 0}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {systemMonitorTab === 'failures' && (
+            <div>
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="border rounded-lg p-3 bg-red-50 border-red-100 text-center">
+                  <p className="text-[10px] font-bold text-red-500 uppercase mb-1">Failure Rate (1h)</p>
+                  <p className="text-2xl font-extrabold text-red-700">
+                    {systemHealth?.throughput?.failure_rate_percent ?? '—'}%
+                  </p>
+                </div>
+                <div className="border rounded-lg p-3 bg-emerald-50 border-emerald-100 text-center">
+                  <p className="text-[10px] font-bold text-emerald-500 uppercase mb-1">Reports / Hour</p>
+                  <p className="text-2xl font-extrabold text-emerald-700">
+                    {systemHealth?.throughput?.reports_per_hour ?? '—'}
+                  </p>
+                </div>
+                <div className="border rounded-lg p-3 bg-amber-50 border-amber-100 text-center">
+                  <p className="text-[10px] font-bold text-amber-500 uppercase mb-1">Avg Queue Wait</p>
+                  <p className="text-2xl font-extrabold text-amber-700">
+                    {systemHealth?.throughput?.avg_queue_wait_ms ?? '—'}ms
+                  </p>
+                </div>
+              </div>
+              {queueStats?.recent_failures?.length > 0 ? (
+                <div>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Retry History (Recent Failures)</p>
+                  <div className="space-y-1.5">
+                    {queueStats.recent_failures.map((f: any, i: number) => (
+                      <div key={i} className="flex items-center justify-between text-xs border border-red-100 bg-red-50 rounded px-3 py-2">
+                        <div className="flex-1 min-w-0">
+                          <span className="font-semibold text-red-800 block truncate">{f.report_id}</span>
+                          <span className="text-red-600 truncate block">{f.errors?.[f.errors.length - 1]}</span>
+                        </div>
+                        <span className="ml-2 shrink-0 text-[10px] bg-red-200 text-red-800 font-bold px-1.5 py-0.5 rounded">
+                          {f.retry_count ?? 0} retries
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-emerald-600 font-semibold text-center py-4">
+                  ✓ No recent failures — system operating normally
+                </p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Telemetry Dashboard Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">

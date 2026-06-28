@@ -288,4 +288,54 @@ export const reportService = {
   downloadReportFile: (reportId: string): string => {
     return `${apiClient.defaults.baseURL || 'http://localhost:8000/api/v1'}/reports/${reportId}/download`
   },
+
+  // ── Sprint 7: Progress Tracking ──────────────────────────────────────
+  getReportProgress: async (reportId: string): Promise<{
+    report_id: string
+    stage: string
+    stage_label: string
+    percentage: number
+    error?: string
+    updated_at?: string
+  }> => {
+    const response = await apiClient.get<{ success: boolean; data: any }>(`/reports/${reportId}/progress`)
+    return response.data.data
+  },
+
+  // ── Sprint 7: Batch Upload ────────────────────────────────────────────
+  batchUploadReports: async (
+    files: File[],
+    patientId: string,
+    reportType: string = 'other'
+  ): Promise<{ reports: { filename: string; report_id?: string; job_id?: string; success: boolean; error?: string }[] }> => {
+    const formData = new FormData()
+    formData.append('patient_id', patientId)
+    formData.append('report_type', reportType)
+    files.forEach((f) => formData.append('files', f))
+    const response = await apiClient.post<{ success: boolean; data: any }>('/reports/batch', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return response.data.data
+  },
+
+  // ── Sprint 7: System Health & Monitoring ─────────────────────────────
+  getSystemHealth: async (): Promise<any> => {
+    const response = await apiClient.get<{ success: boolean; data: any }>('/reports/system/health')
+    return response.data.data
+  },
+
+  getWorkerStatus: async (): Promise<any> => {
+    const response = await apiClient.get<{ success: boolean; data: any }>('/reports/system/workers')
+    return response.data.data
+  },
+
+  getQueueStats: async (): Promise<any> => {
+    const response = await apiClient.get<{ success: boolean; data: any }>('/reports/system/queue')
+    return response.data.data
+  },
+
+  getCacheStats: async (): Promise<any> => {
+    const response = await apiClient.get<{ success: boolean; data: any }>('/reports/system/cache')
+    return response.data.data
+  },
 }

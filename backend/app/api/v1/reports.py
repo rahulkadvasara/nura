@@ -28,6 +28,12 @@ from app.core.dependencies import (
     get_pipeline_service,
     get_pipeline_validator,
     get_pipeline_telemetry,
+    get_report_progress_tracker,
+    get_background_telemetry,
+    get_report_queue_manager,
+    get_report_cache_service,
+    get_job_dispatcher,
+    get_worker_scheduler,
 )
 from app.services.report_service import ReportService
 from app.services.report_processing.document_parser import DocumentParser
@@ -952,4 +958,201 @@ async def download_original_report_file(
     return FileResponse(report.file_url)
 
 
+# ============================================================
+# Sprint 7 — Progress Tracking
+# ============================================================
 
+@router.get(
+    "/{report_id}/progress",
+    response_model=SuccessResponse,
+    summary="Get real-time processing progress for a report. Guarded: Authenticated Users.",
+)
+async def get_report_progress(
+    report_id: str,
+    current_user: UserInDB = Depends(get_current_user),
+    progress_tracker=Depends(get_report_progress_tracker),
+    report_service: ReportService = Depends(get_report_service),
+) -> SuccessResponse:
+    report = await report_service.get_report_by_id(report_id)
+    if not report:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+    await verify_report_access(report, current_user)
+    progress = await progress_tracker.get_progress(report_id)
+    return SuccessResponse(success=True, message="Progress retrieved", data=progress)
+
+
+# ============================================================
+# Sprint 7 — Batch Upload
+# ============================================================
+
+@router.post(
+    "/batch",
+    response_model=SuccessResponse,
+    summary="Batch upload multiple medical report files. Guarded: Authenticated Users.",
+)
+async def batch_upload_reports(
+    patient_id: str = Form(...),
+    report_type: ReportType = Form(ReportType.OTHER),
+    files: List[UploadFile] = File(...),
+    current_user: UserInDB = Depends(get_current_user),
+    report_service: ReportService = Depends(get_report_service),
+    job_dispatcher=Depends(get_job_dispatcher),
+) -> SuccessResponse:
+    if current_user.role == UserRole.PATIENT and str(current_user.id) != patient_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Patients can only upload for themselves")
+
+    if len(files) > 10:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Maximum 10 files per batch upload")
+
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    results = []
+
+    for file in files:
+        try:
+            file_path = os.path.join(UPLOAD_DIR, f"{time.time()}_{file.filename}")
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+
+            schema = ReportCreateSchema(
+                patient_id=patient_id,
+                uploaded_by=str(current_user.id),
+                report_type=report_type,
+                file_url=file_path,
+                raw_text=None,
+                structured_data=None,
+                entities=None,
+                ai_summary=None,
+                risk_level=RiskLevel.LOW,
+                processing_status=ProcessingStatus.UPLOADED,
+                ocr_status="pending",
+                ocr_pages=[],
+            )
+            report_record = await report_service.create_report(schema)
+            job_id = await job_dispatcher.dispatch(
+                report_id=report_record.id,
+                patient_id=patient_id,
+            )
+            results.append({"filename": file.filename, "report_id": report_record.id, "job_id": job_id, "success": True})
+        except Exception as e:
+            logger.error(f"Batch upload failed for {file.filename}: {e}")
+            results.append({"filename": file.filename, "success": False, "error": str(e)})
+
+    return SuccessResponse(
+        success=True,
+        message=f"Batch upload completed: {sum(1 for r in results if r['success'])}/{len(files)} files queued",
+        data={"reports": results},
+    )
+
+
+# ============================================================
+# Sprint 7 — System Health & Monitoring APIs
+# ============================================================
+
+@router.get(
+    "/system/health",
+    response_model=SuccessResponse,
+    summary="System health summary: queue, workers, cache. Guarded: Admin only.",
+)
+async def get_system_health(
+    current_user: UserInDB = Depends(get_current_user),
+    queue_manager=Depends(get_report_queue_manager),
+    bg_telemetry=Depends(get_background_telemetry),
+    cache_service=Depends(get_report_cache_service),
+) -> SuccessResponse:
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    queue_stats = await queue_manager.get_queue_stats()
+    telemetry_stats = bg_telemetry.get_stats()
+    cache_stats = cache_service.get_stats()
+
+    failure_rate = telemetry_stats["throughput"]["failure_rate_percent"]
+    health_status = "healthy" if failure_rate < 10 and queue_stats.get("dead_letter", 0) == 0 else "degraded"
+
+    return SuccessResponse(
+        success=True,
+        message="System health retrieved",
+        data={
+            "health": health_status,
+            "queue": queue_stats,
+            "workers": telemetry_stats["workers"],
+            "throughput": telemetry_stats["throughput"],
+            "cache_sizes": cache_stats,
+        },
+    )
+
+
+@router.get(
+    "/system/workers",
+    response_model=SuccessResponse,
+    summary="Worker pool status and heartbeats. Guarded: Admin only.",
+)
+async def get_worker_status(
+    current_user: UserInDB = Depends(get_current_user),
+    scheduler=Depends(get_worker_scheduler),
+) -> SuccessResponse:
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    worker_status = scheduler.get_worker_status()
+    heartbeats = await scheduler.get_heartbeats()
+
+    return SuccessResponse(
+        success=True,
+        message="Worker status retrieved",
+        data={
+            "total_workers": scheduler.worker_count,
+            "active_workers": scheduler.worker_count_active(),
+            "idle_workers": scheduler.worker_count_idle(),
+            "workers": worker_status,
+            "heartbeats": heartbeats,
+        },
+    )
+
+
+@router.get(
+    "/system/queue",
+    response_model=SuccessResponse,
+    summary="Queue depth and recent failures. Guarded: Admin only.",
+)
+async def get_queue_stats(
+    current_user: UserInDB = Depends(get_current_user),
+    queue_manager=Depends(get_report_queue_manager),
+) -> SuccessResponse:
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    stats = await queue_manager.get_queue_stats()
+    recent_failures = await queue_manager.get_recent_failures(limit=10)
+
+    return SuccessResponse(
+        success=True,
+        message="Queue statistics retrieved",
+        data={"stats": stats, "recent_failures": recent_failures},
+    )
+
+
+@router.get(
+    "/system/cache",
+    response_model=SuccessResponse,
+    summary="Cache statistics: hit ratios and sizes. Guarded: Admin only.",
+)
+async def get_cache_stats(
+    current_user: UserInDB = Depends(get_current_user),
+    cache_service=Depends(get_report_cache_service),
+    bg_telemetry=Depends(get_background_telemetry),
+) -> SuccessResponse:
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    full_stats = bg_telemetry.get_stats()
+    size_stats = cache_service.get_stats()
+
+    return SuccessResponse(
+        success=True,
+        message="Cache statistics retrieved",
+        data={
+            "hit_ratios": full_stats["cache"],
+            "sizes": size_stats,
+        },
+    )

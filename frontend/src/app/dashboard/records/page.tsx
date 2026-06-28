@@ -55,6 +55,13 @@ export default function PatientRecordsPage() {
   const [loadingPipeline, setLoadingPipeline] = useState(false)
   const [inspectTab, setInspectTab] = useState<'structured' | 'ocr' | 'labs' | 'meds' | 'risk' | 'summary' | 'developer'>('summary')
 
+  // Sprint 7 — Batch upload + progress
+  const [batchFiles, setBatchFiles] = useState<File[]>([])
+  const [batchUploading, setBatchUploading] = useState(false)
+  const [batchResults, setBatchResults] = useState<any[]>([])
+  const [reportProgress, setReportProgress] = useState<Record<string, { stage_label: string; percentage: number }>>({})
+  const [uploadMode, setUploadMode] = useState<'single' | 'batch'>('single')
+
   const fetchReports = async () => {
     try {
       setLoading(true)
@@ -79,37 +86,24 @@ export default function PatientRecordsPage() {
     }
   }, [user?.id])
 
-  // Poll status for processing reports periodically
+  // Poll progress for any reports still being processed
   useEffect(() => {
-    const processing = reports.filter(
-      r => r.ocr_status === 'processing' || 
-           r.ocr_status === 'pending' || 
-           r.extraction_status === 'processing' ||
-           r.processing_status === 'processing'
+    const activeReports = reports.filter(
+      r => r.processing_status === 'processing' || r.processing_status === 'uploaded' || r.ocr_status === 'pending'
     )
-    if (processing.length === 0) return
+    if (activeReports.length === 0) return
 
     const interval = setInterval(async () => {
-      let updated = false
-      const copy = [...reports]
-      for (let i = 0; i < copy.length; i++) {
-        const r = copy[i]
-        if (r.ocr_status === 'processing' || r.ocr_status === 'pending' || r.extraction_status === 'processing' || r.processing_status === 'processing') {
-          try {
-            const statusData = await reportService.getProcessingStatus(r.id)
-            const structData = await reportService.getStructuredData(r.id)
-            if (statusData.ocr_status !== r.ocr_status || structData.extraction_status !== r.extraction_status || structData.processing_status !== r.processing_status) {
-              updated = true
-            }
-          } catch (e) {
-            console.error(e)
-          }
-        }
+      const updates: Record<string, { stage_label: string; percentage: number }> = {}
+      for (const r of activeReports) {
+        try {
+          const prog = await reportService.getReportProgress(r.id)
+          updates[r.id] = { stage_label: prog.stage_label, percentage: prog.percentage }
+          if (prog.percentage >= 100) fetchReports()
+        } catch { /* ignore */ }
       }
-      if (updated) {
-        fetchReports()
-      }
-    }, 4000)
+      setReportProgress(prev => ({ ...prev, ...updates }))
+    }, 3000)
 
     return () => clearInterval(interval)
   }, [reports])
@@ -117,6 +111,29 @@ export default function PatientRecordsPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       setSelectedFile(e.target.files[0])
+    }
+  }
+
+  const handleBatchFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setBatchFiles(Array.from(e.target.files))
+    }
+  }
+
+  const handleBatchUpload = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (batchFiles.length === 0 || !user?.id) return
+    try {
+      setBatchUploading(true)
+      setBatchResults([])
+      const result = await reportService.batchUploadReports(batchFiles, user.id, reportType)
+      setBatchResults(result.reports)
+      setBatchFiles([])
+      fetchReports()
+    } catch (e: any) {
+      alert(`Batch upload failed: ${e.response?.data?.message || e.message}`)
+    } finally {
+      setBatchUploading(false)
     }
   }
 
@@ -384,65 +401,163 @@ export default function PatientRecordsPage() {
               <CardTitle className="text-sm font-bold text-slate-800 uppercase tracking-wider">
                 Upload New Report
               </CardTitle>
+              {/* Mode toggle */}
+              <div className="flex gap-1 mt-2 bg-slate-100 rounded-lg p-1">
+                <button
+                  onClick={() => setUploadMode('single')}
+                  className={`flex-1 text-xs font-semibold py-1 rounded-md transition-all ${
+                    uploadMode === 'single' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Single File
+                </button>
+                <button
+                  onClick={() => setUploadMode('batch')}
+                  className={`flex-1 text-xs font-semibold py-1 rounded-md transition-all ${
+                    uploadMode === 'batch' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Batch Upload
+                </button>
+              </div>
             </CardHeader>
             <CardContent className="pt-6">
-              <form onSubmit={handleUpload} className="space-y-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 block uppercase mb-2">
-                    Report Type / Category
-                  </label>
-                  <select
-                    value={reportType}
-                    onChange={(e) => setReportType(e.target.value)}
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  >
-                    <option value="blood_test">Blood Test Result</option>
-                    <option value="prescription">Prescription Document</option>
-                    <option value="imaging">Imaging (X-Ray/MRI/CT)</option>
-                    <option value="discharge_summary">Discharge Summary</option>
-                    <option value="other">Other Medical Document</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 block uppercase mb-2">
-                    File Attachment (PDF, PNG, JPG, JPEG)
-                  </label>
-                  <div className="border-2 border-dashed border-slate-200 rounded-lg p-6 flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100/50 transition-colors cursor-pointer relative">
-                    <Input
-                      type="file"
-                      accept=".pdf,.png,.jpg,.jpeg"
-                      onChange={handleFileChange}
-                      className="absolute inset-0 opacity-0 cursor-pointer"
-                    />
-                    <Upload className="h-8 w-8 text-slate-400 mb-2" />
-                    <span className="text-xs font-bold text-slate-600">
-                      {selectedFile ? selectedFile.name : 'Click to select or drag file here'}
-                    </span>
-                    <span className="text-[10px] text-slate-400 mt-1">
-                      Max file size: 10MB
-                    </span>
+              {uploadMode === 'single' ? (
+                <form onSubmit={handleUpload} className="space-y-4">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 block uppercase mb-2">
+                      Report Type / Category
+                    </label>
+                    <select
+                      value={reportType}
+                      onChange={(e) => setReportType(e.target.value)}
+                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    >
+                      <option value="blood_test">Blood Test Result</option>
+                      <option value="prescription">Prescription Document</option>
+                      <option value="imaging">Imaging (X-Ray/MRI/CT)</option>
+                      <option value="discharge_summary">Discharge Summary</option>
+                      <option value="other">Other Medical Document</option>
+                    </select>
                   </div>
-                </div>
 
-                <Button
-                  type="submit"
-                  disabled={!selectedFile || uploading}
-                  className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold flex items-center justify-center gap-2 shadow-sm"
-                >
-                  {uploading ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 animate-spin" />
-                      Uploading Document...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="h-4 w-4" />
-                      Submit to Processing Queue
-                    </>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 block uppercase mb-2">
+                      File Attachment (PDF, PNG, JPG, JPEG)
+                    </label>
+                    <div className="border-2 border-dashed border-slate-200 rounded-lg p-6 flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100/50 transition-colors cursor-pointer relative">
+                      <Input
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg"
+                        onChange={handleFileChange}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                      />
+                      <Upload className="h-8 w-8 text-slate-400 mb-2" />
+                      <span className="text-xs font-bold text-slate-600">
+                        {selectedFile ? selectedFile.name : 'Click to select or drag file here'}
+                      </span>
+                      <span className="text-[10px] text-slate-400 mt-1">
+                        Max file size: 10MB
+                      </span>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={!selectedFile || uploading}
+                    className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    {uploading ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                        Uploading Document...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4" />
+                        Submit to Processing Queue
+                      </>
+                    )}
+                  </Button>
+                </form>
+              ) : (
+                /* Batch Upload Form */
+                <form onSubmit={handleBatchUpload} className="space-y-4">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 block uppercase mb-2">
+                      Report Type
+                    </label>
+                    <select
+                      value={reportType}
+                      onChange={(e) => setReportType(e.target.value)}
+                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    >
+                      <option value="blood_test">Blood Test Result</option>
+                      <option value="prescription">Prescription</option>
+                      <option value="imaging">Imaging</option>
+                      <option value="discharge_summary">Discharge Summary</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 block uppercase mb-2">
+                      Select Files (up to 10)
+                    </label>
+                    <div className="border-2 border-dashed border-teal-200 rounded-lg p-6 flex flex-col items-center justify-center bg-teal-50/30 hover:bg-teal-50/50 transition-colors cursor-pointer relative">
+                      <Input
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg"
+                        multiple
+                        onChange={handleBatchFileChange}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                      />
+                      <Layers className="h-8 w-8 text-teal-400 mb-2" />
+                      <span className="text-xs font-bold text-slate-600">
+                        {batchFiles.length > 0 ? `${batchFiles.length} file(s) selected` : 'Click to select multiple files'}
+                      </span>
+                      <span className="text-[10px] text-slate-400 mt-1">PDF, PNG, JPG — max 10 files</span>
+                    </div>
+                    {batchFiles.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {batchFiles.map((f, i) => (
+                          <div key={i} className="text-[10px] text-slate-500 flex items-center gap-1">
+                            <CheckSquare className="h-3 w-3 text-teal-500" />
+                            {f.name} <span className="text-slate-400">({(f.size / 1024).toFixed(0)} KB)</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={batchFiles.length === 0 || batchUploading}
+                    className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    {batchUploading ? (
+                      <><RefreshCw className="h-4 w-4 animate-spin" /> Uploading Batch...</>
+                    ) : (
+                      <><Layers className="h-4 w-4" /> Upload {batchFiles.length || ''} Files</>  
+                    )}
+                  </Button>
+
+                  {/* Batch results */}
+                  {batchResults.length > 0 && (
+                    <div className="mt-3 space-y-1 border border-slate-200 rounded-lg p-3 bg-slate-50">
+                      <p className="text-[10px] font-bold text-slate-600 uppercase mb-2">Batch Results</p>
+                      {batchResults.map((r, i) => (
+                        <div key={i} className="flex items-center justify-between text-[10px]">
+                          <span className="text-slate-600 truncate max-w-[140px]">{r.filename}</span>
+                          <span className={r.success ? 'text-teal-600 font-semibold' : 'text-red-500 font-semibold'}>
+                            {r.success ? '✓ Queued' : '✗ Failed'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   )}
-                </Button>
-              </form>
+                </form>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -504,6 +619,24 @@ export default function PatientRecordsPage() {
                             <span>Confidence: {(report.extraction_confidence * 100).toFixed(0)}%</span>
                           )}
                         </div>
+                        {/* Sprint 7: Live progress bar for processing reports */}
+                        {(report.processing_status === 'processing' || report.processing_status === 'uploaded' || report.ocr_status === 'pending') && reportProgress[report.id] && (
+                          <div className="mt-2">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[10px] font-semibold text-teal-600 flex items-center gap-1">
+                                <Activity className="h-3 w-3 animate-pulse" />
+                                {reportProgress[report.id].stage_label}
+                              </span>
+                              <span className="text-[10px] font-bold text-teal-700">{reportProgress[report.id].percentage}%</span>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                              <div
+                                className="h-full bg-gradient-to-r from-teal-400 to-teal-600 rounded-full transition-all duration-700"
+                                style={{ width: `${reportProgress[report.id].percentage}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-3 justify-end">

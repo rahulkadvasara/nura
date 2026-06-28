@@ -1353,8 +1353,82 @@ def get_pipeline_service() -> Any:
     return _pipeline_service_instance
 
 
+# ============================================================
+# Sprint 7: Production Optimization & Scalability Singletons
+# ============================================================
+
+_report_cache_service_instance = None
+_report_progress_tracker_instance = None
+_background_telemetry_instance = None
+_report_queue_manager_instance = None
+_job_dispatcher_instance = None
+_worker_scheduler_instance = None
 
 
+def get_report_cache_service():
+    """Retrieve ReportCacheService singleton (OCR, embedding, summary caches)."""
+    global _report_cache_service_instance
+    if _report_cache_service_instance is None:
+        from app.services.report_cache.report_cache_service import ReportCacheService
+        _report_cache_service_instance = ReportCacheService()
+    return _report_cache_service_instance
+
+
+def get_report_progress_tracker():
+    """Retrieve ReportProgressTracker singleton (per-report stage progress)."""
+    global _report_progress_tracker_instance
+    if _report_progress_tracker_instance is None:
+        from app.services.report_background.progress_tracker import ReportProgressTracker
+        _report_progress_tracker_instance = ReportProgressTracker(db=get_database())
+    return _report_progress_tracker_instance
+
+
+def get_background_telemetry():
+    """Retrieve BackgroundTelemetry singleton (queue, workers, cache stats)."""
+    global _background_telemetry_instance
+    if _background_telemetry_instance is None:
+        from app.services.report_background.background_telemetry import BackgroundTelemetry
+        _background_telemetry_instance = BackgroundTelemetry()
+    return _background_telemetry_instance
+
+
+def get_report_queue_manager():
+    """Retrieve ReportQueueManager singleton (MongoDB-backed priority queue)."""
+    global _report_queue_manager_instance
+    if _report_queue_manager_instance is None:
+        from app.services.report_background.queue_manager import ReportQueueManager
+        _report_queue_manager_instance = ReportQueueManager(db=get_database())
+    return _report_queue_manager_instance
+
+
+def get_job_dispatcher():
+    """Retrieve JobDispatcher singleton (wraps queue + progress tracker)."""
+    global _job_dispatcher_instance
+    if _job_dispatcher_instance is None:
+        from app.services.report_background.job_dispatcher import JobDispatcher
+        _job_dispatcher_instance = JobDispatcher(
+            queue_manager=get_report_queue_manager(),
+            progress_tracker=get_report_progress_tracker(),
+        )
+    return _job_dispatcher_instance
+
+
+def get_worker_scheduler():
+    """Retrieve WorkerScheduler singleton (background worker pool manager)."""
+    global _worker_scheduler_instance
+    if _worker_scheduler_instance is None:
+        import os
+        from app.services.report_background.scheduler import WorkerScheduler
+        worker_count = int(os.environ.get("REPORT_WORKER_COUNT", "3"))
+        _worker_scheduler_instance = WorkerScheduler(
+            queue_manager=get_report_queue_manager(),
+            pipeline_service=get_pipeline_service(),
+            progress_tracker=get_report_progress_tracker(),
+            telemetry=get_background_telemetry(),
+            worker_count=worker_count,
+            db=get_database(),
+        )
+    return _worker_scheduler_instance
 
 
 
