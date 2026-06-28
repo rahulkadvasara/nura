@@ -148,7 +148,6 @@ Qdrant:
 patient_reports
 chat_memory
 medical_knowledge
-drug_knowledge
 doctor_knowledge
 ```
 
@@ -161,6 +160,8 @@ consultations
 prescriptions
 reminders
 doctor_profiles
+drug_master
+drug_interactions
 ```
 
 ---
@@ -379,13 +380,15 @@ Medication Query
 ### Workflow
 
 ```text
-RxNorm Normalization
+Normalize medicine against drug_master
 ↓
-Interaction Retrieval
+Collect patient medications
 ↓
-Risk Classification
+Query drug_interactions (MongoDB)
 ↓
-Recommendation
+Deterministic Risk Classification
+↓
+Groq Explanation
 ```
 
 ---
@@ -413,8 +416,9 @@ High
 ### Dependencies
 
 ```text
-Drug Interaction Dataset
-Qdrant Drug Knowledge Collection
+Drug Master Collection
+Drug Interactions Collection
+Groq (for explanation only)
 ```
 
 ---
@@ -469,6 +473,7 @@ Validate and create reminders.
 ```text
 Reminder Request
 Medication Information
+Current Patient Medications
 ```
 
 ---
@@ -485,7 +490,9 @@ Reminder Recommendation
 ### Dependencies
 
 ```text
-Drug Interaction Agent
+Normalize Medicine Name (drug_master)
+drug_interactions lookup
+Groq (for explanation)
 Reminder Service
 ```
 

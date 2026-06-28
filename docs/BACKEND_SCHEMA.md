@@ -357,6 +357,25 @@ cancelled
 ```
 ---
 
+## drug_master
+
+```json
+{
+  "_id": "ObjectId",
+  "generic_name": "string",
+  "brand_names": ["string"],
+  "aliases": ["string"],
+  "drug_class": "string",
+  "dosage_forms": ["string"],
+  "strengths": ["string"],
+  "manufacturer": "string",
+  "rxnorm_code": "string",
+  "created_at": "datetime",
+  "updated_at": "datetime"
+}
+```
+---
+
 ## refresh_tokens
 
 ```json
@@ -484,14 +503,7 @@ Stores:
 
 ---
 
-## drug_knowledge
 
-Stores:
-
-* Drug information
-* Drug interaction knowledge
-
----
 
 ## doctor_knowledge
 
@@ -713,9 +725,9 @@ Responsibilities:
 
 Responsibilities:
 
-* RxNorm Lookup
-* Drug Safety
-* Risk Classification
+* drug_master Normalization
+* drug_interactions Lookup
+* Deterministic Risk Classification
 
 ---
 
@@ -789,7 +801,6 @@ Indexes:
 * report embeddings
 * chat embeddings
 * medical embeddings
-* drug embeddings
 
 ---
 

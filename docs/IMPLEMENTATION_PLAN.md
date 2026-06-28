@@ -1131,22 +1131,40 @@ Reports generate summaries
 
 ## Objective
 
-Medication safety validation.
+Medication safety validation using deterministic MongoDB data.
+
+---
+
+## Deliverables
+
+* Drug normalization (`drug_master`)
+* Interaction engine (`drug_interactions`)
+* Reminder validation
+* Prescription validation
+* Report medication validation
+* Patient medication history validation
+* AI explanation layer
 
 ---
 
 ## Workflow
 
 ```text
-Drug Input
+Medicine Input
  ↓
-RxNorm
+Normalize Drug
  ↓
-Dataset Lookup
+drug_master
+ ↓
+Collect Patient Medications
+ ↓
+drug_interactions
  ↓
 Risk Classification
  ↓
-Recommendation
+Groq Explanation
+ ↓
+Response
 ```
 
 ---
@@ -1166,9 +1184,21 @@ High
 ```text
 Reminder Creation
  ↓
-Interaction Check
+Normalize Medicine Name
  ↓
-Validation
+drug_master
+ ↓
+Collect Current Patient Medications
+ • prescriptions
+ • report medications
+ • active reminders
+ • patient_memory
+ ↓
+drug_interactions
+ ↓
+Risk Classification
+ ↓
+Allow, Warning, or Block
  ↓
 Reminder Stored
 ```
@@ -1177,9 +1207,9 @@ Reminder Stored
 
 ## Exit Criteria
 
-```text
-Interactions detected correctly
-```
+* Interactions detected correctly using deterministic MongoDB data
+* No dedicated drug vector database
+* No external API dependency during normal application execution
 
 ---
 

@@ -9,7 +9,7 @@ This document describes the design, implementation, safety constraints, and work
 The healthcare agents are encapsulated within the package `backend/app/agents/healthcare/` and inherit from the standard `BaseAgent` framework. They plug directly into:
 - **Router Agent & Intent Registry**: The Router classifies the clinical intent (e.g. `REPORT_ANALYSIS`) and routes the incoming query to the corresponding agent.
 - **LangGraph Workflow**: Dispatched dynamically using conditional transitions from the Router node to the individual agent executor node, which then terminates at the `Finish` node.
-- **Retrieval Pipeline**: Querying Qdrant database collections (`patient_reports`, `drug_knowledge`, `doctor_knowledge`) for grounding context.
+- **Retrieval Pipeline**: Querying Qdrant database collections (`patient_reports`, `doctor_knowledge`) for grounding context.
 - **Patient Context Builder**: Assembling patient-specific details from MongoDB.
 - **AI Telemetry System**: Accumulating metrics (executions, costs, latencies, tokens, citation count) separately for tracking inside the healthcare telemetry singleton.
 
@@ -30,8 +30,9 @@ The healthcare agents are encapsulated within the package `backend/app/agents/he
 ### B. Drug Interaction Agent
 - **Purpose**: Verify safety conflicts.
 - **Workflow**:
-  1. Patient query ➔ RetrievalAgent queries Qdrant `drug_knowledge` and `patient_reports` collections.
-  2. Patient Memory ➔ Retrieves active medications, chronic conditions, and allergy history from MongoDB `PatientMemoryRepository`.
+  1. Patient query ➔ Normalizes medicine name against MongoDB `drug_master`.
+  2. Patient Memory ➔ Retrieves active medications, chronic conditions, and allergy history from MongoDB `PatientMemoryRepository` and recent reports.
+  3. Interaction Lookup ➔ Deterministic lookup in MongoDB `drug_interactions` collection.
   3. Prompt Builder ➔ Compiles medications list, allergies, and retrieved safety facts.
   4. Groq ➔ Performs interaction diagnostics and returns JSON.
   5. Safety Disclosures ➔ Asserts informational disclaimers and wraps results in `DrugInteractionAgentResponse` with severity risk badge.

@@ -97,3 +97,13 @@ Use `patient_memory` MongoDB collection as the primary source of truth for longi
 
 Reason:
 Ensures transactional integrity, provides low-latency reads for Doctor Dashboards without invoking the LLM, and creates a clean separation of operational records from vector embeddings.
+
+---
+
+## ADR-011
+
+Decision:
+Simplify Drug Safety Architecture by using MongoDB (`drug_master`, `drug_interactions`) as the single source of truth for drug data, removing the `drug_knowledge` Qdrant collection, and restricting Groq's role to generating explanations without determining interaction severity.
+
+Reason:
+MongoDB provides deterministic drug interactions and normalizations. The `drug_knowledge` Qdrant collection introduces duplicate storage and unnecessary complexity, while semantic search is not reliable enough for determining clinical interactions.

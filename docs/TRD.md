@@ -168,13 +168,14 @@ Response (streamed to Chat Interface)
 
 * patient_reports
 * medical_knowledge
-* drug_knowledge
 * chat_memory
 * doctor_knowledge
 
 ### MongoDB
 
 * User Metadata
+* drug_master
+* drug_interactions
 * Appointments
 * Consultations
 * Prescriptions
@@ -348,7 +349,6 @@ Qdrant Collections:
 | ----------------- |
 | patient_reports   |
 | medical_knowledge |
-| drug_knowledge    |
 | chat_memory       |
 | doctor_knowledge  |
 

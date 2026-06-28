@@ -86,7 +86,7 @@ Phase 9 - Sprint 3 completes the Context Ranking & Assembly engine:
   3. `Consultations` (Doctor consult logs)
   4. `Prescriptions` (Active medications)
   5. `Medical` (Medical guidelines/knowledge)
-  6. `Drug` (Drug safety database)
+  6. `Drug` (Drug safety database - fetched from MongoDB)
   7. `Doctor` (Doctor profiles)
   8. `Chat` (Conversational message history)
 - **Waterfall Token Compression**: A tokenizer estimates the size of each section. The service iteratively adds sections in order of their priority. If a section would cause the total token count to exceed the configured `token_budget` (e.g. 4000 tokens), it is dropped (or truncated) to guarantee that the LLM is never sent prompts exceeding its context window.
@@ -102,7 +102,7 @@ Phase 9 - Sprint 4 integrates the Agent Framework with the Retrieval Engine to b
 - **Deterministic Intent Classification**: Queries are analyzed by `IntentDetectionService` using regex rules and keywords to classify query intent into categories like:
   - `medical_question` → Queries `medical_knowledge` and `patient_reports`
   - `report_analysis` → Queries `patient_reports`
-  - `drug_question` → Queries `drug_knowledge` and `patient_reports`
+  - `drug_question` → Deterministic MongoDB lookup (`drug_master`, `drug_interactions`) and `patient_reports`
   - `doctor_recommendation` → Queries `doctor_knowledge`
   - `conversation_recall` → Queries `chat_memory`
   - `general_health` → Queries `medical_knowledge`

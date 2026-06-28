@@ -42,7 +42,6 @@ Stores:
 ```text
 patient_reports
 medical_knowledge
-drug_knowledge
 chat_memory
 doctor_knowledge
 ```
@@ -287,6 +286,47 @@ AI-generated insights.
 
 ---
 
+## drug_master
+
+The canonical medication dictionary for normalization.
+
+```json
+{
+  "_id": "ObjectId",
+  "generic_name": "string",
+  "brand_names": ["string"],
+  "aliases": ["string"],
+  "drug_class": "string",
+  "dosage_forms": ["string"],
+  "strengths": ["string"],
+  "manufacturer": "string",
+  "rxnorm_code": "string",
+  "created_at": "datetime",
+  "updated_at": "datetime"
+}
+```
+
+---
+
+## drug_interactions
+
+Deterministic rules for drug-drug interactions.
+
+```json
+{
+  "_id": "ObjectId",
+  "drug_a": "string",
+  "drug_b": "string",
+  "severity": "low|medium|high",
+  "description": "string",
+  "recommendation": "string",
+  "evidence": "string",
+  "updated_at": "datetime"
+}
+```
+
+---
+
 ## reminders
 
 ```json
@@ -440,17 +480,7 @@ Educational Content
 
 ---
 
-## drug_knowledge
 
-Stores:
-
-```text
-Drug Safety Data
-Drug Interaction Knowledge
-RxNorm Related Data
-```
-
----
 
 ## doctor_knowledge
 
@@ -601,7 +631,8 @@ Retain:
 | Chat History      | MongoDB |
 | Chat Memory       | Qdrant  |
 | Medical Knowledge | Qdrant  |
-| Drug Knowledge    | Qdrant  |
+| Drug Master       | MongoDB |
+| Drug Interactions | MongoDB |
 | Doctor Profiles   | MongoDB |
 | Doctor Knowledge  | Qdrant  |
 | Patient Context   | MongoDB (patient_memory) |
@@ -638,7 +669,6 @@ normalized_score = (raw_score + 1.0) / 2.0
 Vector targets are resolved either by direct collection names or document type aliases:
 * `REPORT` &rarr; `patient_reports` (requires patient_id filtering)
 * `MEDICAL_ARTICLE` &rarr; `medical_knowledge`
-* `DRUG_DATASET` &rarr; `drug_knowledge`
 * `DOCTOR_PROFILE` &rarr; `doctor_knowledge`
 * `CHAT_MEMORY` &rarr; `chat_memory`
 
