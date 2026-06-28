@@ -8,7 +8,7 @@ This document outlines the AI Orchestration layer implemented in Phase 8 - Sprin
 
 ```mermaid
 graph TD
-    Client[Playground / AI Client] --> Router[API Router: /playground/chat]
+    Client[Phase 12.5 Conversational AI Platform] --> Router[API Router: /chat & /playground]
     Router --> Orchestrator[AI Orchestrator Service]
     
     Orchestrator --> Context[Patient Context Service]

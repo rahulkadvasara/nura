@@ -137,7 +137,7 @@ The context builder runs after retrieval and before specialized agent execution.
 # 7. LangGraph Workflow
 
 ```text
-User Query
+User Query (via Phase 12.5 Chat Interface)
  ↓
 Intent Detection
  ↓
@@ -153,8 +153,10 @@ Groq LLM
  ↓
 Memory Agent
  ↓
-Response
+Response (streamed to Chat Interface)
 ```
+
+*Note: The Chat Interface layer (Phase 12.5 Conversational AI Platform) manages session persistence, streaming, and conversation history, serving as the user-facing layer for this AI architecture.*
 
 ---
 

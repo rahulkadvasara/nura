@@ -77,6 +77,7 @@ Production Deployment
 | Phase 10 | Multi-Agent System                        | 3 Days   |
 | Phase 11 | Report Analysis                           | 2 Days   |
 | Phase 12 | Drug Safety                               | 2 Days   |
+| Phase 12.5 | Conversational AI Platform              | 2 Days   |
 | Phase 13 | Testing & Deployment                      | 2 Days   |
 
 Estimated MVP:
@@ -1179,6 +1180,86 @@ Reminder Stored
 ```text
 Interactions detected correctly
 ```
+
+---
+
+# PHASE 12.5
+
+# Conversational AI Platform
+
+## Objective
+
+Build the primary conversational interface for Nura where patients can interact with all AI capabilities through natural language.
+
+## Scope
+
+### Backend
+
+* Chat session management
+* Chat message APIs
+* Streaming response support
+* Conversation history
+* Conversation memory persistence (MongoDB)
+* Semantic memory updates (Qdrant `chat_memory`)
+* Multi-Agent Orchestrator integration
+* Citation generation
+* Suggested follow-up questions
+* Regenerate response endpoint
+* Feedback endpoint
+* Token usage and latency tracking
+
+### Frontend
+
+Create:
+
+`/dashboard/chat`
+
+Features:
+
+* Modern conversational interface
+* Streaming responses
+* Conversation history sidebar
+* New chat / Rename / Delete chat
+* Markdown rendering
+* Citation viewer
+* Rich healthcare cards (reports, medications, appointments, doctors)
+* Suggested prompts
+* Loading and typing indicators
+* Retry and regenerate actions
+
+### AI Flow
+
+```text
+User Message
+↓
+Multi-Agent Orchestrator
+↓
+Router Agent
+↓
+Patient Context Builder
+↓
+Retrieval Agent
+↓
+Target Healthcare Agent
+↓
+Groq
+↓
+Response
+↓
+Store Conversation
+↓
+Update chat_memory (Qdrant if memory-worthy)
+↓
+Update patient_memory (only when clinically relevant)
+```
+
+## Exit Criteria
+
+* Patients can chat naturally with Nura.
+* Responses use RAG and patient context.
+* Conversations persist across sessions.
+* Important conversations update long-term memory.
+* Chat becomes the primary interface for all AI features.
 
 ---
 

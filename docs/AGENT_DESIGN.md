@@ -24,7 +24,7 @@ Nura uses a Retrieval-Augmented Multi-Agent Architecture.
 Workflow:
 
 ```text
-User Query
+User Query (via Phase 12.5 Conversational Chat UI)
 ↓
 Router Agent
 ↓
@@ -36,8 +36,10 @@ Specialized Agent
 ↓
 Memory Agent
 ↓
-Response
+Response (streamed to Chat UI)
 ```
+
+**Note:** The entire Multi-Agent workflow is exposed to users via the **Phase 12.5 Conversational AI Platform**, which manages chat sessions, streaming responses, and conversation persistence, forwarding queries to this LangGraph orchestration layer.
 
 ---
 
