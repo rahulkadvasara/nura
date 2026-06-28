@@ -76,6 +76,7 @@ Production Deployment
 | Phase 9  | Retrieval-Augmented Generation            | Completed|
 | Phase 10 | Multi-Agent System                        | 3 Days   |
 | Phase 11 | Report Analysis                           | 2 Days   |
+| Phase 11.5 | Drug Knowledge Data Prep                  | 1 Day    |
 | Phase 12 | Drug Safety                               | 2 Days   |
 | Phase 12.5 | Conversational AI Platform              | 2 Days   |
 | Phase 13 | Testing & Deployment                      | 2 Days   |
@@ -1122,6 +1123,73 @@ AI Analysis
 ```text
 Reports generate summaries
 ```
+
+---
+
+# PHASE 11.5
+
+# Drug Knowledge Data Preparation (Prerequisite)
+
+## Objective
+
+Prepare the drug interaction database required for Phase 12 (Drug Safety) by streaming and processing CSV files directly from the DDInter dataset into MongoDB, normalizing names and severity levels, and establishing a bidirectional schema.
+
+No AI agents are implemented in this phase. This is purely a data preparation phase.
+
+## Scope
+
+### Import Process
+
+* Sequential, direct streaming of CSV files from `data/ddinter/` to avoid intermediate JSON/CSV disk caching.
+* Drug name normalization (lowercase, remove descriptors in parentheses, strip whitespace).
+* Severity normalization:
+  * `Minor` ➔ `LOW`
+  * `Moderate` ➔ `MEDIUM`
+  * `Major` ➔ `HIGH`
+  * `Unknown` ➔ `UNKNOWN`
+* Bidirectional record mapping (create BOTH `A ➔ B` and `B ➔ A` documents to support O(1) indexed lookups at runtime).
+* Batch insertions (chunks of 5000) for performance.
+
+### MongoDB `drug_interactions` Schema
+
+```json
+{
+  "_id": "ObjectId",
+  "interaction_id": "string",
+  "drug_a": "string",
+  "drug_a_normalized": "string",
+  "drug_b": "string",
+  "drug_b_normalized": "string",
+  "severity": "LOW|MEDIUM|HIGH|UNKNOWN",
+  "source_dataset": "ddinter",
+  "dataset_version": "1.0",
+  "imported_at": "datetime",
+  "aliases_a": [],
+  "aliases_b": [],
+  "interaction_description": "string"
+}
+```
+
+### Indexing Strategy
+
+* Compound index: `(drug_a_normalized, drug_b_normalized)` (unique)
+* Index: `drug_a_normalized`
+* Index: `drug_b_normalized`
+* Index: `severity`
+
+## Exit Criteria
+
+✓ DDInter dataset imported successfully from sequential CSV files.
+
+✓ Drug names and severity levels normalized.
+
+✓ Bidirectional documents generated.
+
+✓ MongoDB indexes created and verified.
+
+✓ Lookup latency verified under 5ms.
+
+✓ Database ready for Phase 12 (Drug Safety).
 
 ---
 
