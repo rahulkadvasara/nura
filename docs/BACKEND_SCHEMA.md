@@ -348,11 +348,18 @@ cancelled
 ```json
 {
   "_id": "ObjectId",
-  "drug_a": "aspirin",
-  "drug_b": "warfarin",
-  "severity": "high",
-  "description": "Increased bleeding risk",
-  "source": "rxnorm"
+  "interaction_id": "string",
+  "drug_a": "string",
+  "drug_a_normalized": "string",
+  "drug_b": "string",
+  "drug_b_normalized": "string",
+  "severity": "LOW|MEDIUM|HIGH|UNKNOWN",
+  "source_dataset": "ddinter",
+  "dataset_version": "1.0",
+  "imported_at": "datetime",
+  "aliases_a": [],
+  "aliases_b": [],
+  "interaction_description": "string"
 }
 ```
 ---

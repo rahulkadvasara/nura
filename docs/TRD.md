@@ -211,26 +211,27 @@ Response
 # 9. Drug Interaction Workflow
 
 ```text
-Drug Input
+Medicine Input
  ↓
-RxNorm Normalization
+Normalize Drug (drug_master)
  ↓
-Drug Dataset Lookup
+Collect Patient Medications
  ↓
-Interaction Detection
+Determine Severity (drug_interactions)
  ↓
-Risk Classification
+Generate Explanation (Groq)
  ↓
-Safety Recommendation
+Response
 ```
 
 Risk Levels:
 
 | Level  | Meaning                    |
 | ------ | -------------------------- |
-| Low    | Informational              |
-| Medium | User Confirmation Required |
-| High   | Strong Warning             |
+| LOW    | Informational              |
+| MEDIUM | User Confirmation Required |
+| HIGH   | Strong Warning             |
+| UNKNOWN| Review Required            |
 
 ---
 
@@ -239,13 +240,15 @@ Risk Levels:
 ```text
 Add Medication Reminder
  ↓
-Drug Interaction Agent
+Normalize Medicine Name
  ↓
-Safety Validation
+Collect Current Patient Medications
  ↓
-Risk Classification
+Determine Severity (drug_interactions)
  ↓
-Reminder Creation
+Allow, Warning, or Block
+ ↓
+Reminder Stored
 ```
 
 ---

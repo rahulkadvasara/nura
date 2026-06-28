@@ -310,18 +310,23 @@ The canonical medication dictionary for normalization.
 
 ## drug_interactions
 
-Deterministic rules for drug-drug interactions.
+Deterministic rules for drug-drug interactions. Bidirectional schema for O(1) indexed lookups.
 
 ```json
 {
   "_id": "ObjectId",
+  "interaction_id": "string",
   "drug_a": "string",
+  "drug_a_normalized": "string",
   "drug_b": "string",
-  "severity": "low|medium|high",
-  "description": "string",
-  "recommendation": "string",
-  "evidence": "string",
-  "updated_at": "datetime"
+  "drug_b_normalized": "string",
+  "severity": "LOW|MEDIUM|HIGH|UNKNOWN",
+  "source_dataset": "ddinter",
+  "dataset_version": "1.0",
+  "imported_at": "datetime",
+  "aliases_a": [],
+  "aliases_b": [],
+  "interaction_description": "string"
 }
 ```
 

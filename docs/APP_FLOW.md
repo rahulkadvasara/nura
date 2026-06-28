@@ -157,7 +157,7 @@ Sources:
 * Reports
 * Chat Memory
 * Medical Knowledge
-* Drug Knowledge
+* Drug Interactions (MongoDB)
 * Appointment History
 * Prescriptions
 * Consultations
@@ -319,15 +319,15 @@ User Query
  ↓
 Drug Interaction Agent
  ↓
-RxNorm Normalization
+Normalize Medicine (drug_master)
  ↓
-Drug Dataset Lookup
+Collect Patient Medications
  ↓
-Interaction Detection
+Determine Severity (drug_interactions)
  ↓
-Risk Classification
+Generate Explanation (Groq)
  ↓
-Recommendation
+Response
 ```
 
 ---
@@ -337,15 +337,15 @@ Recommendation
 ```text
 Create Medication Reminder
  ↓
-Drug Interaction Agent
+Normalize Medicine Name
  ↓
-Medication Validation
+Collect Current Patient Medications
  ↓
-Risk Classification
+Determine Severity (drug_interactions)
  ↓
-User Confirmation
+Allow, Warning, or Block
  ↓
-Reminder Creation
+Reminder Stored
 ```
 
 ---

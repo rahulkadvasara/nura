@@ -1197,89 +1197,87 @@ No AI agents are implemented in this phase. This is purely a data preparation ph
 
 # Drug Safety
 
-## Objective
+## Overview
 
-Medication safety validation using deterministic MongoDB data.
-
----
-
-## Deliverables
-
-* Drug normalization (`drug_master`)
-* Interaction engine (`drug_interactions`)
-* Reminder validation
-* Prescription validation
-* Report medication validation
-* Patient medication history validation
-* AI explanation layer
+Medication safety validation using a completely deterministic architecture. The interaction engine uses MongoDB as the single source of truth (`drug_master`, `drug_interactions`), removing the need for a dedicated vector collection (`drug_knowledge`) or LLM-based interaction determination. Groq is strictly limited to generating human-friendly explanations after the deterministic engine determines interaction severity.
 
 ---
 
-## Workflow
+## Updated Workflow
 
 ```text
 Medicine Input
  ↓
-Normalize Drug
- ↓
-drug_master
+Normalize Drug (drug_master)
  ↓
 Collect Patient Medications
  ↓
-drug_interactions
+Determine Severity (drug_interactions)
  ↓
-Risk Classification
- ↓
-Groq Explanation
+Generate Explanation (Groq)
  ↓
 Response
 ```
 
 ---
 
-## Risk Levels
+## Validation Entry Points
 
-```text
-Low
-Medium
-High
-```
-
----
-
-## Reminder Integration
-
-```text
-Reminder Creation
- ↓
-Normalize Medicine Name
- ↓
-drug_master
- ↓
-Collect Current Patient Medications
- • prescriptions
- • report medications
- • active reminders
- • patient_memory
- ↓
-drug_interactions
- ↓
-Risk Classification
- ↓
-Allow, Warning, or Block
- ↓
-Reminder Stored
-```
+* Reminder Creation/Update
+* Prescription Issuance
+* Report Medication Analysis
+* Patient Medication History
 
 ---
 
-## Exit Criteria
+## Integrations
 
-* Interactions detected correctly using deterministic MongoDB data
-* No dedicated drug vector database
-* No external API dependency during normal application execution
+* MongoDB (`drug_interactions`) for O(1) bidirectional lookup of potential interactions.
+* Multi-Agent System (Drug Safety Agent acts as orchestrator for deterministic checks + explanation).
+* Dashboard (Visualizations of conflicts).
 
 ---
+
+## Fallback Behavior
+
+If the AI explanation layer (Groq) fails or times out, the system must continue to function normally using the deterministic data and rules from MongoDB.
+
+---
+
+## Sprint Plan
+
+### Sprint 1: Normalization & Lookup
+* Establish drug name normalization service.
+* Implement O(1) interactions lookup against `drug_interactions`.
+
+### Sprint 2: Core Interaction Engine
+* Build deterministic engine logic to collect patient medications and evaluate conflicts.
+* Determine interaction severity deterministically.
+
+### Sprint 3: Evaluation Pipeline Integration
+* Integrate validation entry points (Reminders, Prescriptions, Reports).
+
+### Sprint 4: AI Explanation Layer (Groq)
+* Pass deterministic interaction results to Groq for human-friendly explanation generation.
+* Implement strict fallback behavior if Groq fails.
+
+### Sprint 5: Dashboard Visualization
+* UI components to display interactions, severity warnings, and AI explanations.
+
+### Sprint 6: Production Optimization
+* Caching, scaling, and latency optimization for interaction lookups.
+
+---
+
+## Acceptance Criteria
+
+* Interactions detected correctly using deterministic MongoDB data.
+* No dedicated drug vector database is used.
+* Fallback behavior ensures continued operation if Groq fails.
+* All validation entry points correctly trigger the interaction engine.
+
+---
+
 
 # PHASE 12.5
 
