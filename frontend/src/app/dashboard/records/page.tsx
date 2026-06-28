@@ -44,10 +44,13 @@ export default function PatientRecordsPage() {
   const [riskData, setRiskData] = useState<any>(null)
   const [summaryData, setSummaryData] = useState<any>(null)
   const [insightsData, setInsightsData] = useState<any>(null)
+  const [patientMemory, setPatientMemory] = useState<any | null>(null)
+  const [reportSyncStatus, setReportSyncStatus] = useState<any | null>(null)
   const [loadingOcr, setLoadingOcr] = useState(false)
   const [loadingExtraction, setLoadingExtraction] = useState(false)
   const [loadingRisk, setLoadingRisk] = useState(false)
   const [loadingSummary, setLoadingSummary] = useState(false)
+  const [loadingSync, setLoadingSync] = useState(false)
   const [inspectTab, setInspectTab] = useState<'structured' | 'ocr' | 'labs' | 'meds' | 'risk' | 'summary'>('summary')
 
   const fetchReports = async () => {
@@ -55,6 +58,12 @@ export default function PatientRecordsPage() {
       setLoading(true)
       const data = await reportService.getReports(user?.id)
       setReports(data.reverse())
+      try {
+        const mem = await reportService.getPatientMemory()
+        setPatientMemory(mem)
+      } catch (err) {
+        console.error('Failed to load patient memory profile', err)
+      }
     } catch (e) {
       console.error(e)
     } finally {
@@ -190,11 +199,34 @@ export default function PatientRecordsPage() {
         setSummaryData(summary)
         const insights = await reportService.getReportInsights(report.id)
         setInsightsData(insights)
+        
+        try {
+          const sync = await reportService.getReportSyncStatus(report.id)
+          setReportSyncStatus(sync)
+        } catch (syncErr) {
+          console.error("Failed to load sync status", syncErr)
+        }
       } catch (e) {
         console.error(e)
       } finally {
         setLoadingSummary(false)
       }
+    }
+  }
+
+  const handleSynchronizeReport = async (reportId: string) => {
+    try {
+      setLoadingSync(true)
+      await reportService.synchronizeReport(reportId)
+      const sync = await reportService.getReportSyncStatus(reportId)
+      setReportSyncStatus(sync)
+      
+      const mem = await reportService.getPatientMemory()
+      setPatientMemory(mem)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoadingSync(false)
     }
   }
 
@@ -286,10 +318,33 @@ export default function PatientRecordsPage() {
           <FileText className="h-8 w-8 text-teal-600" />
           My Medical Records & Diagnostics
         </h1>
-        <p className="text-slate-500 mt-1">
-          Upload laboratory investigations or prescriptions to perform OCR extraction and calculate clinical risks.
-        </p>
       </div>
+
+      {patientMemory && (
+        <Card className="border border-teal-200 bg-gradient-to-r from-teal-50/40 to-cyan-50/40 shadow-xs">
+          <CardContent className="p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-bold text-teal-800 uppercase tracking-wider bg-teal-100/80 px-2 py-0.5 rounded">
+                  AI Patient Health Memory
+                </span>
+                <span className="text-slate-400 text-xs font-semibold">•</span>
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                  Sync Status: Synchronized (v{patientMemory.summary_version})
+                </span>
+              </div>
+              <h3 className="font-bold text-slate-800 text-sm">Longitudinal Health Summary</h3>
+              <p className="text-xs text-slate-600 leading-relaxed max-w-4xl">
+                {patientMemory.longitudinal_summary || patientMemory.ai_summary || 'Aggregating patient medical data...'}
+              </p>
+            </div>
+            <div className="flex flex-col text-right items-end text-xs text-slate-400 font-medium space-y-1 bg-white/70 border border-slate-100 rounded-lg p-3 w-full md:w-auto shrink-0">
+              <div>Last Synced: {patientMemory.last_updated ? new Date(patientMemory.last_updated).toLocaleString() : 'N/A'}</div>
+              <div>Report summaries: {patientMemory.report_summaries?.length ?? 0} • Diagnoses: {patientMemory.diagnoses?.length ?? 0}</div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column: Upload */}
@@ -575,6 +630,43 @@ export default function PatientRecordsPage() {
                           </div>
                         </div>
 
+                        {/* Synchronization Status Details */}
+                        <Card className="border border-slate-200 shadow-xs bg-white">
+                          <CardHeader className="py-2.5 bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between">
+                            <CardTitle className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                              <Cpu className="h-3.5 w-3.5 text-teal-600" />
+                              Knowledge Synchronization Status
+                            </CardTitle>
+                            {reportSyncStatus?.in_sync ? (
+                              <Badge className="bg-emerald-50 text-emerald-800 border-emerald-200">Synchronized</Badge>
+                            ) : (
+                              <Badge className="bg-amber-50 text-amber-800 border-amber-200">Out of Sync</Badge>
+                            )}
+                          </CardHeader>
+                          <CardContent className="pt-3 pb-3 space-y-2">
+                            <p className="text-xs text-slate-500 leading-relaxed">
+                              Synchronize this processed report&apos;s summaries and structured parameters with the longitudinal AI Patient Memory and Qdrant semantic vector index.
+                            </p>
+                            {reportSyncStatus?.validation_details && (
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-50 p-2.5 rounded border border-slate-100 text-[10px] font-mono">
+                                <div>Memory: <span className="font-bold text-slate-700">{reportSyncStatus.validation_details.mongodb_memory_status}</span></div>
+                                <div>Indexed chunks: <span className="font-bold text-slate-700">{reportSyncStatus.validation_details.qdrant_points_status}</span></div>
+                                <div>Compatible: <span className="font-bold text-slate-700">{reportSyncStatus.validation_details.version_synchronized ? 'Yes' : 'No'}</span></div>
+                              </div>
+                            )}
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => handleSynchronizeReport(inspectingReport.id)}
+                                className="bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold h-8"
+                                disabled={loadingSync}
+                              >
+                                {loadingSync ? 'Synchronizing...' : 'Synchronize Now'}
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+
                         {/* Patient Explanation */}
                         <Card className="border border-slate-100 shadow-xs">
                           <CardHeader className="py-3 bg-slate-50/50 border-b border-slate-100">
@@ -655,7 +747,7 @@ export default function PatientRecordsPage() {
                           </Button>
                         ) : (
                           <div className="text-[10px] text-amber-600 font-bold bg-amber-50 rounded p-2 inline-block">
-                            Please calculate Clinical Risk under the 'Clinical Risk' tab first.
+                            Please calculate Clinical Risk under the &quot;Clinical Risk&quot; tab first.
                           </div>
                         )}
                       </div>

@@ -4,10 +4,11 @@ Business logic and validation for doctor-specific patient management.
 """
 
 import logging
+from datetime import datetime, timezone
 from bson import ObjectId
 from typing import List, Optional, Tuple, Dict, Any
 
-from app.models.user import UserInDB, UserRole
+from app.models.user import UserInDB, UserRole, UserResponse
 from app.repositories.user_repository import UserRepository
 from app.repositories.doctor_repository import DoctorProfileRepository
 from app.repositories.appointment_repository import AppointmentRepository
@@ -82,7 +83,7 @@ class DoctorPatientService:
             if ObjectId.is_valid(pid):
                 valid_object_ids.append(ObjectId(pid))
                 
-        query = {
+        query: Dict[str, Any] = {
             "role": UserRole.PATIENT.value,
             "_id": {"$in": valid_object_ids}
         }
@@ -252,7 +253,7 @@ class DoctorPatientService:
         doctor_profile = await self.doctor_profile_repository.get(doctor_profile_id)
         doctor_user_id = doctor_profile.user_id if doctor_profile else None
 
-        chat_query = {
+        chat_query: Dict[str, Any] = {
             "patient_id": patient_id,
             "session_type": "doctor_chat"
         }
@@ -274,8 +275,24 @@ class DoctorPatientService:
             from app.models.chat import ChatSessionInDB
             latest_chat_session = ChatSessionResponse(**ChatSessionInDB.from_mongo(latest_chat_doc).model_dump())
 
+        # Fetch patient memory document
+        db = self.user_repository.collection.database
+        patient_mem_doc = await db.patient_memory.find_one({"patient_id": patient_id})
+        patient_memory_data = None
+        if patient_mem_doc:
+            doc = dict(patient_mem_doc)
+            if "_id" in doc:
+                doc["id"] = str(doc.pop("_id"))
+            if "patient_id" in doc:
+                doc["patient_id"] = str(doc["patient_id"])
+            if "last_updated" not in doc and "updated_at" in doc:
+                doc["last_updated"] = doc.pop("updated_at")
+            elif "last_updated" not in doc:
+                doc["last_updated"] = datetime.now(timezone.utc)
+            patient_memory_data = doc
+
         return DoctorPatientDetailResponse(
-            profile=self.user_repository.to_response(user),
+            profile=UserResponse(**user.model_dump()),
             appointment_history=appointments,
             consultation_history=consultations,
             reports=reports,
@@ -283,4 +300,5 @@ class DoctorPatientService:
             health_insights=health_insights,
             current_reminders=current_reminders,
             latest_chat_session=latest_chat_session,
+            patient_memory=patient_memory_data,
         )

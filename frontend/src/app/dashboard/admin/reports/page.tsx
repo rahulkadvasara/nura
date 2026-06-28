@@ -32,6 +32,7 @@ function AdminReportsDashboardContent() {
   const [extractTelemetry, setExtractTelemetry] = useState<any | null>(null)
   const [riskTelemetry, setRiskTelemetry] = useState<any | null>(null)
   const [aiTelemetry, setAiTelemetry] = useState<any | null>(null)
+  const [syncTelemetry, setSyncTelemetry] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all')
   
@@ -42,11 +43,13 @@ function AdminReportsDashboardContent() {
   const [riskData, setRiskData] = useState<any | null>(null)
   const [summaryData, setSummaryData] = useState<any | null>(null)
   const [insightsData, setInsightsData] = useState<any | null>(null)
+  const [reportSyncStatus, setReportSyncStatus] = useState<any | null>(null)
   const [loadingOcr, setLoadingOcr] = useState(false)
   const [loadingExtraction, setLoadingExtraction] = useState(false)
   const [loadingRisk, setLoadingRisk] = useState(false)
   const [loadingSummary, setLoadingSummary] = useState(false)
-  const [inspectTab, setInspectTab] = useState<'ocr' | 'json' | 'warnings' | 'risk' | 'summary_json' | 'prompt_debug'>('json')
+  const [loadingSync, setLoadingSync] = useState(false)
+  const [inspectTab, setInspectTab] = useState<'ocr' | 'json' | 'warnings' | 'risk' | 'summary_json' | 'prompt_debug' | 'sync_validation'>('json')
 
   const fetchData = async () => {
     try {
@@ -77,10 +80,46 @@ function AdminReportsDashboardContent() {
       } catch (err) {
         console.error('Failed to load report AI telemetry', err)
       }
+
+      try {
+        const syncStats = await reportService.getReportSyncTelemetry()
+        setSyncTelemetry(syncStats)
+      } catch (err) {
+        console.error('Failed to load synchronization telemetry', err)
+      }
     } catch (e) {
       console.error(e)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleRebuildSync = async () => {
+    if (!confirm('Rebuild synchronization indexes for all completed reports? This performs vector indexing.')) return
+    try {
+      setLoadingSync(true)
+      await reportService.rebuildReportSync()
+      fetchData()
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoadingSync(false)
+    }
+  }
+
+  const handleSingleSync = async (reportId: string) => {
+    try {
+      setLoadingSync(true)
+      await reportService.synchronizeReport(reportId)
+      fetchData()
+      if (inspectingReport?.id === reportId) {
+        const check = await reportService.getReportSyncStatus(reportId)
+        setReportSyncStatus(check)
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoadingSync(false)
     }
   }
 
@@ -194,6 +233,12 @@ function AdminReportsDashboardContent() {
         setSummaryData(summary)
         const insights = await reportService.getReportInsights(report.id)
         setInsightsData(insights)
+        try {
+          const sync = await reportService.getReportSyncStatus(report.id)
+          setReportSyncStatus(sync)
+        } catch (syncErr) {
+          console.error('Failed to load sync status in admin', syncErr)
+        }
       } catch (e) {
         console.error(e)
       } finally {
@@ -316,6 +361,54 @@ function AdminReportsDashboardContent() {
         ))}
       </div>
 
+      {/* Knowledge Synchronization Controls & Stats Card */}
+      <Card className="border border-teal-200 shadow-sm bg-white">
+        <CardHeader className="pb-3 border-b border-slate-100 bg-teal-50/15 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <CardTitle className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+              <Cpu className="h-5 w-5 text-teal-600" />
+              Knowledge Synchronization & Vector Analytics
+            </CardTitle>
+            <p className="text-xs text-slate-500 mt-1">
+              Synchronize processed summaries to patient_memory (MongoDB) and patient_reports Qdrant vectors.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            onClick={handleRebuildSync}
+            className="bg-teal-600 hover:bg-teal-700 text-white font-semibold flex items-center gap-1.5 h-8 text-xs shrink-0"
+            disabled={loadingSync}
+          >
+            {loadingSync ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            Rebuild Synchronization Index
+          </Button>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
+            <div className="border rounded-md p-3 bg-slate-50">
+              <span className="text-[9px] uppercase font-bold text-slate-400 block">Total Sync Runs</span>
+              <span className="text-lg font-bold text-slate-800 mt-1 block">{syncTelemetry?.total_syncs ?? 0}</span>
+            </div>
+            <div className="border rounded-md p-3 bg-slate-50">
+              <span className="text-[9px] uppercase font-bold text-slate-400 block">Successful Syncs</span>
+              <span className="text-lg font-bold text-slate-800 mt-1 block">{syncTelemetry?.successful_syncs ?? 0}</span>
+            </div>
+            <div className="border rounded-md p-3 bg-slate-50">
+              <span className="text-[9px] uppercase font-bold text-slate-400 block">Failed Sync Jobs</span>
+              <span className="text-lg font-bold text-rose-600 mt-1 block">{syncTelemetry?.failed_syncs ?? 0}</span>
+            </div>
+            <div className="border rounded-md p-3 bg-slate-50">
+              <span className="text-[9px] uppercase font-bold text-slate-400 block">Duplicates Prevented</span>
+              <span className="text-lg font-bold text-teal-600 mt-1 block">{syncTelemetry?.duplicate_chunks_prevented ?? 0}</span>
+            </div>
+            <div className="border rounded-md p-3 bg-slate-50">
+              <span className="text-[9px] uppercase font-bold text-slate-400 block">Avg Sync Latency</span>
+              <span className="text-lg font-bold text-slate-800 mt-1 block">{syncTelemetry?.average_latency_ms ?? 0}ms</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Document Queue and Inspect Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Left Column: Job Queue List */}
@@ -412,9 +505,19 @@ function AdminReportsDashboardContent() {
                         >
                           Run Summary
                         </Button>
+                      ) : !report.is_synchronized ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleSingleSync(report.id)}
+                          className="text-xs text-indigo-600 hover:text-indigo-700 font-bold bg-indigo-50 h-7"
+                          disabled={loadingSync}
+                        >
+                          Sync Memory
+                        </Button>
                       ) : (
                         <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 py-0.5 rounded">
-                          Summarised
+                          Synchronised
                         </Badge>
                       )}
 
@@ -453,6 +556,7 @@ function AdminReportsDashboardContent() {
                   {[
                     { id: 'summary_json', name: 'Summary JSON' },
                     { id: 'prompt_debug', name: 'Prompt Debug' },
+                    { id: 'sync_validation', name: 'Sync Status' },
                     { id: 'risk', name: 'Risk JSON' },
                     { id: 'json', name: 'Struct JSON' },
                     { id: 'warnings', name: 'Warnings' },
@@ -472,6 +576,54 @@ function AdminReportsDashboardContent() {
               </div>
             </CardHeader>
             <CardContent className="pt-6 space-y-6">
+              {inspectTab === 'sync_validation' && (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Report Synchronization Audit Status</span>
+                    {inspectingReport.processing_status === 'completed' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleSingleSync(inspectingReport.id)}
+                        className="h-7 text-[10px] text-teal-700 border-teal-200"
+                        disabled={loadingSync}
+                      >
+                        Synchronize Knowledge
+                      </Button>
+                    )}
+                  </div>
+
+                  {loadingSync ? (
+                    <div className="text-center py-20 text-slate-500">
+                      <RefreshCw className="h-8 w-8 animate-spin text-teal-600 mb-2" />
+                      <p className="text-sm">Synchronizing memory documents & vector chunks...</p>
+                    </div>
+                  ) : reportSyncStatus ? (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-4 text-xs">
+                        <div className="p-3 border rounded bg-slate-50">
+                          <span className="text-slate-400 font-bold block">MongoDB Status</span>
+                          <span className="text-sm font-bold text-slate-800 mt-1 block">{reportSyncStatus.validation_details?.mongodb_memory_status}</span>
+                        </div>
+                        <div className="p-3 border rounded bg-slate-50">
+                          <span className="text-slate-400 font-bold block">Qdrant status</span>
+                          <span className="text-sm font-bold text-slate-800 mt-1 block">{reportSyncStatus.validation_details?.qdrant_points_status}</span>
+                        </div>
+                      </div>
+
+                      <pre className="bg-slate-950 text-indigo-400 p-4 rounded-lg font-mono text-[11px] overflow-auto max-h-[400px] border border-slate-800 whitespace-pre-wrap">
+                        {JSON.stringify(reportSyncStatus, null, 2)}
+                      </pre>
+                    </div>
+                  ) : (
+                    <div className="text-center py-20 border border-dashed rounded-lg text-slate-400 bg-slate-50/50">
+                      <Cpu className="h-10 w-10 mx-auto text-slate-300 mb-2 stroke-1" />
+                      <p className="text-sm">No synchronization logs compiled yet. Click &quot;Synchronize Knowledge&quot; above.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {inspectTab === 'summary_json' && (
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">

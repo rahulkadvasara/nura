@@ -104,6 +104,8 @@ export interface ReportResponse {
   summary_confidence?: number
   summary_version?: string
   summary_generated_at?: string
+  is_synchronized?: boolean
+  synchronized_at?: string
 }
 
 export interface ReportProcessingStatus {
@@ -240,6 +242,31 @@ export const reportService = {
 
   getReportAiTelemetry: async (): Promise<any> => {
     const response = await apiClient.get<{ success: boolean; data: any }>('/reports/ai/statistics')
+    return response.data.data
+  },
+
+  synchronizeReport: async (reportId: string): Promise<boolean> => {
+    const response = await apiClient.post<{ success: boolean }>((`/reports/${reportId}/synchronize`))
+    return response.data.success
+  },
+
+  getReportSyncStatus: async (reportId: string): Promise<any> => {
+    const response = await apiClient.get<{ success: boolean; data: any }>((`/reports/${reportId}/sync-status`))
+    return response.data.data
+  },
+
+  getReportSyncTelemetry: async (): Promise<any> => {
+    const response = await apiClient.get<{ success: boolean; data: any }>('/reports/synchronization/statistics')
+    return response.data.data
+  },
+
+  rebuildReportSync: async (): Promise<any> => {
+    const response = await apiClient.post<{ success: boolean; data: any }>('/reports/synchronization/rebuild')
+    return response.data.data
+  },
+
+  getPatientMemory: async (): Promise<any> => {
+    const response = await apiClient.get<{ success: boolean; data: any }>('/reports/patient-memory')
     return response.data.data
   },
 }

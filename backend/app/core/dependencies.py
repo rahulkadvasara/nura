@@ -3,7 +3,7 @@ Nura - Dependencies
 Dependency injection for services and repositories
 """
 
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Any
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -1245,6 +1245,66 @@ def get_appointment_agent() -> AppointmentAgent:
             prompt_loader=PromptLoader()
         )
     return _appointment_agent_instance
+
+
+_report_patient_memory_builder_instance = None
+_report_chunk_builder_instance = None
+_report_sync_service_instance = None
+_report_sync_validator_instance = None
+
+
+def get_report_patient_memory_builder() -> Any:
+    """Retrieve ReportPatientMemoryBuilder singleton"""
+    global _report_patient_memory_builder_instance
+    if _report_patient_memory_builder_instance is None:
+        from app.services.report_sync.patient_memory_builder import ReportPatientMemoryBuilder
+        _report_patient_memory_builder_instance = ReportPatientMemoryBuilder(
+            patient_memory_repository=get_patient_memory_repository(),
+            patient_summary_builder=get_patient_summary_builder()
+        )
+    return _report_patient_memory_builder_instance
+
+
+def get_report_chunk_builder() -> Any:
+    """Retrieve ReportChunkBuilder singleton"""
+    global _report_chunk_builder_instance
+    if _report_chunk_builder_instance is None:
+        from app.services.report_sync.chunk_builder import ReportChunkBuilder
+        _report_chunk_builder_instance = ReportChunkBuilder()
+    return _report_chunk_builder_instance
+
+
+def get_report_sync_service() -> Any:
+    """Retrieve ReportSyncService singleton"""
+    global _report_sync_service_instance
+    if _report_sync_service_instance is None:
+        from app.services.report_sync.report_sync_service import ReportSyncService
+        _report_sync_service_instance = ReportSyncService(
+            report_repository=get_report_repository(),
+            patient_memory_repository=get_patient_memory_repository(),
+            memory_builder=get_report_patient_memory_builder(),
+            chunk_builder=get_report_chunk_builder(),
+            embedding_service=get_embedding_service(),
+            vector_service=get_vector_service(),
+            index_version_service=get_index_version_service(),
+            audit_log_service=get_audit_log_service()
+        )
+    return _report_sync_service_instance
+
+
+def get_report_sync_validator() -> Any:
+    """Retrieve ReportSyncValidator singleton"""
+    global _report_sync_validator_instance
+    if _report_sync_validator_instance is None:
+        from app.services.report_sync.sync_validator import ReportSyncValidator
+        _report_sync_validator_instance = ReportSyncValidator(
+            report_repository=get_report_repository(),
+            patient_memory_repository=get_patient_memory_repository(),
+            vector_service=get_vector_service(),
+            index_version_service=get_index_version_service(),
+            chunk_builder=get_report_chunk_builder()
+        )
+    return _report_sync_validator_instance
 
 
 

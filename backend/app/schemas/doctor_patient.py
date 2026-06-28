@@ -4,7 +4,7 @@ Pydantic schemas for retrieving doctor-specific patient list and detail profiles
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Any
 from pydantic import BaseModel, Field, ConfigDict
 
 from app.schemas.appointment import AppointmentResponse, ConsultationResponse, PrescriptionResponse
@@ -49,3 +49,4 @@ class DoctorPatientDetailResponse(BaseModel):
     health_insights: List[HealthInsightResponse] = Field(default_factory=list, description="Health insights generated for this patient")
     current_reminders: List[ReminderResponse] = Field(default_factory=list, description="Active reminders set for this patient")
     latest_chat_session: Optional[ChatSessionResponse] = Field(None, description="Latest doctor-patient chat session details if exists")
+    patient_memory: Optional[Any] = Field(None, description="Longitudinal patient memory profile containing clinical history summaries")

@@ -4,7 +4,7 @@ MongoDB models for patient_memory collection
 """
 
 from datetime import datetime, timezone
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Dict
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -31,6 +31,19 @@ class PatientMemoryBase(BaseModel):
     content_hash: Optional[str] = Field(None, description="Hash of patient memory sections for incremental updates")
     summary_version: int = Field(default=1, description="Incremental version number of patient memory")
 
+    # New fields added for Sprint 5 Report Synchronization
+    longitudinal_summary: Optional[str] = Field(None, description="Detailed overall health longitudinal summary")
+    latest_report_summary: Optional[str] = Field(None, description="AI summary of the most recently processed report")
+    latest_risk: Optional[str] = Field(None, description="Risk assessment level of the most recently processed report")
+    laboratory_history: List[Dict[str, Any]] = Field(default_factory=list, description="Historical lab test parameters tracker")
+    medication_history: List[Dict[str, Any]] = Field(default_factory=list, description="Historical list of medications prescribed")
+    diagnosis_history: List[Dict[str, Any]] = Field(default_factory=list, description="Historical clinical diagnoses tracker")
+    laboratory_trends: Optional[str] = Field(None, description="Calculated longitudinal lab value trends text")
+    latest_recommendations: List[Dict[str, Any]] = Field(default_factory=list, description="Suggestions from the latest risk analysis run")
+    procedures: List[str] = Field(default_factory=list, description="Extracted clinical procedures history")
+    medical_history: List[str] = Field(default_factory=list, description="Textual patient history records")
+    report_summaries: List[Dict[str, Any]] = Field(default_factory=list, description="History log of individual report summaries")
+
 
 class PatientMemoryCreate(PatientMemoryBase):
     """Model used to create a new patient memory record"""
@@ -51,6 +64,19 @@ class PatientMemoryUpdate(BaseModel):
     timeline: Optional[List[Any]] = None
     content_hash: Optional[str] = None
     summary_version: Optional[int] = None
+
+    # New fields updates for Sprint 5
+    longitudinal_summary: Optional[str] = None
+    latest_report_summary: Optional[str] = None
+    latest_risk: Optional[str] = None
+    laboratory_history: Optional[List[Dict[str, Any]]] = None
+    medication_history: Optional[List[Dict[str, Any]]] = None
+    diagnosis_history: Optional[List[Dict[str, Any]]] = None
+    laboratory_trends: Optional[str] = None
+    latest_recommendations: Optional[List[Dict[str, Any]]] = None
+    procedures: Optional[List[str]] = None
+    medical_history: Optional[List[str]] = None
+    report_summaries: Optional[List[Dict[str, Any]]] = None
 
 
 class PatientMemoryInDB(PatientMemoryBase):

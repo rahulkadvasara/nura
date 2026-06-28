@@ -439,6 +439,31 @@ export default function DoctorPatientsPage() {
                         {/* Tab 1: Insights & Reminders */}
                         {activeTab === 'insights' && (
                           <div className="space-y-6">
+                            {/* Patient Longitudinal Health Memory */}
+                            {detailData.patient_memory && (
+                              <Card className="border border-teal-200 bg-gradient-to-r from-teal-50/50 to-cyan-50/50 p-4 shadow-sm space-y-2">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[10px] font-bold text-teal-800 uppercase tracking-wider bg-teal-100 px-2 py-0.5 rounded">
+                                    AI Health Memory
+                                  </span>
+                                  <span className="text-slate-400 text-xs font-semibold">•</span>
+                                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                    Summary Version: v{detailData.patient_memory.summary_version}
+                                  </span>
+                                </div>
+                                <h4 className="font-bold text-slate-800 text-sm">Longitudinal Health Summary</h4>
+                                <p className="text-xs text-slate-700 leading-relaxed font-medium">
+                                  {detailData.patient_memory.longitudinal_summary || detailData.patient_memory.ai_summary}
+                                </p>
+                                {detailData.patient_memory.laboratory_trends && (
+                                  <div className="border-t border-teal-100 pt-2 mt-2">
+                                    <span className="text-[9px] uppercase font-bold text-teal-800 tracking-wider">Laboratory Trends</span>
+                                    <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">{detailData.patient_memory.laboratory_trends}</p>
+                                  </div>
+                                )}
+                              </Card>
+                            )}
+
                             {/* AI Health Insights */}
                             <div className="space-y-3">
                               <h4 className="font-bold text-slate-800 text-sm tracking-wide uppercase flex items-center gap-2">
@@ -533,6 +558,31 @@ export default function DoctorPatientsPage() {
                         {/* Tab 2: History (Appointments & Consultations) */}
                         {activeTab === 'history' && (
                           <div className="space-y-6">
+                            {/* AI Patient Health Timeline */}
+                            {detailData.patient_memory?.timeline && detailData.patient_memory.timeline.length > 0 && (
+                              <div className="space-y-3 bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+                                <h4 className="font-bold text-slate-800 text-sm tracking-wide uppercase flex items-center gap-2">
+                                  <Clock className="h-4 w-4 text-teal-600" />
+                                  Longitudinal Medical Timeline
+                                </h4>
+                                <div className="relative border-l-2 border-teal-100 pl-4 ml-2 space-y-4 pt-2">
+                                  {detailData.patient_memory.timeline.slice(0, 10).map((event: any, idx: number) => (
+                                    <div key={idx} className="relative">
+                                      <div className="absolute -left-[22px] top-1.5 h-2.5 w-2.5 rounded-full bg-teal-500 border border-white" />
+                                      <div className="space-y-0.5 text-xs">
+                                        <span className="text-[10px] font-bold text-slate-450">
+                                          {event.timestamp ? new Date(event.timestamp).toLocaleDateString() : 'Historical'}
+                                        </span>
+                                        <p className="text-slate-700 font-semibold leading-relaxed">
+                                          {event.description}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
                             {/* Consultation Summary Log */}
                             <div className="space-y-3">
                               <h4 className="font-bold text-slate-800 text-sm tracking-wide uppercase flex items-center gap-2">

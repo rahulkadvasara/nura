@@ -22,6 +22,9 @@ from app.core.dependencies import (
     get_report_extraction_service,
     get_risk_analysis_service,
     get_report_understanding_service,
+    get_report_sync_service,
+    get_report_sync_validator,
+    get_patient_memory_repository,
 )
 from app.services.report_service import ReportService
 from app.services.report_processing.document_parser import DocumentParser
@@ -689,6 +692,135 @@ async def get_report_ai_telemetry_stats(
         success=True,
         message="Clinical report AI telemetry statistics fetched successfully",
         data=stats
+    )
+
+
+@router.get(
+    "/patient-memory",
+    response_model=SuccessResponse,
+    summary="Retrieve the patient memory profile for the logged in patient",
+)
+async def get_patient_memory(
+    current_user: UserInDB = Depends(get_current_user),
+    memory_repo = Depends(get_patient_memory_repository),
+) -> SuccessResponse:
+    if current_user.role != UserRole.PATIENT:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only patient accounts can fetch their patient memory"
+        )
+    
+    memory = await memory_repo.get_by_patient_id(str(current_user.id))
+    return SuccessResponse(
+        success=True,
+        message="Patient memory retrieved successfully",
+        data=memory
+    )
+
+
+@router.get(
+    "/synchronization/statistics",
+    response_model=SuccessResponse,
+    summary="Get cumulative report synchronization statistics. Guarded: Admin Only.",
+)
+async def get_report_sync_statistics(
+    current_user: UserInDB = Depends(get_current_user),
+) -> SuccessResponse:
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admin accounts can retrieve report sync statistics"
+        )
+    
+    from app.services.report_sync.telemetry import get_report_sync_telemetry
+    stats = get_report_sync_telemetry().get_statistics()
+    return SuccessResponse(
+        success=True,
+        message="Synchronization statistics retrieved successfully",
+        data=stats
+    )
+
+
+@router.post(
+    "/synchronization/rebuild",
+    response_model=SuccessResponse,
+    summary="Rebuild synchronization index for all processed medical reports. Guarded: Admin Only.",
+)
+async def rebuild_report_synchronization(
+    current_user: UserInDB = Depends(get_current_user),
+    sync_service = Depends(get_report_sync_service),
+) -> SuccessResponse:
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admin accounts are authorized to trigger index rebuilds"
+        )
+    
+    res = await sync_service.rebuild_all_synchronizations()
+    return SuccessResponse(
+        success=True,
+        message="Rebuild synchronization jobs executed",
+        data=res
+    )
+
+
+@router.post(
+    "/{report_id}/synchronize",
+    response_model=SuccessResponse,
+    summary="Trigger report summaries and metadata synchronization to patient memory and Qdrant",
+)
+async def synchronize_report(
+    report_id: str,
+    current_user: UserInDB = Depends(get_current_user),
+    report_service = Depends(get_report_service),
+    sync_service = Depends(get_report_sync_service),
+) -> SuccessResponse:
+    # Fetch report
+    report = await report_service.get_report_by_id(report_id)
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found"
+        )
+
+    # Authorize access
+    await verify_report_access(report, current_user)
+
+    res = await sync_service.synchronize_report(report_id)
+    return SuccessResponse(
+        success=True,
+        message="Report synchronization completed successfully",
+        data=res
+    )
+
+
+@router.get(
+    "/{report_id}/sync-status",
+    response_model=SuccessResponse,
+    summary="Retrieve validation check status of report sync pipeline",
+)
+async def get_report_sync_status(
+    report_id: str,
+    current_user: UserInDB = Depends(get_current_user),
+    report_service = Depends(get_report_service),
+    validator = Depends(get_report_sync_validator),
+) -> SuccessResponse:
+    # Fetch report
+    report = await report_service.get_report_by_id(report_id)
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found"
+        )
+
+    # Authorize access
+    await verify_report_access(report, current_user)
+
+    res = await validator.validate_synchronization(report_id)
+    return SuccessResponse(
+        success=True,
+        message="Report synchronization validation status retrieved",
+        data=res
     )
 
 

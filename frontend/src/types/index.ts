@@ -591,6 +591,7 @@ export interface DoctorPatientDetail {
   health_insights: HealthInsight[]
   current_reminders: Reminder[]
   latest_chat_session?: ChatSession
+  patient_memory?: any
 }
 
 // Doctor Earnings Dashboard Types (Sprint 8)
