@@ -456,6 +456,16 @@ export const aiService = {
   getDrugStatistics: async (): Promise<DrugTelemetryResponse> => {
     const response = await apiClient.get<DrugTelemetryResponse>('/ai/drug/statistics')
     return response.data
+  },
+
+  checkDrugInteractions: async (medications: string[]): Promise<DrugCheckResponse> => {
+    const response = await apiClient.post<DrugCheckResponse>('/ai/drug/check', { medications })
+    return response.data
+  },
+
+  getDrugInteractionsStatistics: async (): Promise<DrugTelemetryResponse> => {
+    const response = await apiClient.get<DrugTelemetryResponse>('/ai/drug/interactions/statistics')
+    return response.data
   }
 }
 
@@ -1087,7 +1097,33 @@ export interface DrugTelemetryResponse {
   avg_latency_ms: number
   unknown_drug_count: number
   normalization_count: number
+  
+  // Interaction stats
+  interaction_checks: number
+  pairs_evaluated: number
+  interaction_avg_latency_ms: number
+  severity_distribution: Record<string, number>
 }
+
+export interface InteractionPairDetail {
+  drug_a: string
+  drug_a_normalized: string
+  drug_b: string
+  drug_b_normalized: string
+  severity: string
+  description: string
+}
+
+export interface DrugCheckResponse {
+  medications: string[]
+  normalized_medications: string[]
+  detected_interactions: InteractionPairDetail[]
+  severity: string
+  recommendations: string[]
+  statistics: DrugTelemetryResponse
+  latency_ms: number
+}
+
 
 
 

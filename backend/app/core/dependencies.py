@@ -616,6 +616,16 @@ def get_drug_lookup_service():
     return DrugLookupService(database)
 
 
+def get_drug_interaction_engine(
+    lookup_service = Depends(get_drug_lookup_service)
+):
+    """Get DrugInteractionEngine instance"""
+    from app.services.drug_safety.interaction_engine import DrugInteractionEngine
+    database = get_database()
+    return DrugInteractionEngine(database, lookup_service)
+
+
+
 
 def get_embedding_service() -> EmbeddingService:
     """Get EmbeddingService instance"""

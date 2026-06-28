@@ -51,6 +51,7 @@ import {
   DrugLookupResponse,
   DrugNormalizeResponse,
   DrugTelemetryResponse,
+  DrugCheckResponse,
 } from '@/services/ai.service'
 
 /**
@@ -736,6 +737,36 @@ export function useDrugStatistics() {
     refetchInterval: 10000, // Refresh statistics every 10 seconds
   })
 }
+
+/**
+ * Custom hook to execute a drug-drug interaction check for a list of medications.
+ */
+export function useCheckDrugInteractions() {
+  const queryClient = useQueryClient()
+  return useMutation<DrugCheckResponse, Error, string[]>({
+    mutationFn: async (medications: string[]) => {
+      return await aiService.checkDrugInteractions(medications)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'drug', 'statistics'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'drug-interactions', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to fetch drug interaction statistics periodically.
+ */
+export function useDrugInteractionsStatistics() {
+  return useQuery<DrugTelemetryResponse, Error>({
+    queryKey: ['admin', 'ai', 'drug-interactions', 'statistics'],
+    queryFn: async () => {
+      return await aiService.getDrugInteractionsStatistics()
+    },
+    refetchInterval: 10000, // Refresh statistics every 10 seconds
+  })
+}
+
 
 
 

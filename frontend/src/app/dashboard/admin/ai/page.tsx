@@ -50,7 +50,9 @@ import {
   useHealthcareAgentsStatistics,
   useDrugLookup,
   useDrugNormalize,
-  useDrugStatistics
+  useDrugStatistics,
+  useCheckDrugInteractions,
+  useDrugInteractionsStatistics
 } from '@/hooks/use-ai'
 import { HealthcareAgentsView } from './healthcare_agents_view'
 import { OperationsAgentsView } from './operations_agents_view'
@@ -6195,8 +6197,280 @@ function DrugLookupPlaygroundView() {
   )
 }
 
+function DrugInteractionPlaygroundView() {
+  const [medList, setMedList] = useState<string[]>(['Warfarin', 'Aspirin', 'Metformin'])
+  const [newMed, setNewMed] = useState('')
+  const [checkResult, setCheckResult] = useState<any>(null)
+  
+  const checkMutation = useCheckDrugInteractions()
+  const { data: stats, refetch: refetchStats } = useDrugInteractionsStatistics()
+
+  const handleAddMed = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (newMed.trim() && !medList.includes(newMed.trim())) {
+      setMedList([...medList, newMed.trim()])
+      setNewMed('')
+    }
+  }
+
+  const handleRemoveMed = (index: number) => {
+    setMedList(medList.filter((_, i) => i !== index))
+  }
+
+  const handleCheck = async () => {
+    if (medList.length === 0) return
+    try {
+      const res = await checkMutation.mutateAsync(medList)
+      setCheckResult(res)
+      refetchStats()
+    } catch (err) {
+      setCheckResult(null)
+    }
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
+      <div className="lg:col-span-2 space-y-6">
+        {/* Medication Editor Card */}
+        <Card className="border-slate-200 shadow-md bg-white">
+          <CardHeader className="border-b border-slate-100 bg-slate-50/50">
+            <CardTitle className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+              <Sliders className="h-5 w-5 text-teal-600" />
+              Medication List Editor
+            </CardTitle>
+            <CardDescription>
+              Build the list of drugs to analyze for potential drug-drug interactions.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6 space-y-4">
+            <form onSubmit={handleAddMed} className="flex gap-2">
+              <Input
+                placeholder="Type medication name (e.g. Warfarin, Aspirin)..."
+                value={newMed}
+                onChange={(e) => setNewMed(e.target.value)}
+                className="border-slate-200 focus:border-teal-500 focus:ring-teal-500"
+              />
+              <Button type="submit" variant="outline" className="border-slate-200 text-slate-700 hover:bg-slate-50 font-medium">
+                Add Medication
+              </Button>
+            </form>
+
+            <div className="flex flex-wrap gap-2 py-2">
+              {medList.length === 0 ? (
+                <span className="text-sm text-slate-400 italic">No medications added yet.</span>
+              ) : (
+                medList.map((med, index) => (
+                  <div key={index} className="flex items-center gap-1.5 bg-slate-100 border border-slate-200 rounded-full pl-3 pr-1 py-1 text-sm text-slate-800 animate-in zoom-in-95 duration-100">
+                    <span>{med}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveMed(index)}
+                      className="h-5 w-5 rounded-full hover:bg-slate-200 text-slate-500 hover:text-slate-700 flex items-center justify-center font-bold text-xs"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-slate-100">
+              <Button
+                onClick={handleCheck}
+                disabled={medList.length === 0 || checkMutation.isPending}
+                className="bg-teal-600 hover:bg-teal-700 text-white font-semibold shadow"
+              >
+                {checkMutation.isPending ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Checking Interactions...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="h-4 w-4 mr-2" />
+                    Check Interactions
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Results Panel */}
+        {checkResult && (
+          <Card className="border-slate-200 shadow-md bg-white overflow-hidden animate-in slide-in-from-top-2 duration-200">
+            <CardHeader className="border-b border-slate-100 bg-slate-50/50 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-lg font-semibold text-slate-800">
+                  Interaction Evaluation Report
+                </CardTitle>
+                <CardDescription>
+                  Deterministic matching results from MongoDB `drug_interactions` collection.
+                </CardDescription>
+              </div>
+              <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
+                checkResult.severity === 'HIGH' ? 'bg-red-100 text-red-800 border border-red-200' :
+                checkResult.severity === 'MEDIUM' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                checkResult.severity === 'LOW' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
+                checkResult.severity === 'UNKNOWN' ? 'bg-slate-100 text-slate-800 border border-slate-200' :
+                'bg-teal-50 text-teal-800 border border-teal-100'
+              }`}>
+                Overall Severity: {checkResult.severity}
+              </span>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-6">
+              {/* Recommendations */}
+              <div className="p-4 rounded-lg bg-slate-50 border border-slate-100">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Deterministic Action Plan</h4>
+                <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700 font-medium">
+                  {checkResult.recommendations.map((rec: string, i: number) => (
+                    <li key={i}>{rec}</li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Interactions Table */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Matched Interaction Pairs</h4>
+                {checkResult.detected_interactions.length === 0 ? (
+                  <div className="p-8 border border-dashed rounded-lg text-center text-slate-400 text-sm">
+                    No active drug-drug interactions detected between these medications.
+                  </div>
+                ) : (
+                  <div className="border border-slate-100 rounded-lg overflow-hidden">
+                    <table className="w-full text-left text-sm text-slate-700">
+                      <thead className="bg-slate-50 text-xs font-semibold text-slate-600 border-b border-slate-100">
+                        <tr>
+                          <th className="px-4 py-2">Medication A</th>
+                          <th className="px-4 py-2">Medication B</th>
+                          <th className="px-4 py-2">Severity</th>
+                          <th className="px-4 py-2">Description</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 bg-white">
+                        {checkResult.detected_interactions.map((pair: any, i: number) => (
+                          <tr key={i} className="hover:bg-slate-50/50">
+                            <td className="px-4 py-3 font-medium text-slate-900">
+                              {pair.drug_a} <span className="block text-[10px] text-slate-400 font-mono">{pair.drug_a_normalized}</span>
+                            </td>
+                            <td className="px-4 py-3 font-medium text-slate-900">
+                              {pair.drug_b} <span className="block text-[10px] text-slate-400 font-mono">{pair.drug_b_normalized}</span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                pair.severity === 'HIGH' ? 'bg-red-50 text-red-700' :
+                                pair.severity === 'MEDIUM' ? 'bg-amber-50 text-amber-700' :
+                                pair.severity === 'LOW' ? 'bg-yellow-50 text-yellow-700' :
+                                'bg-slate-50 text-slate-700'
+                              }`}>
+                                {pair.severity}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-slate-600 leading-relaxed max-w-[250px] truncate" title={pair.description}>
+                              {pair.description}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Latency check */}
+              <div className="text-right text-[10px] text-slate-400 font-mono">
+                Evaluation latency: {checkResult.latency_ms} ms
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Telemetry and Stats Sidebar */}
+      <div className="space-y-6">
+        {/* Latency card */}
+        <Card className="border-slate-200 shadow bg-gradient-to-br from-teal-50 to-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Avg Check Latency</p>
+                <h3 className="text-3xl font-extrabold text-teal-900 mt-1">
+                  {stats?.interaction_avg_latency_ms ?? 0} <span className="text-lg font-semibold text-teal-600">ms</span>
+                </h3>
+              </div>
+              <div className="p-3 rounded-full bg-teal-100 text-teal-700">
+                <Clock className="h-6 w-6" />
+              </div>
+            </div>
+            <div className="mt-3 text-xs text-slate-400 flex items-center gap-1">
+              <Activity className="h-3 w-3 text-teal-500" />
+              Running latency of interaction checks
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Evaluation Summary Card */}
+        <Card className="border-slate-200 shadow-md bg-white">
+          <CardHeader className="pb-3 border-b border-slate-100">
+            <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+              <Layers className="h-4 w-4 text-slate-500" />
+              Execution Statistics
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4 space-y-3 text-xs text-slate-600">
+            <div className="flex justify-between items-center">
+              <span>Total Check Requests:</span>
+              <span className="font-semibold text-slate-800">{stats?.interaction_checks ?? 0}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span>Pairs Evaluated:</span>
+              <span className="font-semibold text-slate-800">{stats?.pairs_evaluated ?? 0}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span>Total Master Lookups:</span>
+              <span className="font-semibold text-slate-800">{stats?.total_lookups ?? 0}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Severity Distribution Card */}
+        {stats && stats.severity_distribution && (
+          <Card className="border-slate-200 shadow-md bg-white">
+            <CardHeader className="pb-3 border-b border-slate-100">
+              <CardTitle className="text-sm font-semibold text-slate-700">
+                Severity Profile
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-2">
+              {Object.entries(stats.severity_distribution).map(([sev, count]: [string, any]) => (
+                <div key={sev} className="space-y-1">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-medium text-slate-600">{sev}</span>
+                    <span className="font-semibold text-slate-800">{count}</span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full rounded-full ${
+                        sev === 'HIGH' ? 'bg-red-500' :
+                        sev === 'MEDIUM' ? 'bg-amber-500' :
+                        sev === 'LOW' ? 'bg-yellow-400' :
+                        sev === 'UNKNOWN' ? 'bg-slate-400' : 'bg-teal-500'
+                      }`} 
+                      style={{ width: `${stats.interaction_checks > 0 ? (count / stats.interaction_checks) * 100 : 0}%` }} 
+                    />
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function AIPlaygroundContent() {
-  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent' | 'workflow-engine' | 'router-agent' | 'core-agents' | 'healthcare-agents' | 'operations-agents' | 'drug-lookup'>('llm')
+  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent' | 'workflow-engine' | 'router-agent' | 'core-agents' | 'healthcare-agents' | 'operations-agents' | 'drug-lookup' | 'drug-interactions'>('llm')
 
   return (
     <div className="space-y-6">
@@ -6395,6 +6669,17 @@ function AIPlaygroundContent() {
           Drug Lookup
         </button>
         <button
+          onClick={() => setActiveTab('drug-interactions')}
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
+            activeTab === 'drug-interactions'
+              ? 'border-teal-600 text-teal-600 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Zap className="h-4 w-4" />
+          Drug Interaction Engine
+        </button>
+        <button
           onClick={() => setActiveTab('integration')}
           className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
             activeTab === 'integration'
@@ -6435,6 +6720,8 @@ function AIPlaygroundContent() {
         <OperationsAgentsView />
       ) : activeTab === 'drug-lookup' ? (
         <DrugLookupPlaygroundView />
+      ) : activeTab === 'drug-interactions' ? (
+        <DrugInteractionPlaygroundView />
       ) : (
         <IntegrationPlaygroundView />
       )}

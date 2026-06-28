@@ -208,6 +208,15 @@ class DrugTelemetryResponse(BaseModel):
     avg_latency_ms: float = Field(..., description="Running average lookup latency in milliseconds")
     unknown_drug_count: int = Field(..., description="Count of unknown drug lookups")
     normalization_count: int = Field(..., description="Count of normalizations executed")
+    
+    # Interaction stats
+    interaction_checks: int = Field(..., description="Count of interaction checks executed")
+    pairs_evaluated: int = Field(..., description="Count of medication pairs evaluated")
+    interaction_avg_latency_ms: float = Field(..., description="Running average interaction check latency in milliseconds")
+    severity_distribution: Dict[str, int] = Field(..., description="Frequency counts of overall severity levels detected")
+
+
+from app.services.drug_safety.models import DrugCheckRequest, DrugCheckResponse, InteractionPairDetail
 
 
 

@@ -43,6 +43,7 @@ from app.core.dependencies import (
     get_multi_agent_orchestrator,
     get_drug_normalizer,
     get_drug_lookup_service,
+    get_drug_interaction_engine,
 )
 from app.models import UserRole, UserInDB
 from app.schemas.ai import (
@@ -57,6 +58,8 @@ from app.schemas.ai import (
     DrugNormalizeRequest,
     DrugNormalizeResponse,
     DrugTelemetryResponse,
+    DrugCheckRequest,
+    DrugCheckResponse,
     DocumentIndexRequest,
     DocumentIndexResponse,
     BatchDocumentIndexRequest,
@@ -1833,6 +1836,44 @@ async def get_drug_statistics(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch drug safety statistics: {str(e)}"
         )
+
+
+@router.post(
+    "/drug/check",
+    response_model=DrugCheckResponse,
+    summary="Validate potential interactions across a list of medications. Guarded: Admin Only.",
+)
+async def check_drug_interactions(
+    payload: DrugCheckRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    interaction_engine = Depends(get_drug_interaction_engine),
+):
+    try:
+        return await interaction_engine.check_interactions(payload.medications)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Drug interaction check failed: {str(e)}"
+        )
+
+
+@router.get(
+    "/drug/interactions/statistics",
+    response_model=DrugTelemetryResponse,
+    summary="Retrieve cumulative drug interaction checking statistics. Guarded: Admin Only.",
+)
+async def get_drug_interactions_statistics(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+):
+    try:
+        from app.services.drug_safety.telemetry import drug_safety_telemetry
+        return drug_safety_telemetry.get_statistics()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch drug interaction statistics: {str(e)}"
+        )
+
 
 
 
