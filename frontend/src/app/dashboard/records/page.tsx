@@ -25,7 +25,8 @@ import {
   Shield,
   Layers,
   Zap,
-  CheckSquare
+  CheckSquare,
+  HelpCircle
 } from 'lucide-react'
 
 export default function PatientRecordsPage() {
@@ -41,10 +42,13 @@ export default function PatientRecordsPage() {
   const [ocrData, setOcrData] = useState<ReportOcrData | null>(null)
   const [structuredData, setStructuredData] = useState<any>(null)
   const [riskData, setRiskData] = useState<any>(null)
+  const [summaryData, setSummaryData] = useState<any>(null)
+  const [insightsData, setInsightsData] = useState<any>(null)
   const [loadingOcr, setLoadingOcr] = useState(false)
   const [loadingExtraction, setLoadingExtraction] = useState(false)
   const [loadingRisk, setLoadingRisk] = useState(false)
-  const [inspectTab, setInspectTab] = useState<'structured' | 'ocr' | 'labs' | 'meds' | 'risk'>('structured')
+  const [loadingSummary, setLoadingSummary] = useState(false)
+  const [inspectTab, setInspectTab] = useState<'structured' | 'ocr' | 'labs' | 'meds' | 'risk' | 'summary'>('summary')
 
   const fetchReports = async () => {
     try {
@@ -139,7 +143,9 @@ export default function PatientRecordsPage() {
     setOcrData(null)
     setStructuredData(null)
     setRiskData(null)
-    setInspectTab(report.overall_risk ? 'risk' : report.extraction_status === 'completed' ? 'structured' : 'ocr')
+    setSummaryData(null)
+    setInsightsData(null)
+    setInspectTab(report.patient_summary || report.ai_summary ? 'summary' : report.overall_risk ? 'risk' : report.extraction_status === 'completed' ? 'structured' : 'ocr')
 
     if (report.ocr_status === 'completed') {
       try {
@@ -175,6 +181,38 @@ export default function PatientRecordsPage() {
       } finally {
         setLoadingRisk(false)
       }
+    }
+
+    if (report.patient_summary || report.ai_summary) {
+      try {
+        setLoadingSummary(true)
+        const summary = await reportService.getReportSummary(report.id)
+        setSummaryData(summary)
+        const insights = await reportService.getReportInsights(report.id)
+        setInsightsData(insights)
+      } catch (e) {
+        console.error(e)
+      } finally {
+        setLoadingSummary(false)
+      }
+    }
+  }
+
+  const handleGenerateSummary = async (reportId: string) => {
+    try {
+      setLoadingSummary(true)
+      await reportService.summarizeReport(reportId)
+      fetchReports()
+      setTimeout(async () => {
+        const summary = await reportService.getReportSummary(reportId)
+        setSummaryData(summary)
+        const insights = await reportService.getReportInsights(reportId)
+        setInsightsData(insights)
+      }, 4000)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoadingSummary(false)
     }
   }
 
@@ -467,6 +505,7 @@ export default function PatientRecordsPage() {
 
                 <div className="flex flex-wrap gap-2">
                   {[
+                    { id: 'summary', name: 'AI Summary' },
                     { id: 'risk', name: 'Clinical Risk' },
                     { id: 'structured', name: 'Profile Summary' },
                     { id: 'labs', name: 'Lab Results' },
@@ -489,6 +528,141 @@ export default function PatientRecordsPage() {
               </CardHeader>
 
               <CardContent className="pt-6">
+                {/* AI Summary Tab */}
+                {inspectTab === 'summary' && (
+                  <div className="space-y-6">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">AI Report Summarization</span>
+                      {inspectingReport.overall_risk && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleGenerateSummary(inspectingReport.id)}
+                          className="h-7 text-[10px] text-teal-700 border-teal-200"
+                          disabled={loadingSummary}
+                        >
+                          {summaryData ? 'Re-run Summarization' : 'Generate AI Summary'}
+                        </Button>
+                      )}
+                    </div>
+
+                    {loadingSummary ? (
+                      <div className="text-center py-10 bg-white border border-slate-200 rounded-lg shadow-sm">
+                        <RefreshCw className="h-6 w-6 animate-spin text-teal-600 mx-auto mb-2" />
+                        <p className="text-xs text-slate-500 font-medium">Synthesizing clinical observations & patient explanations...</p>
+                      </div>
+                    ) : summaryData ? (
+                      <div className="space-y-6 text-xs text-slate-700">
+                        {/* Executive AI Summary Card */}
+                        <div className="p-5 rounded-lg border border-teal-100 bg-gradient-to-r from-teal-50/50 to-cyan-50/50 shadow-xs space-y-2">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <span className="text-[9px] uppercase font-bold text-teal-800 tracking-wider">Executive Overview</span>
+                              <h4 className="text-sm font-bold text-slate-800 mt-0.5">Clinical Analysis Summary</h4>
+                            </div>
+                            <Badge className="bg-teal-100 text-teal-800 border-teal-200 rounded hover:bg-teal-100 font-semibold text-[9px]">
+                              Confidence: {(summaryData.summary_confidence * 100).toFixed(0)}%
+                            </Badge>
+                          </div>
+                          <p className="text-slate-700 text-xs leading-relaxed font-medium mt-1">
+                            {summaryData.ai_summary}
+                          </p>
+                          <div className="text-[9px] text-slate-400 mt-2 flex justify-between">
+                            <span>Template version: {summaryData.summary_version}</span>
+                            {summaryData.summary_generated_at && (
+                              <span>Generated: {new Date(summaryData.summary_generated_at).toLocaleString()}</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Patient Explanation */}
+                        <Card className="border border-slate-100 shadow-xs">
+                          <CardHeader className="py-3 bg-slate-50/50 border-b border-slate-100">
+                            <CardTitle className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                              <Heart className="h-3.5 w-3.5 text-rose-500" />
+                              Patient-Friendly Explanation
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="pt-4 pb-4">
+                            <p className="text-xs leading-relaxed text-slate-600 whitespace-pre-line">
+                              {summaryData.patient_summary}
+                            </p>
+                          </CardContent>
+                        </Card>
+
+                        {/* Key Findings & Follow-up Questions Grid */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          {/* Key Findings */}
+                          <div className="space-y-3">
+                            <span className="font-bold uppercase text-slate-500 tracking-wider text-[10px] flex items-center gap-1.5">
+                              <CheckSquare className="h-3.5 w-3.5 text-teal-600" />
+                              Important Observations & Findings
+                            </span>
+                            {insightsData && insightsData.key_findings && insightsData.key_findings.length > 0 ? (
+                              <div className="space-y-2">
+                                {insightsData.key_findings.map((finding: string, idx: number) => (
+                                  <div key={idx} className="flex items-start gap-2 p-2 border border-slate-100 bg-white rounded shadow-2xs">
+                                    <div className="h-4 w-4 bg-teal-50 text-teal-600 rounded flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">✓</div>
+                                    <span className="text-slate-600 text-xs leading-relaxed">{finding}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="p-4 border border-dashed rounded text-center text-slate-400 bg-slate-50">
+                                No key findings generated.
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Suggested questions */}
+                          <div className="space-y-3">
+                            <span className="font-bold uppercase text-slate-500 tracking-wider text-[10px] flex items-center gap-1.5">
+                              <HelpCircle className="h-3.5 w-3.5 text-teal-600" />
+                              Suggested Doctor Questions
+                            </span>
+                            {insightsData && insightsData.followup_questions && insightsData.followup_questions.length > 0 ? (
+                              <div className="space-y-2">
+                                {insightsData.followup_questions.map((q: string, idx: number) => (
+                                  <div key={idx} className="p-3 border border-indigo-50 bg-indigo-50/10 rounded-lg flex items-start gap-2 shadow-2xs">
+                                    <HelpCircle className="h-4 w-4 text-indigo-500 shrink-0 mt-0.5" />
+                                    <span className="text-slate-700 font-medium text-[11px] leading-relaxed">{q}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="p-4 border border-dashed rounded text-center text-slate-400 bg-slate-50">
+                                No suggested questions available.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-8 border border-dashed rounded-lg text-center text-slate-500 bg-slate-50 space-y-3">
+                        <Zap className="h-8 w-8 text-amber-500 mx-auto" />
+                        <h4 className="font-bold text-sm text-slate-800">AI Summary Not Generated Yet</h4>
+                        <p className="text-xs text-slate-400 max-w-sm mx-auto leading-relaxed">
+                          This report has not been summarised using AI. Clinically analyze the report inputs to synthesize patient and doctor descriptions.
+                        </p>
+                        {inspectingReport.overall_risk ? (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => handleGenerateSummary(inspectingReport.id)}
+                            className="bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs mt-2"
+                          >
+                            Generate AI Summary
+                          </Button>
+                        ) : (
+                          <div className="text-[10px] text-amber-600 font-bold bg-amber-50 rounded p-2 inline-block">
+                            Please calculate Clinical Risk under the 'Clinical Risk' tab first.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Clinical Risk Tab */}
                 {inspectTab === 'risk' && (
                   <div className="space-y-6">

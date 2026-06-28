@@ -895,6 +895,55 @@ def get_risk_analysis_service():
     return _risk_analysis_service_instance
 
 
+_report_prompt_loader_instance = None
+_report_summary_service_instance = None
+_report_insight_service_instance = None
+_report_understanding_service_instance = None
+
+
+def get_report_prompt_loader():
+    """Retrieve singleton ReportPromptLoader instance"""
+    global _report_prompt_loader_instance
+    if _report_prompt_loader_instance is None:
+        from app.services.report_ai.utils import ReportPromptLoader
+        _report_prompt_loader_instance = ReportPromptLoader()
+    return _report_prompt_loader_instance
+
+
+def get_report_summary_service():
+    """Retrieve singleton SummaryService instance"""
+    global _report_summary_service_instance
+    if _report_summary_service_instance is None:
+        from app.services.report_ai.summary_service import SummaryService
+        _report_summary_service_instance = SummaryService()
+    return _report_summary_service_instance
+
+
+def get_report_insight_service():
+    """Retrieve singleton InsightService instance"""
+    global _report_insight_service_instance
+    if _report_insight_service_instance is None:
+        from app.services.report_ai.insight_service import InsightService
+        _report_insight_service_instance = InsightService()
+    return _report_insight_service_instance
+
+
+def get_report_understanding_service():
+    """Retrieve singleton ReportUnderstandingService instance"""
+    global _report_understanding_service_instance
+    if _report_understanding_service_instance is None:
+        from app.services.report_ai.report_understanding_service import ReportUnderstandingService
+        _report_understanding_service_instance = ReportUnderstandingService(
+            report_repository=get_report_repository(),
+            ai_service=get_ai_service(),
+            report_analysis_agent=get_report_analysis_agent(),
+            prompt_loader=get_report_prompt_loader(),
+            summary_service=get_report_summary_service(),
+            insight_service=get_report_insight_service()
+        )
+    return _report_understanding_service_instance
+
+
 def get_report_analysis_agent() -> ReportAnalysisAgent:
     """Get singleton ReportAnalysisAgent instance"""
     global _report_analysis_agent_instance

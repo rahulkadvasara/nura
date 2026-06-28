@@ -21,6 +21,7 @@ from app.core.dependencies import (
     get_database,
     get_report_extraction_service,
     get_risk_analysis_service,
+    get_report_understanding_service,
 )
 from app.services.report_service import ReportService
 from app.services.report_processing.document_parser import DocumentParser
@@ -563,5 +564,132 @@ async def get_risk_telemetry(
         message="Clinical risk telemetry statistics fetched successfully",
         data=stats
     )
+
+
+@router.post(
+    "/{report_id}/summarize",
+    response_model=SuccessResponse,
+    summary="Trigger clinical AI report understanding and summarization. Guarded: Authorized Users.",
+)
+async def summarize_report_clinical(
+    report_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: UserInDB = Depends(get_current_user),
+    report_service: ReportService = Depends(get_report_service),
+    understanding_service = Depends(get_report_understanding_service),
+) -> SuccessResponse:
+    report = await report_service.get_report_by_id(report_id)
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found"
+        )
+
+    # Authorize access
+    await verify_report_access(report, current_user)
+
+    # Trigger summary analysis in background tasks
+    background_tasks.add_task(understanding_service.generate_report_summary, report_id)
+
+    return SuccessResponse(
+        success=True,
+        message="Clinical AI summarization task triggered successfully"
+    )
+
+
+@router.get(
+    "/{report_id}/summary",
+    response_model=SuccessResponse,
+    summary="Get calculated clinical AI summaries. Guarded: Authorized Users.",
+)
+async def get_report_ai_summary(
+    report_id: str,
+    current_user: UserInDB = Depends(get_current_user),
+    report_service: ReportService = Depends(get_report_service),
+) -> SuccessResponse:
+    report = await report_service.get_report_by_id(report_id)
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found"
+        )
+
+    # Authorize access
+    await verify_report_access(report, current_user)
+
+    summary_data = {
+        "report_id": report_id,
+        "ai_summary": getattr(report, "ai_summary", "") or "",
+        "patient_summary": getattr(report, "patient_summary", "") or "",
+        "doctor_summary": getattr(report, "doctor_summary", "") or "",
+        "summary_confidence": getattr(report, "summary_confidence", 0.0) or 0.0,
+        "summary_version": getattr(report, "summary_version", "1.0.0") or "1.0.0",
+        "summary_generated_at": getattr(report, "summary_generated_at", None)
+    }
+
+    return SuccessResponse(
+        success=True,
+        message="Clinical AI summaries data retrieved successfully",
+        data=summary_data
+    )
+
+
+@router.get(
+    "/{report_id}/insights",
+    response_model=SuccessResponse,
+    summary="Get calculated clinical AI insights and findings. Guarded: Authorized Users.",
+)
+async def get_report_ai_insights(
+    report_id: str,
+    current_user: UserInDB = Depends(get_current_user),
+    report_service: ReportService = Depends(get_report_service),
+) -> SuccessResponse:
+    report = await report_service.get_report_by_id(report_id)
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found"
+        )
+
+    # Authorize access
+    await verify_report_access(report, current_user)
+
+    insights_data = {
+        "report_id": report_id,
+        "key_findings": getattr(report, "key_findings", []) or [],
+        "clinical_insights": getattr(report, "clinical_insights", []) or [],
+        "followup_questions": getattr(report, "followup_questions", []) or []
+    }
+
+    return SuccessResponse(
+        success=True,
+        message="Clinical AI insights data retrieved successfully",
+        data=insights_data
+    )
+
+
+@router.get(
+    "/ai/statistics",
+    response_model=SuccessResponse,
+    summary="Retrieve cumulative clinical report AI telemetry statistics. Guarded: Admin Only.",
+)
+async def get_report_ai_telemetry_stats(
+    current_user: UserInDB = Depends(get_current_user),
+) -> SuccessResponse:
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admin accounts are authorized to view report AI telemetry stats"
+        )
+    
+    from app.services.report_ai.telemetry import get_report_ai_telemetry
+    stats = get_report_ai_telemetry().get_stats()
+    
+    return SuccessResponse(
+        success=True,
+        message="Clinical report AI telemetry statistics fetched successfully",
+        data=stats
+    )
+
 
 

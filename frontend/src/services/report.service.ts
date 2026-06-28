@@ -21,6 +21,7 @@ export interface ReportResponse {
   ocr_pages?: Record<string, any>[]
   created_at: string
   updated_at: string
+  ai_summary?: string
 
   // Medical Extraction Pipeline fields
   document_type?: string
@@ -93,6 +94,16 @@ export interface ReportResponse {
   clinical_flags?: string[]
   risk_version?: string
   risk_generated_at?: string
+
+  // Clinical AI Summarization fields
+  patient_summary?: string
+  doctor_summary?: string
+  key_findings?: string[]
+  clinical_insights?: string[]
+  followup_questions?: string[]
+  summary_confidence?: number
+  summary_version?: string
+  summary_generated_at?: string
 }
 
 export interface ReportProcessingStatus {
@@ -209,6 +220,26 @@ export const reportService = {
 
   getRiskTelemetry: async (): Promise<any> => {
     const response = await apiClient.get<{ success: boolean; data: any }>('/reports/risk/statistics')
+    return response.data.data
+  },
+
+  summarizeReport: async (reportId: string): Promise<boolean> => {
+    const response = await apiClient.post<{ success: boolean }>((`/reports/${reportId}/summarize`))
+    return response.data.success
+  },
+
+  getReportSummary: async (reportId: string): Promise<any> => {
+    const response = await apiClient.get<{ success: boolean; data: any }>((`/reports/${reportId}/summary`))
+    return response.data.data
+  },
+
+  getReportInsights: async (reportId: string): Promise<any> => {
+    const response = await apiClient.get<{ success: boolean; data: any }>((`/reports/${reportId}/insights`))
+    return response.data.data
+  },
+
+  getReportAiTelemetry: async (): Promise<any> => {
+    const response = await apiClient.get<{ success: boolean; data: any }>('/reports/ai/statistics')
     return response.data.data
   },
 }

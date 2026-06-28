@@ -67,6 +67,16 @@ class ReportCreateSchema(BaseModel):
     risk_version: Optional[str] = Field(None, description="Clinical risk evaluation rule-engine version")
     risk_generated_at: Optional[datetime] = Field(None, description="Risk calculation timestamp")
 
+    # Clinical AI Summarization fields
+    patient_summary: Optional[str] = Field(None, description="Patient-friendly clinical report explanation")
+    doctor_summary: Optional[str] = Field(None, description="Doctor-focused clinical diagnostic summary")
+    key_findings: Optional[List[str]] = Field(None, description="List of most critical findings observed")
+    clinical_insights: Optional[List[str]] = Field(None, description="Possible trends, complications and monitoring metrics")
+    followup_questions: Optional[List[str]] = Field(None, description="Educational questions the patient can ask their physician")
+    summary_confidence: Optional[float] = Field(None, description="Overall LLM generation confidence score")
+    summary_version: Optional[str] = Field(None, description="AI summary prompt template version")
+    summary_generated_at: Optional[datetime] = Field(None, description="AI summary generation timestamp")
+
 
 class ReportUpdateSchema(BaseModel):
     """Request schema for updating report metadata or processing details"""
@@ -114,6 +124,16 @@ class ReportUpdateSchema(BaseModel):
     clinical_flags: Optional[List[str]] = None
     risk_version: Optional[str] = None
     risk_generated_at: Optional[datetime] = None
+
+    # Clinical AI Summarization updates
+    patient_summary: Optional[str] = None
+    doctor_summary: Optional[str] = None
+    key_findings: Optional[List[str]] = None
+    clinical_insights: Optional[List[str]] = None
+    followup_questions: Optional[List[str]] = None
+    summary_confidence: Optional[float] = None
+    summary_version: Optional[str] = None
+    summary_generated_at: Optional[datetime] = None
 
 
 class ReportResponse(BaseModel):
@@ -167,6 +187,16 @@ class ReportResponse(BaseModel):
     clinical_flags: Optional[List[str]] = Field(None, description="Badges of triggered risk markers")
     risk_version: Optional[str] = Field(None, description="Clinical risk evaluation rule-engine version")
     risk_generated_at: Optional[datetime] = Field(None, description="Risk calculation timestamp")
+
+    # Clinical AI Summarization fields
+    patient_summary: Optional[str] = Field(None, description="Patient-friendly clinical report explanation")
+    doctor_summary: Optional[str] = Field(None, description="Doctor-focused clinical diagnostic summary")
+    key_findings: Optional[List[str]] = Field(None, description="List of most critical findings observed")
+    clinical_insights: Optional[List[str]] = Field(None, description="Possible trends, complications and monitoring metrics")
+    followup_questions: Optional[List[str]] = Field(None, description="Educational questions the patient can ask their physician")
+    summary_confidence: Optional[float] = Field(None, description="Overall LLM generation confidence score")
+    summary_version: Optional[str] = Field(None, description="AI summary prompt template version")
+    summary_generated_at: Optional[datetime] = Field(None, description="AI summary generation timestamp")
 
 
 # ---------------------------------------------------------------------------

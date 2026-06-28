@@ -31,6 +31,7 @@ function AdminReportsDashboardContent() {
   const [telemetry, setTelemetry] = useState<ReportTelemetryStats | null>(null)
   const [extractTelemetry, setExtractTelemetry] = useState<any | null>(null)
   const [riskTelemetry, setRiskTelemetry] = useState<any | null>(null)
+  const [aiTelemetry, setAiTelemetry] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all')
   
@@ -39,10 +40,13 @@ function AdminReportsDashboardContent() {
   const [ocrData, setOcrData] = useState<ReportOcrData | null>(null)
   const [structuredData, setStructuredData] = useState<any | null>(null)
   const [riskData, setRiskData] = useState<any | null>(null)
+  const [summaryData, setSummaryData] = useState<any | null>(null)
+  const [insightsData, setInsightsData] = useState<any | null>(null)
   const [loadingOcr, setLoadingOcr] = useState(false)
   const [loadingExtraction, setLoadingExtraction] = useState(false)
   const [loadingRisk, setLoadingRisk] = useState(false)
-  const [inspectTab, setInspectTab] = useState<'ocr' | 'json' | 'warnings' | 'risk'>('json')
+  const [loadingSummary, setLoadingSummary] = useState(false)
+  const [inspectTab, setInspectTab] = useState<'ocr' | 'json' | 'warnings' | 'risk' | 'summary_json' | 'prompt_debug'>('json')
 
   const fetchData = async () => {
     try {
@@ -65,6 +69,13 @@ function AdminReportsDashboardContent() {
         setRiskTelemetry(rStats)
       } catch (err) {
         console.error('Failed to load risk telemetry', err)
+      }
+
+      try {
+        const aiStats = await reportService.getReportAiTelemetry()
+        setAiTelemetry(aiStats)
+      } catch (err) {
+        console.error('Failed to load report AI telemetry', err)
       }
     } catch (e) {
       console.error(e)
@@ -136,7 +147,9 @@ function AdminReportsDashboardContent() {
     setOcrData(null)
     setStructuredData(null)
     setRiskData(null)
-    setInspectTab(report.overall_risk ? 'risk' : report.extraction_status === 'completed' ? 'json' : 'ocr')
+    setSummaryData(null)
+    setInsightsData(null)
+    setInspectTab(report.patient_summary || report.ai_summary ? 'summary_json' : report.overall_risk ? 'risk' : report.extraction_status === 'completed' ? 'json' : 'ocr')
 
     if (report.ocr_status === 'completed') {
       try {
@@ -172,6 +185,38 @@ function AdminReportsDashboardContent() {
       } finally {
         setLoadingRisk(false)
       }
+    }
+
+    if (report.patient_summary || report.ai_summary) {
+      try {
+        setLoadingSummary(true)
+        const summary = await reportService.getReportSummary(report.id)
+        setSummaryData(summary)
+        const insights = await reportService.getReportInsights(report.id)
+        setInsightsData(insights)
+      } catch (e) {
+        console.error(e)
+      } finally {
+        setLoadingSummary(false)
+      }
+    }
+  }
+
+  const handleGenerateSummary = async (reportId: string) => {
+    try {
+      setLoadingSummary(true)
+      await reportService.summarizeReport(reportId)
+      fetchData()
+      setTimeout(async () => {
+        const summary = await reportService.getReportSummary(reportId)
+        setSummaryData(summary)
+        const insights = await reportService.getReportInsights(reportId)
+        setInsightsData(insights)
+      }, 4000)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoadingSummary(false)
     }
   }
 
@@ -225,7 +270,7 @@ function AdminReportsDashboardContent() {
       </div>
 
       {/* Telemetry Dashboard Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         {[
           {
             name: 'OCR Processed Documents',
@@ -250,16 +295,22 @@ function AdminReportsDashboardContent() {
             val: riskTelemetry?.total_analyses ?? 0,
             desc: `Success rate: ${(((riskTelemetry?.successful_analyses ?? 0) / Math.max(1, riskTelemetry?.total_analyses ?? 0)) * 100).toFixed(0)}%`,
             icon: Shield
+          },
+          {
+            name: 'AI Summaries Generated',
+            val: aiTelemetry?.total_generations ?? 0,
+            desc: `Avg: ${aiTelemetry?.average_latency_ms ?? 0}ms | Cost: $${(aiTelemetry?.accumulated_cost ?? 0.0).toFixed(4)}`,
+            icon: Zap
           }
         ].map((item, idx) => (
           <Card key={idx} className="border border-slate-200 shadow-sm bg-white">
             <CardContent className="pt-4 flex items-center justify-between">
               <div>
-                <span className="text-xs text-slate-400 block uppercase font-semibold">{item.name}</span>
-                <span className="text-xl font-bold text-slate-900 mt-0.5 block">{item.val}</span>
-                <span className="text-[10px] text-slate-500 block mt-0.5">{item.desc}</span>
+                <span className="text-[10px] text-slate-400 block uppercase font-bold">{item.name}</span>
+                <span className="text-lg font-bold text-slate-900 mt-0.5 block">{item.val}</span>
+                <span className="text-[9px] text-slate-500 block mt-0.5">{item.desc}</span>
               </div>
-              <item.icon className="h-8 w-8 text-teal-600/30" />
+              <item.icon className="h-7 w-7 text-teal-600/30" />
             </CardContent>
           </Card>
         ))}
@@ -351,9 +402,19 @@ function AdminReportsDashboardContent() {
                         >
                           Run Risk
                         </Button>
+                      ) : !report.patient_summary ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleGenerateSummary(report.id)}
+                          className="text-xs text-teal-600 hover:text-teal-700 font-bold bg-teal-50 h-7"
+                          disabled={loadingSummary}
+                        >
+                          Run Summary
+                        </Button>
                       ) : (
                         <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 py-0.5 rounded">
-                          Checked
+                          Summarised
                         </Badge>
                       )}
 
@@ -390,6 +451,8 @@ function AdminReportsDashboardContent() {
 
                 <div className="flex gap-1.5 flex-wrap">
                   {[
+                    { id: 'summary_json', name: 'Summary JSON' },
+                    { id: 'prompt_debug', name: 'Prompt Debug' },
                     { id: 'risk', name: 'Risk JSON' },
                     { id: 'json', name: 'Struct JSON' },
                     { id: 'warnings', name: 'Warnings' },
@@ -409,6 +472,75 @@ function AdminReportsDashboardContent() {
               </div>
             </CardHeader>
             <CardContent className="pt-6 space-y-6">
+              {inspectTab === 'summary_json' && (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">AI Summarization Outputs JSON</span>
+                    {inspectingReport.overall_risk && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleGenerateSummary(inspectingReport.id)}
+                        className="h-7 text-[10px] text-teal-700 border-teal-200"
+                        disabled={loadingSummary}
+                      >
+                        Generate AI Summary
+                      </Button>
+                    )}
+                  </div>
+
+                  {loadingSummary ? (
+                    <div className="text-center py-20 text-slate-500">
+                      <RefreshCw className="h-8 w-8 animate-spin text-teal-600 mb-2" />
+                      <p className="text-sm">Synthesizing clinical insights and descriptions...</p>
+                    </div>
+                  ) : summaryData ? (
+                    <pre className="bg-slate-950 text-emerald-400 p-4 rounded-lg font-mono text-[11px] overflow-auto max-h-[500px] border border-slate-800 whitespace-pre-wrap">
+                      {JSON.stringify({ summaryData, insightsData }, null, 2)}
+                    </pre>
+                  ) : (
+                    <div className="text-center py-20 border border-dashed rounded-lg text-slate-400 bg-slate-50/50">
+                      <Zap className="h-10 w-10 mx-auto text-slate-300 mb-2 stroke-1" />
+                      <p className="text-sm">No summaries compiled yet. Click &quot;Generate AI Summary&quot; above.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {inspectTab === 'prompt_debug' && (
+                <div className="space-y-4">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">AI Prompts Template Debugger</span>
+                  <div className="space-y-3 font-mono text-[10px]">
+                    <div className="border border-slate-800 rounded bg-slate-950 text-cyan-400 p-3 space-y-1">
+                      <span className="font-sans text-[10px] font-bold text-slate-400 block border-b border-slate-800 pb-1">report_summary_system.md</span>
+                      <pre className="whitespace-pre-wrap leading-relaxed">
+{`You are an expert medical AI assistant specialized in clinical summarization and diagnostics interpretations.
+Your task is to analyze structured lab parameters and write structured interpretations.
+Output structure JSON:
+{
+  "ai_summary": "Concise overview",
+  "patient_summary": "Simple friendly explanation",
+  "doctor_summary": "Differential interpretation",
+  "key_findings": ["string"],
+  "clinical_insights": ["string"],
+  "followup_questions": ["string"],
+  "confidence": 0.95
+}`}
+                      </pre>
+                    </div>
+
+                    <div className="border border-slate-800 rounded bg-slate-950 text-indigo-300 p-3 space-y-1">
+                      <span className="font-sans text-[10px] font-bold text-slate-400 block border-b border-slate-800 pb-1">patient_summary.md & doctor_summary.md</span>
+                      <pre className="whitespace-pre-wrap leading-relaxed">
+{`Demographics: ${JSON.stringify(structuredData?.patient_information ?? {}, null, 2)}
+Lab Results (count: ${structuredData?.laboratory_results?.length ?? 0}): ...
+Risk Assessment: ${JSON.stringify(riskData ?? {}, null, 2)}`}
+                      </pre>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {inspectTab === 'risk' && (
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">

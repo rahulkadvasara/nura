@@ -18,7 +18,8 @@ import {
   MessageSquare,
   FileText,
   UserCheck,
-  RefreshCw
+  RefreshCw,
+  Shield
 } from 'lucide-react'
 
 import { useDoctorPatients, useDoctorPatient } from '@/hooks/use-doctor-patient'
@@ -41,6 +42,8 @@ export default function DoctorPatientsPage() {
   const [structuredReport, setStructuredReport] = useState<any>(null)
   const [reportEntities, setReportEntities] = useState<any[] | null>(null)
   const [reportRiskDetails, setReportRiskDetails] = useState<any>(null)
+  const [reportSummary, setReportSummary] = useState<any>(null)
+  const [reportInsights, setReportInsights] = useState<any>(null)
   const [loadingReportDetails, setLoadingReportDetails] = useState(false)
 
   const { data: listData, isLoading, isError, error, refetch } = useDoctorPatients({
@@ -86,6 +89,8 @@ export default function DoctorPatientsPage() {
       setStructuredReport(null)
       setReportEntities(null)
       setReportRiskDetails(null)
+      setReportSummary(null)
+      setReportInsights(null)
       setLoadingReportDetails(true)
       
       const struct = await reportService.getStructuredData(reportId)
@@ -100,6 +105,15 @@ export default function DoctorPatientsPage() {
       } catch (err) {
         console.warn("No report risk details found for this report yet", err)
       }
+
+      try {
+        const summary = await reportService.getReportSummary(reportId)
+        setReportSummary(summary)
+        const insights = await reportService.getReportInsights(reportId)
+        setReportInsights(insights)
+      } catch (err) {
+        console.warn("No AI summary generated for this report yet", err)
+      }
     } catch (e) {
       console.error(e)
     } finally {
@@ -112,6 +126,8 @@ export default function DoctorPatientsPage() {
     setStructuredReport(null)
     setReportEntities(null)
     setReportRiskDetails(null)
+    setReportSummary(null)
+    setReportInsights(null)
   }
 
   return (
@@ -751,6 +767,41 @@ export default function DoctorPatientsPage() {
                                             </tbody>
                                           </table>
                                         </div>
+                                      </div>
+                                    )}
+
+                                    {/* AI Doctor Summary & Insights */}
+                                    {reportSummary && (
+                                      <div className="space-y-4 p-4 border border-teal-100 bg-teal-50/10 rounded-lg shadow-xs">
+                                        <div className="flex justify-between items-center border-b border-teal-100 pb-2">
+                                          <span className="font-bold text-teal-800 uppercase text-[10px] flex items-center gap-1.5">
+                                            <Shield className="h-3.5 w-3.5" />
+                                            AI Clinical Interpretation
+                                          </span>
+                                          <Badge className="bg-teal-100 text-teal-800 hover:bg-teal-100 border border-teal-200 text-[9px] rounded font-semibold">
+                                            Confidence: {(reportSummary.summary_confidence * 100).toFixed(0)}%
+                                          </Badge>
+                                        </div>
+                                        <div className="space-y-2">
+                                          <span className="font-bold text-slate-700 block text-[10px]">DOCTOR SUMMARY REPORT</span>
+                                          <p className="text-[11px] leading-relaxed text-slate-600 whitespace-pre-line">
+                                            {reportSummary.doctor_summary}
+                                          </p>
+                                        </div>
+
+                                        {reportInsights && reportInsights.clinical_insights && reportInsights.clinical_insights.length > 0 && (
+                                          <div className="space-y-2 border-t border-slate-100 pt-3">
+                                            <span className="font-bold text-slate-700 block text-[10px] uppercase">Differential Trends & Insights</span>
+                                            <div className="space-y-1.5">
+                                              {reportInsights.clinical_insights.map((insight: string, idx: number) => (
+                                                <div key={idx} className="flex gap-1.5 items-start">
+                                                  <span className="h-1.5 w-1.5 bg-teal-500 rounded-full mt-1.5 shrink-0" />
+                                                  <span className="text-[10px] text-slate-600 leading-relaxed">{insight}</span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
                                       </div>
                                     )}
 
