@@ -603,6 +603,20 @@ def get_ai_service(
     return get_ai_service_impl(groq_service)
 
 
+def get_drug_normalizer():
+    """Get DrugNormalizer instance"""
+    from app.services.drug_safety.normalizer import DrugNormalizer
+    return DrugNormalizer()
+
+
+def get_drug_lookup_service():
+    """Get DrugLookupService instance"""
+    from app.services.drug_safety.lookup_service import DrugLookupService
+    database = get_database()
+    return DrugLookupService(database)
+
+
+
 def get_embedding_service() -> EmbeddingService:
     """Get EmbeddingService instance"""
     from app.services.embedding_service import get_embedding_service as get_embedding_service_impl

@@ -41,6 +41,8 @@ from app.core.dependencies import (
     get_reminder_agent,
     get_appointment_agent,
     get_multi_agent_orchestrator,
+    get_drug_normalizer,
+    get_drug_lookup_service,
 )
 from app.models import UserRole, UserInDB
 from app.schemas.ai import (
@@ -51,6 +53,10 @@ from app.schemas.ai import (
     AIPlaygroundChatRequest,
     AIPlaygroundChatResponse,
     AIPlaygroundHealthResponse,
+    DrugLookupResponse,
+    DrugNormalizeRequest,
+    DrugNormalizeResponse,
+    DrugTelemetryResponse,
     DocumentIndexRequest,
     DocumentIndexResponse,
     BatchDocumentIndexRequest,
@@ -1766,6 +1772,68 @@ async def get_orchestrator_health(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Orchestrator health check validation failed: {str(e)}"
         )
+
+
+@router.get(
+    "/drug/lookup/{drug_name}",
+    response_model=DrugLookupResponse,
+    summary="Lookup a drug in the master catalog. Guarded: Admin Only.",
+)
+async def lookup_drug(
+    drug_name: str,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    lookup_service = Depends(get_drug_lookup_service),
+):
+    try:
+        return await lookup_service.lookup(drug_name)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Drug lookup failed: {str(e)}"
+        )
+
+
+@router.post(
+    "/drug/normalize",
+    response_model=DrugNormalizeResponse,
+    summary="Normalize a drug string. Guarded: Admin Only.",
+)
+async def normalize_drug(
+    payload: DrugNormalizeRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    normalizer = Depends(get_drug_normalizer),
+):
+    try:
+        import time
+        from app.services.drug_safety.telemetry import drug_safety_telemetry
+        start = time.perf_counter()
+        normalized = normalizer.normalize(payload.drug_name)
+        drug_safety_telemetry.record_normalization()
+        return DrugNormalizeResponse(normalized_name=normalized)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Drug normalization failed: {str(e)}"
+        )
+
+
+@router.get(
+    "/drug/statistics",
+    response_model=DrugTelemetryResponse,
+    summary="Retrieve drug safety lookup statistics. Guarded: Admin Only.",
+)
+async def get_drug_statistics(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+):
+    try:
+        from app.services.drug_safety.telemetry import drug_safety_telemetry
+        return drug_safety_telemetry.get_statistics()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch drug safety statistics: {str(e)}"
+        )
+
 
 
 

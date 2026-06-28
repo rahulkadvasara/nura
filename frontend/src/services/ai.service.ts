@@ -441,6 +441,21 @@ export const aiService = {
   getOrchestratorHealth: async (): Promise<Record<string, any>> => {
     const response = await apiClient.get<Record<string, any>>('/ai/execution/health')
     return response.data
+  },
+
+  lookupDrug: async (drugName: string): Promise<DrugLookupResponse> => {
+    const response = await apiClient.get<DrugLookupResponse>(`/ai/drug/lookup/${encodeURIComponent(drugName)}`)
+    return response.data
+  },
+
+  normalizeDrug: async (drugName: string): Promise<DrugNormalizeResponse> => {
+    const response = await apiClient.post<DrugNormalizeResponse>('/ai/drug/normalize', { drug_name: drugName })
+    return response.data
+  },
+
+  getDrugStatistics: async (): Promise<DrugTelemetryResponse> => {
+    const response = await apiClient.get<DrugTelemetryResponse>('/ai/drug/statistics')
+    return response.data
   }
 }
 
@@ -1043,6 +1058,37 @@ export interface OrchestratorStatisticsResponse {
   cache_hit_rate: number
   retrieval_metrics: Record<string, any>
 }
+
+export interface DrugMasterModel {
+  drug_name: string
+  normalized_name: string
+  aliases: string[]
+  source_dataset: string
+}
+
+export interface DrugLookupResponse {
+  exists: boolean
+  matched_drug: DrugMasterModel | null
+  normalized_name: string
+  lookup_source: string
+  confidence: number
+  latency_ms: number
+}
+
+export interface DrugNormalizeResponse {
+  normalized_name: string
+}
+
+export interface DrugTelemetryResponse {
+  total_lookups: number
+  cache_hits: number
+  cache_misses: number
+  cache_hit_ratio: number
+  avg_latency_ms: number
+  unknown_drug_count: number
+  normalization_count: number
+}
+
 
 
 

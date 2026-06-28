@@ -48,6 +48,9 @@ import {
   AIExecuteRequest,
   StandardResponseContract,
   OrchestratorStatisticsResponse,
+  DrugLookupResponse,
+  DrugNormalizeResponse,
+  DrugTelemetryResponse,
 } from '@/services/ai.service'
 
 /**
@@ -690,6 +693,50 @@ export function useOrchestratorHealth() {
     refetchInterval: 30000, // Check health status every 30 seconds
   })
 }
+
+/**
+ * Custom hook to execute a drug lookup by name or alias.
+ */
+export function useDrugLookup() {
+  const queryClient = useQueryClient()
+  return useMutation<DrugLookupResponse, Error, string>({
+    mutationFn: async (drugName: string) => {
+      return await aiService.lookupDrug(drugName)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'drug', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to normalize a drug name string.
+ */
+export function useDrugNormalize() {
+  const queryClient = useQueryClient()
+  return useMutation<DrugNormalizeResponse, Error, string>({
+    mutationFn: async (drugName: string) => {
+      return await aiService.normalizeDrug(drugName)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ai', 'drug', 'statistics'] })
+    }
+  })
+}
+
+/**
+ * Custom hook to fetch drug safety telemetry statistics periodically.
+ */
+export function useDrugStatistics() {
+  return useQuery<DrugTelemetryResponse, Error>({
+    queryKey: ['admin', 'ai', 'drug', 'statistics'],
+    queryFn: async () => {
+      return await aiService.getDrugStatistics()
+    },
+    refetchInterval: 10000, // Refresh statistics every 10 seconds
+  })
+}
+
 
 
 

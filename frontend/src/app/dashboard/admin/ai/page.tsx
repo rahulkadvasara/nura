@@ -47,7 +47,10 @@ import {
   useReportAgentTest,
   useDrugAgentTest,
   useDoctorAgentTest,
-  useHealthcareAgentsStatistics
+  useHealthcareAgentsStatistics,
+  useDrugLookup,
+  useDrugNormalize,
+  useDrugStatistics
 } from '@/hooks/use-ai'
 import { HealthcareAgentsView } from './healthcare_agents_view'
 import { OperationsAgentsView } from './operations_agents_view'
@@ -5926,8 +5929,274 @@ function WorkflowEngineView() {
   )
 }
 
+function DrugLookupPlaygroundView() {
+  const [lookupName, setLookupName] = useState('')
+  const [normalizeInput, setNormalizeInput] = useState('')
+  const [lookupResult, setLookupResult] = useState<any>(null)
+  const [normalizedOutput, setNormalizedOutput] = useState<string>('')
+  
+  const lookupMutation = useDrugLookup()
+  const normalizeMutation = useDrugNormalize()
+  const { data: stats, refetch: refetchStats } = useDrugStatistics()
+
+  const handleLookup = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!lookupName.trim()) return
+    try {
+      const res = await lookupMutation.mutateAsync(lookupName)
+      setLookupResult(res)
+    } catch (err) {
+      setLookupResult(null)
+    }
+  }
+
+  const handleNormalize = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!normalizeInput.trim()) return
+    try {
+      const res = await normalizeMutation.mutateAsync(normalizeInput)
+      setNormalizedOutput(res.normalized_name)
+    } catch (err) {
+      setNormalizedOutput('')
+    }
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
+      <div className="lg:col-span-2 space-y-6">
+        {/* Drug Lookup Card */}
+        <Card className="border-slate-200 shadow-md bg-white">
+          <CardHeader className="border-b border-slate-100 bg-slate-50/50">
+            <CardTitle className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+              <Search className="h-5 w-5 text-teal-600" />
+              Drug Master Lookup
+            </CardTitle>
+            <CardDescription>
+              Query medications by name or alias to resolve their standard names and aliases in the MongoDB master catalog.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <form onSubmit={handleLookup} className="flex gap-3 mb-6">
+              <Input
+                placeholder="Enter drug name or alias (e.g. Paracetamol, Acetaminophen, Advil)..."
+                value={lookupName}
+                onChange={(e) => setLookupName(e.target.value)}
+                disabled={lookupMutation.isPending}
+                className="border-slate-200 focus:border-teal-500 focus:ring-teal-500"
+              />
+              <Button
+                type="submit"
+                disabled={!lookupName.trim() || lookupMutation.isPending}
+                className="bg-teal-600 hover:bg-teal-700 text-white font-semibold"
+              >
+                {lookupMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : "Lookup"}
+              </Button>
+            </form>
+
+            {lookupMutation.isPending && (
+              <div className="flex justify-center py-8">
+                <RefreshCw className="h-8 w-8 animate-spin text-teal-500" />
+              </div>
+            )}
+
+            {lookupMutation.isError && (
+              <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+                Error looking up drug. Please try again.
+              </div>
+            )}
+
+            {lookupResult && (
+              <div className="space-y-4 animate-in slide-in-from-top-2 duration-200">
+                <div className={`p-4 rounded-lg border flex items-start gap-3 ${
+                  lookupResult.exists 
+                    ? 'bg-teal-50/50 border-teal-100 text-teal-900' 
+                    : 'bg-amber-50/50 border-amber-100 text-amber-900'
+                }`}>
+                  {lookupResult.exists ? (
+                    <CheckCircle2 className="h-5 w-5 text-teal-600 mt-0.5 flex-shrink-0" />
+                  ) : (
+                    <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                  )}
+                  <div>
+                    <h4 className="font-semibold text-sm">
+                      {lookupResult.exists ? "Drug Found in Master Catalog" : "Drug Not Found"}
+                    </h4>
+                    <p className="text-xs mt-1 text-slate-500">
+                      Query normalized to <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-800">{lookupResult.normalized_name}</code>
+                    </p>
+                  </div>
+                </div>
+
+                {lookupResult.exists && lookupResult.matched_drug && (
+                  <Card className="border-slate-100 shadow-sm">
+                    <CardContent className="p-4 space-y-3 text-sm">
+                      <div className="grid grid-cols-3 gap-2 py-1 border-b border-slate-50">
+                        <span className="text-slate-400 font-medium">Canonical Name:</span>
+                        <span className="col-span-2 font-semibold text-slate-800">{lookupResult.matched_drug.drug_name}</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 py-1 border-b border-slate-50">
+                        <span className="text-slate-400 font-medium">Normalized:</span>
+                        <span className="col-span-2 font-mono text-xs text-slate-600">{lookupResult.matched_drug.normalized_name}</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 py-1 border-b border-slate-50">
+                        <span className="text-slate-400 font-medium">Aliases:</span>
+                        <span className="col-span-2 text-slate-600">
+                          {lookupResult.matched_drug.aliases.length > 0 
+                            ? lookupResult.matched_drug.aliases.join(', ') 
+                            : <span className="text-slate-400 italic">None</span>
+                          }
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 py-1 border-b border-slate-50">
+                        <span className="text-slate-400 font-medium">Resolution Score:</span>
+                        <span className="col-span-2 flex items-center gap-1.5">
+                          <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                            lookupResult.confidence === 1.0 
+                              ? 'bg-teal-100 text-teal-800' 
+                              : 'bg-blue-100 text-blue-800'
+                          }`}>
+                            {lookupResult.confidence === 1.0 ? "Exact Match (1.0)" : "Alias Match (0.9)"}
+                          </span>
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 py-1 border-b border-slate-50">
+                        <span className="text-slate-400 font-medium">Data Source:</span>
+                        <span className="col-span-2 text-slate-600 font-medium uppercase text-xs">{lookupResult.matched_drug.source_dataset}</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 py-1">
+                        <span className="text-slate-400 font-medium">Lookup Source:</span>
+                        <span className="col-span-2 text-slate-600 font-medium capitalize text-xs">{lookupResult.lookup_source}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Normalization Sandbox Card */}
+        <Card className="border-slate-200 shadow-md bg-white">
+          <CardHeader className="border-b border-slate-100 bg-slate-50/50">
+            <CardTitle className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+              <Sliders className="h-5 w-5 text-indigo-600" />
+              Normalization Sandbox
+            </CardTitle>
+            <CardDescription>
+              Test the deterministic drug normalization rules (lowercase, remove dosage, strength, form words, extra spaces).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <form onSubmit={handleNormalize} className="flex gap-3 mb-4">
+              <Input
+                placeholder="Enter raw medication string (e.g. Paracetamol 650mg Tablet)..."
+                value={normalizeInput}
+                onChange={(e) => setNormalizeInput(e.target.value)}
+                disabled={normalizeMutation.isPending}
+                className="border-slate-200 focus:border-indigo-500 focus:ring-indigo-500"
+              />
+              <Button
+                type="submit"
+                disabled={!normalizeInput.trim() || normalizeMutation.isPending}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold"
+              >
+                {normalizeMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : "Normalize"}
+              </Button>
+            </form>
+
+            {normalizedOutput && (
+              <div className="mt-4 p-4 rounded-lg bg-indigo-50/50 border border-indigo-100 flex items-center justify-between animate-in slide-in-from-top-2 duration-200">
+                <div>
+                  <span className="text-xs text-indigo-500 font-medium uppercase tracking-wider block">Normalized Output</span>
+                  <span className="font-mono font-bold text-indigo-900 mt-1 block">{normalizedOutput}</span>
+                </div>
+                <div className="text-[10px] text-indigo-500 font-medium bg-white border border-indigo-200/50 px-2 py-1 rounded-full shadow-sm">
+                  Deterministic Regex Rule Set
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Telemetry and Sidebar */}
+      <div className="space-y-6">
+        {/* Latency card */}
+        <Card className="border-slate-200 shadow bg-gradient-to-br from-teal-50 to-white hover:shadow-md transition-all">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Avg Resolution Latency</p>
+                <h3 className="text-3xl font-extrabold text-teal-900 mt-1">
+                  {stats?.avg_latency_ms ?? 0} <span className="text-lg font-semibold text-teal-600">ms</span>
+                </h3>
+              </div>
+              <div className="p-3 rounded-full bg-teal-100 text-teal-700">
+                <Clock className="h-6 w-6" />
+              </div>
+            </div>
+            <div className="mt-3 text-xs text-slate-400 flex items-center gap-1">
+              <Activity className="h-3 w-3 text-teal-500" />
+              Running average drug lookup resolution latency
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Cache Performance Card */}
+        <Card className="border-slate-200 shadow-md bg-white">
+          <CardHeader className="pb-3 border-b border-slate-100">
+            <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+              <Layers className="h-4 w-4 text-slate-500" />
+              Cache Telemetry
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4 space-y-3 text-xs text-slate-600">
+            <div className="flex justify-between items-center">
+              <span>Total Lookups:</span>
+              <span className="font-semibold text-slate-800">{stats?.total_lookups ?? 0}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span>Cache Hits:</span>
+              <span className="font-semibold text-teal-600">{stats?.cache_hits ?? 0}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span>Cache Misses:</span>
+              <span className="font-semibold text-amber-600">{stats?.cache_misses ?? 0}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span>Cache Hit Ratio:</span>
+              <span className="font-bold text-slate-800">
+                {stats?.cache_hit_ratio ? `${(stats.cache_hit_ratio * 100).toFixed(1)}%` : "0.0%"}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span>Total Normalizations:</span>
+              <span className="font-semibold text-slate-800">{stats?.normalization_count ?? 0}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Warnings Card */}
+        {stats && stats.unknown_drug_count > 0 && (
+          <Card className="border-amber-200 bg-amber-50/50 shadow-sm">
+            <CardContent className="p-4 flex gap-3 text-xs text-amber-900">
+              <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+              <div>
+                <h5 className="font-semibold">Unknown Lookup Warnings</h5>
+                <p className="mt-1 text-slate-500 leading-relaxed">
+                  Detected <span className="font-bold text-amber-800">{stats.unknown_drug_count}</span> lookup failures in this session. Patients submitting unrecognized drug names will fail deterministic lookup and interaction screening.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function AIPlaygroundContent() {
-  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent' | 'workflow-engine' | 'router-agent' | 'core-agents' | 'healthcare-agents' | 'operations-agents'>('llm')
+  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent' | 'workflow-engine' | 'router-agent' | 'core-agents' | 'healthcare-agents' | 'operations-agents' | 'drug-lookup'>('llm')
 
   return (
     <div className="space-y-6">
@@ -6115,6 +6384,17 @@ function AIPlaygroundContent() {
           Operations Agents
         </button>
         <button
+          onClick={() => setActiveTab('drug-lookup')}
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
+            activeTab === 'drug-lookup'
+              ? 'border-teal-600 text-teal-600 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Search className="h-4 w-4" />
+          Drug Lookup
+        </button>
+        <button
           onClick={() => setActiveTab('integration')}
           className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
             activeTab === 'integration'
@@ -6153,6 +6433,8 @@ function AIPlaygroundContent() {
         <HealthcareAgentsView />
       ) : activeTab === 'operations-agents' ? (
         <OperationsAgentsView />
+      ) : activeTab === 'drug-lookup' ? (
+        <DrugLookupPlaygroundView />
       ) : (
         <IntegrationPlaygroundView />
       )}

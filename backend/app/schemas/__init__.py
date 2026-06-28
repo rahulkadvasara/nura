@@ -154,6 +154,11 @@ from app.schemas.ai import (
     AIPlaygroundChatRequest,
     AIPlaygroundChatResponse,
     AIPlaygroundHealthResponse,
+    DrugMasterModel,
+    DrugLookupResponse,
+    DrugNormalizeRequest,
+    DrugNormalizeResponse,
+    DrugTelemetryResponse,
 )
 
 from app.schemas.graph import (
@@ -358,4 +363,9 @@ __all__ = [
     "ReportCreateSchema",
     "ReportUpdateSchema",
     "ReportResponse",
+    "DrugMasterModel",
+    "DrugLookupResponse",
+    "DrugNormalizeRequest",
+    "DrugNormalizeResponse",
+    "DrugTelemetryResponse",
 ]

@@ -171,6 +171,46 @@ class SyncStatisticsResponse(BaseModel):
     vectors_skipped: int = Field(..., description="Count of skips utilizing content hash matches")
 
 
+class DrugMasterModel(BaseModel):
+    """Schema representing a drug entry in the drug master catalog"""
+    drug_name: str = Field(..., description="Display/canonical name of the drug")
+    normalized_name: str = Field(..., description="Cleaned, lowercase normalized name")
+    aliases: List[str] = Field(default_factory=list, description="Alternative names mapping to this drug")
+    source_dataset: str = Field(..., description="Source of the drug data (e.g. ddinter)")
+
+
+class DrugLookupResponse(BaseModel):
+    """Response schema for drug lookup queries"""
+    exists: bool = Field(..., description="Indicates if the drug exists in catalog")
+    matched_drug: Optional[DrugMasterModel] = Field(None, description="Detailed drug catalog info if found")
+    normalized_name: str = Field(..., description="Cleaned, normalized version of lookup query")
+    lookup_source: str = Field(..., description="Source of lookup: database, cache, or none")
+    confidence: float = Field(..., description="Confidence score of resolution: 1.0 (exact), 0.9 (alias), 0.0 (not found)")
+    latency_ms: float = Field(..., description="Internal lookup execution time in milliseconds")
+
+
+class DrugNormalizeRequest(BaseModel):
+    """Request schema to normalize a drug string"""
+    drug_name: str = Field(..., min_length=1, description="Raw drug string to normalize")
+
+
+class DrugNormalizeResponse(BaseModel):
+    """Response schema containing the normalized drug string"""
+    normalized_name: str = Field(..., description="Normalized drug string output")
+
+
+class DrugTelemetryResponse(BaseModel):
+    """Response schema for drug safety lookup telemetry stats"""
+    total_lookups: int = Field(..., description="Total lookups executed")
+    cache_hits: int = Field(..., description="Cache hits counted")
+    cache_misses: int = Field(..., description="Cache misses counted")
+    cache_hit_ratio: float = Field(..., description="Cache hits over total lookups ratio")
+    avg_latency_ms: float = Field(..., description="Running average lookup latency in milliseconds")
+    unknown_drug_count: int = Field(..., description="Count of unknown drug lookups")
+    normalization_count: int = Field(..., description="Count of normalizations executed")
+
+
+
 
 
 
