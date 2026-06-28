@@ -1,0 +1,15 @@
+from enum import Enum
+
+
+class PipelineState(str, Enum):
+    """Lifecycle states of the Report Processing Pipeline"""
+    UPLOADED = "UPLOADED"
+    PROCESSING = "PROCESSING"
+    OCR_COMPLETE = "OCR_COMPLETE"
+    EXTRACTION_COMPLETE = "EXTRACTION_COMPLETE"
+    RISK_COMPLETE = "RISK_COMPLETE"
+    SUMMARY_COMPLETE = "SUMMARY_COMPLETE"
+    SYNC_COMPLETE = "SYNC_COMPLETE"
+    READY = "READY"
+    FAILED = "FAILED"
+    PARTIAL_SUCCESS = "PARTIAL_SUCCESS"

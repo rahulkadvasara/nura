@@ -438,30 +438,164 @@ export default function DoctorPatientsPage() {
                       <div className="pt-2">
                         {/* Tab 1: Insights & Reminders */}
                         {activeTab === 'insights' && (
-                          <div className="space-y-6">
+                          <div className="space-y-6 text-xs text-slate-700">
                             {/* Patient Longitudinal Health Memory */}
-                            {detailData.patient_memory && (
-                              <Card className="border border-teal-200 bg-gradient-to-r from-teal-50/50 to-cyan-50/50 p-4 shadow-sm space-y-2">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="text-[10px] font-bold text-teal-800 uppercase tracking-wider bg-teal-100 px-2 py-0.5 rounded">
-                                    AI Health Memory
-                                  </span>
-                                  <span className="text-slate-400 text-xs font-semibold">•</span>
-                                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                    Summary Version: v{detailData.patient_memory.summary_version}
-                                  </span>
-                                </div>
-                                <h4 className="font-bold text-slate-800 text-sm">Longitudinal Health Summary</h4>
-                                <p className="text-xs text-slate-700 leading-relaxed font-medium">
-                                  {detailData.patient_memory.longitudinal_summary || detailData.patient_memory.ai_summary}
-                                </p>
-                                {detailData.patient_memory.laboratory_trends && (
-                                  <div className="border-t border-teal-100 pt-2 mt-2">
-                                    <span className="text-[9px] uppercase font-bold text-teal-800 tracking-wider">Laboratory Trends</span>
-                                    <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">{detailData.patient_memory.laboratory_trends}</p>
+                            {detailData.patient_memory ? (
+                              <div className="space-y-6">
+                                {/* Summary Card */}
+                                <Card className="border border-teal-200 bg-gradient-to-r from-teal-50/50 to-cyan-50/50 p-4 shadow-sm space-y-3">
+                                  <div className="flex justify-between items-center flex-wrap gap-2">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[10px] font-bold text-teal-800 uppercase tracking-wider bg-teal-100 px-2 py-0.5 rounded">
+                                        Patient Longitudinal Profile
+                                      </span>
+                                    </div>
+                                    {detailData.patient_memory.report_summaries && detailData.patient_memory.report_summaries.length > 0 && (
+                                      <Badge className="bg-teal-100 text-teal-800 border border-teal-200 hover:bg-teal-100 text-[9px] rounded font-semibold">
+                                        Latest Report Confidence: {(detailData.patient_memory.report_summaries[detailData.patient_memory.report_summaries.length - 1].summary_confidence * 100).toFixed(0)}%
+                                      </Badge>
+                                    )}
                                   </div>
+                                  
+                                  <div className="space-y-2">
+                                    <h4 className="font-bold text-slate-800 text-sm">Longitudinal Clinical Summary</h4>
+                                    <p className="text-slate-700 leading-relaxed font-medium">
+                                      {detailData.patient_memory.longitudinal_summary || detailData.patient_memory.ai_summary}
+                                    </p>
+                                  </div>
+
+                                  {detailData.patient_memory.latest_report_summary && (
+                                    <div className="border-t border-teal-100 pt-3 mt-1 space-y-1">
+                                      <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wide">Latest Report Executive Summary</h4>
+                                      <p className="text-slate-600 leading-relaxed font-medium">
+                                        {detailData.patient_memory.latest_report_summary}
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {detailData.patient_memory.latest_risk && (
+                                    <div className="border-t border-teal-100 pt-3 mt-1 flex justify-between items-center">
+                                      <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Abnormal Findings/Risk</span>
+                                      <Badge className="bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-50 font-bold py-0.5">
+                                        {detailData.patient_memory.latest_risk}
+                                      </Badge>
+                                    </div>
+                                  )}
+                                </Card>
+
+                                {/* Diagnostics, Trends & Timeline Grid */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                  {/* Lab Trends & History */}
+                                  <div className="space-y-4">
+                                    {/* Lab Trends */}
+                                    <Card className="border border-slate-200 shadow-sm p-4 bg-white space-y-3">
+                                      <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wide flex items-center gap-1.5">
+                                        <Activity className="h-4 w-4 text-teal-600 animate-pulse" />
+                                        Laboratory Parameters Trends
+                                      </h4>
+                                      <p className="text-slate-600 leading-relaxed font-medium">
+                                        {detailData.patient_memory.laboratory_trends || "No lab trends identified."}
+                                      </p>
+                                    </Card>
+
+                                    {/* Diagnosis History */}
+                                    <Card className="border border-slate-200 shadow-sm p-4 bg-white space-y-3">
+                                      <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wide flex items-center gap-1.5">
+                                        <Stethoscope className="h-4 w-4 text-teal-600" />
+                                        Diagnosis History
+                                      </h4>
+                                      {detailData.patient_memory.diagnosis_history && detailData.patient_memory.diagnosis_history.length > 0 ? (
+                                        <div className="flex flex-wrap gap-2">
+                                          {detailData.patient_memory.diagnosis_history.map((diag: any, idx: number) => (
+                                            <Badge key={idx} className="bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-50 font-semibold text-[10px] rounded">
+                                              {diag.diagnosis} ({new Date(diag.report_date).toLocaleDateString()})
+                                            </Badge>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p className="text-slate-400 italic">No diagnoses listed.</p>
+                                      )}
+                                    </Card>
+
+                                    {/* Medication History */}
+                                    <Card className="border border-slate-200 shadow-sm p-4 bg-white space-y-3">
+                                      <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wide flex items-center gap-1.5">
+                                        <Pill className="h-4 w-4 text-teal-600" />
+                                        Medications History Log
+                                      </h4>
+                                      {detailData.patient_memory.medication_history && detailData.patient_memory.medication_history.length > 0 ? (
+                                        <div className="space-y-2">
+                                          {detailData.patient_memory.medication_history.map((med: any, idx: number) => (
+                                            <div key={idx} className="flex justify-between items-center border-b pb-1">
+                                              <div>
+                                                <strong className="text-slate-800">{med.medicine}</strong>
+                                                <span className="text-[10px] text-slate-400 block">{med.dosage} - {med.frequency}</span>
+                                              </div>
+                                              <span className="text-[10px] text-slate-500 font-mono">Date: {med.report_date ? med.report_date.split('T')[0] : 'N/A'}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p className="text-slate-400 italic">No medications history listed.</p>
+                                      )}
+                                    </Card>
+                                  </div>
+
+                                  {/* Timeline Visualizer */}
+                                  <Card className="border border-slate-200 shadow-sm p-4 bg-white space-y-3">
+                                    <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wide flex items-center gap-1.5">
+                                      <Clock className="h-4 w-4 text-teal-600" />
+                                      Chronological Medical Timeline
+                                    </h4>
+                                    {detailData.patient_memory.timeline && detailData.patient_memory.timeline.length > 0 ? (
+                                      <div className="relative border-l border-slate-100 pl-4 ml-2 space-y-4">
+                                        {detailData.patient_memory.timeline.map((event: any, idx: number) => (
+                                          <div key={idx} className="relative">
+                                            <span className="absolute -left-[21px] top-1.5 h-1.5 w-1.5 rounded-full bg-teal-500 border border-white" />
+                                            <div>
+                                              <span className="text-[9px] font-mono text-slate-400 font-bold block">
+                                                {event.timestamp ? event.timestamp.substring(0, 7) : 'N/A'}
+                                              </span>
+                                              <strong className="text-slate-850 text-[11px] block mt-0.5">{event.description}</strong>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <p className="text-slate-400 italic">No medical timeline logged.</p>
+                                    )}
+                                  </Card>
+                                </div>
+
+                                {/* Actionable Clinical Recommendations */}
+                                {detailData.patient_memory.latest_recommendations && detailData.patient_memory.latest_recommendations.length > 0 && (
+                                  <Card className="border border-slate-200 shadow-sm p-4 bg-white space-y-3">
+                                    <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wide flex items-center gap-1.5">
+                                      <Clipboard className="h-4 w-4 text-teal-600" />
+                                      Latest Actionable Recommendations
+                                    </h4>
+                                    <div className="space-y-3">
+                                      {detailData.patient_memory.latest_recommendations.map((rec: any, idx: number) => (
+                                        <div key={idx} className="p-3 border rounded bg-white shadow-2xs border-l-4 border-l-teal-500 space-y-1">
+                                          <div className="flex justify-between items-center text-[10px] font-bold text-slate-900 border-b pb-1">
+                                            <span>{rec.recommendation_type}</span>
+                                            <span className={`px-1.5 py-0.5 rounded text-[8px] border font-bold ${
+                                              rec.urgency === 'IMMEDIATE' ? 'bg-red-50 text-red-700 border-red-200' :
+                                              rec.urgency === 'SOON' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                              'bg-slate-50 text-slate-500'
+                                            }`}>
+                                              {rec.urgency}
+                                            </span>
+                                          </div>
+                                          <p className="text-[11px] text-slate-600 leading-normal">{rec.description}</p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </Card>
                                 )}
-                              </Card>
+                              </div>
+                            ) : (
+                              <p className="text-slate-400 italic">No health memory logged for this patient.</p>
                             )}
 
                             {/* AI Health Insights */}

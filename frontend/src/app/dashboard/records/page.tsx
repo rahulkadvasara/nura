@@ -46,12 +46,14 @@ export default function PatientRecordsPage() {
   const [insightsData, setInsightsData] = useState<any>(null)
   const [patientMemory, setPatientMemory] = useState<any | null>(null)
   const [reportSyncStatus, setReportSyncStatus] = useState<any | null>(null)
+  const [pipelineStatus, setPipelineStatus] = useState<any | null>(null)
   const [loadingOcr, setLoadingOcr] = useState(false)
   const [loadingExtraction, setLoadingExtraction] = useState(false)
   const [loadingRisk, setLoadingRisk] = useState(false)
   const [loadingSummary, setLoadingSummary] = useState(false)
   const [loadingSync, setLoadingSync] = useState(false)
-  const [inspectTab, setInspectTab] = useState<'structured' | 'ocr' | 'labs' | 'meds' | 'risk' | 'summary'>('summary')
+  const [loadingPipeline, setLoadingPipeline] = useState(false)
+  const [inspectTab, setInspectTab] = useState<'structured' | 'ocr' | 'labs' | 'meds' | 'risk' | 'summary' | 'developer'>('summary')
 
   const fetchReports = async () => {
     try {
@@ -154,7 +156,18 @@ export default function PatientRecordsPage() {
     setRiskData(null)
     setSummaryData(null)
     setInsightsData(null)
+    setPipelineStatus(null)
     setInspectTab(report.patient_summary || report.ai_summary ? 'summary' : report.overall_risk ? 'risk' : report.extraction_status === 'completed' ? 'structured' : 'ocr')
+
+    try {
+      setLoadingPipeline(true)
+      const pipe = await reportService.getPipelineStatus(report.id)
+      setPipelineStatus(pipe)
+    } catch (err) {
+      console.error("Failed to load report pipeline status", err)
+    } finally {
+      setLoadingPipeline(false)
+    }
 
     if (report.ocr_status === 'completed') {
       try {
@@ -279,6 +292,23 @@ export default function PatientRecordsPage() {
       console.error(e)
     } finally {
       setLoadingRisk(false)
+    }
+  }
+
+  const handleRetryPipeline = async (reportId: string) => {
+    try {
+      setLoadingPipeline(true)
+      await reportService.retryPipeline(reportId)
+      alert("Pipeline retry execution started in background!")
+      fetchReports()
+      setTimeout(async () => {
+        const pipe = await reportService.getPipelineStatus(reportId)
+        setPipelineStatus(pipe)
+      }, 2000)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoadingPipeline(false)
     }
   }
 
@@ -565,7 +595,8 @@ export default function PatientRecordsPage() {
                     { id: 'structured', name: 'Profile Summary' },
                     { id: 'labs', name: 'Lab Results' },
                     { id: 'meds', name: 'Prescribed Drugs' },
-                    { id: 'ocr', name: 'Raw OCR Text' }
+                    { id: 'ocr', name: 'Raw OCR Text' },
+                    { id: 'developer', name: 'Raw JSON (Dev)' }
                   ].map((tab) => (
                     <Button
                       key={tab.id}
@@ -583,6 +614,107 @@ export default function PatientRecordsPage() {
               </CardHeader>
 
               <CardContent className="pt-6">
+                {/* Pipeline Processing Progress Tracker and stage timeline */}
+                {pipelineStatus && (
+                  <div className="mb-6 p-4 rounded-lg border border-slate-200 bg-slate-50/50 space-y-4 text-xs">
+                    <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-slate-200 pb-3">
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                          <Activity className="h-3.5 w-3.5 text-teal-600 animate-pulse" />
+                          Report Pipeline Orchestrator Progress Tracker
+                        </h4>
+                        <p className="text-[10px] text-slate-500 font-medium mt-1">
+                          Current pipeline status: <strong className="text-slate-800 uppercase">{pipelineStatus.pipeline_status || 'UNKNOWN'}</strong>
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        {/* Download JSON & View Original PDF */}
+                        {structuredData && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-[10px] bg-white text-slate-700 font-bold border-slate-200"
+                            onClick={() => {
+                              const blob = new Blob([JSON.stringify(structuredData, null, 2)], { type: 'application/json' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `structured_report_${inspectingReport.id}.json`;
+                              a.click();
+                              URL.revokeObjectURL(url);
+                            }}
+                          >
+                            Download Extracted JSON
+                          </Button>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-[10px] bg-white text-slate-700 font-bold border-slate-200"
+                          onClick={() => {
+                            window.open(reportService.downloadReportFile(inspectingReport.id), '_blank')
+                          }}
+                        >
+                          View Original Report
+                        </Button>
+                        
+                        {/* Retry Button */}
+                        {(pipelineStatus.pipeline_status === 'FAILED' || pipelineStatus.pipeline_status === 'PARTIAL_SUCCESS' || inspectingReport.processing_status === 'failed') && (
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="h-7 text-[10px] font-bold"
+                            onClick={() => handleRetryPipeline(inspectingReport.id)}
+                          >
+                            <RefreshCw className="h-3 w-3 mr-1" />
+                            Retry Failed Stages
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Timeline Stages Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
+                      {[
+                        { key: 'uploaded', label: 'Uploaded', active: true, duration: null },
+                        { key: 'ocr', label: 'OCR Scan', active: pipelineStatus.ocr_status === 'completed', duration: pipelineStatus.ocr_duration_ms },
+                        { key: 'extraction', label: 'Extraction', active: !!pipelineStatus.laboratory_results || pipelineStatus.extraction_status === 'completed', duration: pipelineStatus.extraction_duration_ms },
+                        { key: 'risk', label: 'Clinical Risk', active: !!pipelineStatus.overall_risk, duration: pipelineStatus.risk_duration_ms },
+                        { key: 'summary', label: 'AI Summary', active: !!pipelineStatus.ai_summary, duration: pipelineStatus.summary_duration_ms },
+                        { key: 'sync', label: 'DB Sync', active: pipelineStatus.is_synchronized, duration: pipelineStatus.sync_duration_ms },
+                        { key: 'ready', label: 'Ready', active: pipelineStatus.pipeline_status === 'READY', duration: pipelineStatus.pipeline_duration_ms }
+                      ].map((step, idx) => (
+                        <div key={idx} className={`p-2.5 rounded border text-center space-y-1 relative ${
+                          step.active 
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-800 font-bold' 
+                            : pipelineStatus.pipeline_status === 'FAILED' && !step.active && idx === 1
+                              ? 'bg-rose-50 border-rose-200 text-rose-800 font-bold'
+                              : 'bg-slate-100/50 border-slate-200 text-slate-400'
+                        }`}>
+                          <span className="text-[10px] font-bold block">{step.label}</span>
+                          <span className="text-[9px] font-mono block opacity-80">
+                            {step.active 
+                              ? (step.duration ? `${(step.duration / 1000).toFixed(1)}s` : 'Done') 
+                              : 'Pending'
+                            }
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Pipeline errors description */}
+                    {pipelineStatus.pipeline_errors && pipelineStatus.pipeline_errors.length > 0 && (
+                      <div className="p-3 bg-rose-50 border border-rose-100 rounded text-rose-800 text-[10px] font-mono leading-relaxed space-y-1">
+                        <strong className="block text-rose-900">Pipeline Diagnostic Errors Log:</strong>
+                        {pipelineStatus.pipeline_errors.map((err: string, i: number) => (
+                          <div key={i}>• {err}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* AI Summary Tab */}
                 {inspectTab === 'summary' && (
                   <div className="space-y-6">
@@ -1149,6 +1281,22 @@ export default function PatientRecordsPage() {
                         <p>No OCR layout content found.</p>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Developer Mode tab */}
+                {inspectTab === 'developer' && (
+                  <div className="space-y-4">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Raw Extracted JSON Document (Developer Mode)</span>
+                    <pre className="bg-slate-950 text-slate-200 p-4 rounded-lg font-mono text-[11px] overflow-auto max-h-96 whitespace-pre-wrap border border-slate-800">
+                      {JSON.stringify({
+                        report: inspectingReport,
+                        pipeline_status: pipelineStatus,
+                        structured_data: structuredData,
+                        risk_data: riskData,
+                        summary_data: summaryData
+                      }, null, 2)}
+                    </pre>
                   </div>
                 )}
               </CardContent>

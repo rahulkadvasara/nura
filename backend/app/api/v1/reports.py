@@ -25,6 +25,9 @@ from app.core.dependencies import (
     get_report_sync_service,
     get_report_sync_validator,
     get_patient_memory_repository,
+    get_pipeline_service,
+    get_pipeline_validator,
+    get_pipeline_telemetry,
 )
 from app.services.report_service import ReportService
 from app.services.report_processing.document_parser import DocumentParser
@@ -71,7 +74,7 @@ async def upload_report(
     file: UploadFile = File(..., description="PDF or Image report file"),
     current_user: UserInDB = Depends(get_current_user),
     report_service: ReportService = Depends(get_report_service),
-    document_parser: DocumentParser = Depends(get_document_parser),
+    pipeline_service = Depends(get_pipeline_service),
 ) -> SuccessResponse:
     try:
         # Enforce patient restriction (Patients can only upload reports for themselves)
@@ -105,12 +108,12 @@ async def upload_report(
         )
         report_record = await report_service.create_report(schema)
 
-        # 3. Auto-trigger OCR processing pipeline in the background
-        background_tasks.add_task(document_parser.process_report, report_record.id)
+        # 3. Auto-trigger end-to-end medical orchestrator pipeline in the background
+        background_tasks.add_task(pipeline_service.execute_pipeline, report_record.id)
 
         return SuccessResponse(
             success=True,
-            message="Report file uploaded and OCR queue processing scheduled successfully",
+            message="Report file uploaded and orchestrator pipeline scheduled successfully",
             data={"report": report_service.to_response(report_record).model_dump()}
         )
     except HTTPException:
@@ -822,6 +825,131 @@ async def get_report_sync_status(
         message="Report synchronization validation status retrieved",
         data=res
     )
+
+
+@router.get(
+    "/pipeline/statistics",
+    response_model=SuccessResponse,
+    summary="Get cumulative pipeline statistics and telemetry. Guarded: Admin Only.",
+)
+async def get_pipeline_statistics(
+    current_user: UserInDB = Depends(get_current_user),
+    telemetry = Depends(get_pipeline_telemetry),
+) -> SuccessResponse:
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admin accounts can retrieve report pipeline statistics"
+        )
+    
+    stats = await telemetry.get_statistics()
+    return SuccessResponse(
+        success=True,
+        message="Pipeline statistics retrieved successfully",
+        data=stats
+    )
+
+
+@router.get(
+    "/{report_id}/pipeline",
+    response_model=SuccessResponse,
+    summary="Get current stage status and execution timings for a report pipeline.",
+)
+async def get_report_pipeline_status(
+    report_id: str,
+    current_user: UserInDB = Depends(get_current_user),
+    report_service = Depends(get_report_service),
+) -> SuccessResponse:
+    report = await report_service.get_report_by_id(report_id)
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found"
+        )
+
+    await verify_report_access(report, current_user)
+
+    pipeline_data = {
+        "report_id": report_id,
+        "pipeline_status": getattr(report, "pipeline_status", "pending") or "pending",
+        "processing_status": report.processing_status,
+        "ocr_status": getattr(report, "ocr_status", "pending"),
+        "extraction_status": getattr(report, "extraction_status", "pending"),
+        "overall_risk": getattr(report, "overall_risk", None),
+        "ai_summary": getattr(report, "ai_summary", None),
+        "is_synchronized": getattr(report, "is_synchronized", False),
+        "ocr_duration_ms": getattr(report, "ocr_duration_ms", 0.0),
+        "extraction_duration_ms": getattr(report, "extraction_duration_ms", 0.0),
+        "risk_duration_ms": getattr(report, "risk_duration_ms", 0.0),
+        "summary_duration_ms": getattr(report, "summary_duration_ms", 0.0),
+        "sync_duration_ms": getattr(report, "sync_duration_ms", 0.0),
+        "pipeline_duration_ms": getattr(report, "pipeline_duration_ms", 0.0),
+        "pipeline_errors": getattr(report, "pipeline_errors", []) or [],
+        "pipeline_retries": getattr(report, "pipeline_retries", 0) or 0
+    }
+
+    return SuccessResponse(
+        success=True,
+        message="Report pipeline status fetched successfully",
+        data=pipeline_data
+    )
+
+
+@router.post(
+    "/{report_id}/pipeline/retry",
+    response_model=SuccessResponse,
+    summary="Trigger retry of failed stages in report processing pipeline.",
+)
+async def retry_failed_pipeline_stages(
+    report_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: UserInDB = Depends(get_current_user),
+    report_service = Depends(get_report_service),
+    pipeline_service = Depends(get_pipeline_service),
+) -> SuccessResponse:
+    report = await report_service.get_report_by_id(report_id)
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found"
+        )
+
+    await verify_report_access(report, current_user)
+
+    # Queue execution in background tasks
+    background_tasks.add_task(pipeline_service.execute_pipeline, report_id, force_retry=True)
+
+    return SuccessResponse(
+        success=True,
+        message="Pipeline retry execution triggered successfully in the background"
+    )
+
+
+@router.get(
+    "/{report_id}/download",
+    summary="Download or stream the original uploaded PDF/image file.",
+)
+async def download_original_report_file(
+    report_id: str,
+    current_user: UserInDB = Depends(get_current_user),
+    report_service = Depends(get_report_service),
+):
+    from fastapi.responses import FileResponse
+    report = await report_service.get_report_by_id(report_id)
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found"
+        )
+    await verify_report_access(report, current_user)
+    
+    if not report.file_url or not os.path.exists(report.file_url):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Original report file does not exist on disk"
+        )
+        
+    return FileResponse(report.file_url)
 
 
 

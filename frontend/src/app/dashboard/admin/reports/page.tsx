@@ -33,6 +33,7 @@ function AdminReportsDashboardContent() {
   const [riskTelemetry, setRiskTelemetry] = useState<any | null>(null)
   const [aiTelemetry, setAiTelemetry] = useState<any | null>(null)
   const [syncTelemetry, setSyncTelemetry] = useState<any | null>(null)
+  const [pipelineTelemetry, setPipelineTelemetry] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all')
   
@@ -86,6 +87,13 @@ function AdminReportsDashboardContent() {
         setSyncTelemetry(syncStats)
       } catch (err) {
         console.error('Failed to load synchronization telemetry', err)
+      }
+
+      try {
+        const pipeStats = await reportService.getPipelineStatistics()
+        setPipelineTelemetry(pipeStats)
+      } catch (err) {
+        console.error('Failed to load pipeline telemetry', err)
       }
     } catch (e) {
       console.error(e)
@@ -313,6 +321,94 @@ function AdminReportsDashboardContent() {
           Refresh Pipeline Status
         </Button>
       </div>
+
+      {/* Production Monitoring Console */}
+      {pipelineTelemetry && (
+        <Card className="border border-slate-200 shadow-sm bg-white">
+          <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <CardTitle className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                <BarChart4 className="h-5 w-5 text-teal-600" />
+                Pipeline Production Monitoring Console
+              </CardTitle>
+              <p className="text-xs text-slate-500 mt-1">
+                Real-time dashboard for end-to-end stage durations, pipeline queue depth, failure rates, and retry counts.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-slate-500 font-bold">Health Status:</span>
+              <Badge className={`capitalize font-bold text-xs ${
+                pipelineTelemetry.health === 'healthy' 
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-50' 
+                  : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-50'
+              }`}>
+                {pipelineTelemetry.health || 'UNKNOWN'}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-6 space-y-6">
+            {/* Row 1: Key Metrics */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
+              <div className="border rounded-md p-3 bg-slate-50/50">
+                <span className="text-[9px] uppercase font-bold text-slate-400 block">Queue Depth (Processing)</span>
+                <span className="text-lg font-bold text-slate-800 mt-1 block">{pipelineTelemetry.queue_depth ?? 0}</span>
+              </div>
+              <div className="border rounded-md p-3 bg-slate-50/50">
+                <span className="text-[9px] uppercase font-bold text-slate-400 block">Total Processed Reports</span>
+                <span className="text-lg font-bold text-slate-800 mt-1 block">{pipelineTelemetry.total_processed ?? 0}</span>
+              </div>
+              <div className="border rounded-md p-3 bg-slate-50/50">
+                <span className="text-[9px] uppercase font-bold text-slate-400 block">End-to-End Successes</span>
+                <span className="text-lg font-bold text-emerald-600 mt-1 block">{pipelineTelemetry.completed_count ?? 0}</span>
+              </div>
+              <div className="border rounded-md p-3 bg-slate-50/50">
+                <span className="text-[9px] uppercase font-bold text-slate-400 block">Failure Rate %</span>
+                <span className="text-lg font-bold text-rose-600 mt-1 block">{pipelineTelemetry.failure_rate_percent ?? 0}%</span>
+              </div>
+              <div className="border rounded-md p-3 bg-slate-50/50">
+                <span className="text-[9px] uppercase font-bold text-slate-400 block">Total Pipeline Retries</span>
+                <span className="text-lg font-bold text-teal-600 mt-1 block">{pipelineTelemetry.total_retries ?? 0}</span>
+              </div>
+            </div>
+
+            {/* Row 2: Average Timings per Stage */}
+            <div className="space-y-2.5">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Average Stage Latency Metrics</span>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+                {[
+                  { label: 'OCR scan', val: pipelineTelemetry.averages?.avg_ocr_ms },
+                  { label: 'Clinical extraction', val: pipelineTelemetry.averages?.avg_extraction_ms },
+                  { label: 'Clinical risk engine', val: pipelineTelemetry.averages?.avg_risk_ms },
+                  { label: 'AI understanding', val: pipelineTelemetry.averages?.avg_summary_ms },
+                  { label: 'DB & Vector Sync', val: pipelineTelemetry.averages?.avg_sync_ms }
+                ].map((stage, idx) => (
+                  <div key={idx} className="p-3 border rounded bg-white text-center shadow-2xs space-y-1">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase block">{stage.label}</span>
+                    <strong className="text-slate-800 text-sm block">
+                      {stage.val ? `${(stage.val / 1000).toFixed(2)}s` : '0.00s'}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Row 3: Common Errors */}
+            {pipelineTelemetry.common_errors && pipelineTelemetry.common_errors.length > 0 && (
+              <div className="space-y-2 border-t border-slate-100 pt-4">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Most Common Failure Causes</span>
+                <div className="space-y-2">
+                  {pipelineTelemetry.common_errors.map((err: any, idx: number) => (
+                    <div key={idx} className="flex justify-between items-center bg-rose-50/50 p-2.5 rounded border border-rose-100/50 text-[11px] font-mono text-rose-800">
+                      <span className="truncate max-w-xl">{err.error}</span>
+                      <strong className="shrink-0">Count: {err.count}</strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Telemetry Dashboard Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">

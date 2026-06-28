@@ -269,4 +269,23 @@ export const reportService = {
     const response = await apiClient.get<{ success: boolean; data: any }>('/reports/patient-memory')
     return response.data.data
   },
+
+  getPipelineStatus: async (reportId: string): Promise<any> => {
+    const response = await apiClient.get<{ success: boolean; data: any }>(`/reports/${reportId}/pipeline`)
+    return response.data.data
+  },
+
+  retryPipeline: async (reportId: string): Promise<boolean> => {
+    const response = await apiClient.post<{ success: boolean }>(`/reports/${reportId}/pipeline/retry`)
+    return response.data.success
+  },
+
+  getPipelineStatistics: async (): Promise<any> => {
+    const response = await apiClient.get<{ success: boolean; data: any }>('/reports/pipeline/statistics')
+    return response.data.data
+  },
+
+  downloadReportFile: (reportId: string): string => {
+    return `${apiClient.defaults.baseURL || 'http://localhost:8000/api/v1'}/reports/${reportId}/download`
+  },
 }

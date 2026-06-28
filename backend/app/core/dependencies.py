@@ -1307,6 +1307,53 @@ def get_report_sync_validator() -> Any:
     return _report_sync_validator_instance
 
 
+_pipeline_telemetry_instance = None
+_pipeline_validator_instance = None
+_pipeline_service_instance = None
+
+
+def get_pipeline_telemetry() -> Any:
+    """Retrieve PipelineTelemetry singleton"""
+    global _pipeline_telemetry_instance
+    if _pipeline_telemetry_instance is None:
+        from app.services.report_pipeline.pipeline_telemetry import PipelineTelemetry
+        _pipeline_telemetry_instance = PipelineTelemetry()
+    return _pipeline_telemetry_instance
+
+
+def get_pipeline_validator() -> Any:
+    """Retrieve PipelineValidator singleton"""
+    global _pipeline_validator_instance
+    if _pipeline_validator_instance is None:
+        from app.services.report_pipeline.pipeline_validator import PipelineValidator
+        _pipeline_validator_instance = PipelineValidator(
+            report_repository=get_report_repository(),
+            patient_memory_repository=get_patient_memory_repository(),
+            vector_service=get_vector_service()
+        )
+    return _pipeline_validator_instance
+
+
+def get_pipeline_service() -> Any:
+    """Retrieve PipelineService singleton"""
+    global _pipeline_service_instance
+    if _pipeline_service_instance is None:
+        from app.services.report_pipeline.pipeline_service import PipelineService
+        _pipeline_service_instance = PipelineService(
+            report_repository=get_report_repository(),
+            document_parser=get_document_parser(),
+            extraction_service=get_report_extraction_service(),
+            risk_service=get_risk_analysis_service(),
+            understanding_service=get_report_understanding_service(),
+            sync_service=get_report_sync_service(),
+            telemetry=get_pipeline_telemetry(),
+            validator=get_pipeline_validator(),
+            event_dispatcher=get_event_dispatcher()
+        )
+    return _pipeline_service_instance
+
+
+
 
 
 
