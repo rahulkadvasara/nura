@@ -186,6 +186,7 @@ class PrescriptionCreateSchema(BaseModel):
     medications: List[MedicationSchema] = Field(..., min_items=1, description="List of prescribed medications")
     dosage_instructions: Optional[str] = Field(None, max_length=2000, description="Additional dosage instructions")
     notes: Optional[str] = Field(None, max_length=2000, description="General notes about the prescription")
+    override_reason: Optional[str] = Field(None, max_length=2000, description="Override reason if prescription has drug interactions")
 
 
 class PrescriptionCreateRequestSchema(BaseModel):
@@ -193,6 +194,7 @@ class PrescriptionCreateRequestSchema(BaseModel):
     medications: List[MedicationSchema] = Field(..., min_items=1, description="List of prescribed medications")
     dosage_instructions: Optional[str] = Field(None, max_length=2000, description="Additional dosage instructions")
     notes: Optional[str] = Field(None, max_length=2000, description="General notes about the prescription")
+    override_reason: Optional[str] = Field(None, max_length=2000, description="Override reason if prescription has drug interactions")
 
 
 class PrescriptionUpdateSchema(BaseModel):
@@ -200,6 +202,7 @@ class PrescriptionUpdateSchema(BaseModel):
     medications: Optional[List[MedicationSchema]] = Field(None, min_items=1)
     dosage_instructions: Optional[str] = Field(None, max_length=2000)
     notes: Optional[str] = Field(None, max_length=2000)
+    override_reason: Optional[str] = Field(None, max_length=2000)
 
 
 class PrescriptionResponse(BaseModel):
@@ -213,6 +216,7 @@ class PrescriptionResponse(BaseModel):
     medications: List[MedicationSchema] = Field(..., description="List of prescribed medications")
     dosage_instructions: Optional[str] = Field(None, description="Additional dosage instructions")
     notes: Optional[str] = Field(None, description="General notes about the prescription")
+    override_reason: Optional[str] = Field(None, description="Override reason if prescription has drug interactions")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 

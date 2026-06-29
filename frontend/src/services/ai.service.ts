@@ -486,6 +486,26 @@ export const aiService = {
   getDrugAISafetyStatistics: async (): Promise<DrugAITelemetryResponse> => {
     const response = await apiClient.get<DrugAITelemetryResponse>('/ai/drug/ai/statistics')
     return response.data
+  },
+
+  getPatientDrugSafety: async (patientId: string): Promise<any> => {
+    const response = await apiClient.get<any>(`/ai/drug/patient/${patientId}`)
+    return response.data
+  },
+
+  getDoctorDrugSafety: async (patientId: string): Promise<any> => {
+    const response = await apiClient.get<any>(`/ai/drug/doctor/${patientId}`)
+    return response.data
+  },
+
+  getDrugValidationHistory: async (patientId: string): Promise<any> => {
+    const response = await apiClient.get<any>(`/ai/drug/history/${patientId}`)
+    return response.data
+  },
+
+  getDrugDashboardStatistics: async (): Promise<any> => {
+    const response = await apiClient.get<any>('/ai/drug/dashboard/statistics')
+    return response.data
   }
 }
 

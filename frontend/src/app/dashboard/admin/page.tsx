@@ -4,7 +4,9 @@ import { useAuthStore } from '@/stores/auth'
 import { useAdminDashboard } from '@/hooks/use-dashboard'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Button } from '@/components/ui/button'
-import { RefreshCw } from 'lucide-react'
+import { Card } from '@/components/ui/card'
+import { RefreshCw, Shield } from 'lucide-react'
+import { useDrugDashboardStatistics } from '@/hooks/use-ai'
 import {
   UserMetricsCard,
   RevenueOverviewCard,
@@ -24,6 +26,7 @@ function getGreeting(): string {
 function AdminDashboardContent() {
   const { user } = useAuthStore()
   const { data, isLoading, isError, error, refetch } = useAdminDashboard()
+  const { data: drugStats, isLoading: drugStatsLoading } = useDrugDashboardStatistics()
   const adminName = user?.full_name?.split(' ')[0] || 'Admin'
 
   if (isLoading) {
@@ -126,6 +129,44 @@ function AdminDashboardContent() {
             pendingCount={data.pending_doctor_verifications_count} 
             verifiedCount={data.verified_doctors_count} 
           />
+
+          {/* Drug Safety Monitoring Card */}
+          <Card className="border border-slate-200 shadow-sm bg-white p-5 rounded-lg space-y-4">
+            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+              <Shield className="h-4 w-4 text-teal-600 animate-pulse" />
+              Drug Safety Monitoring
+            </h3>
+            {drugStatsLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <RefreshCw className="h-5 w-5 animate-spin text-teal-600" />
+              </div>
+            ) : drugStats ? (
+              <div className="space-y-3.5 text-xs">
+                <div className="flex justify-between border-b pb-1.5">
+                  <span className="text-slate-500 font-semibold">Total Checks</span>
+                  <strong className="text-slate-800 font-extrabold">{drugStats.validations || 0} runs</strong>
+                </div>
+                <div className="flex justify-between border-b pb-1.5">
+                  <span className="text-slate-500 font-semibold">Active Warnings</span>
+                  <strong className="text-amber-600 font-extrabold">{drugStats.active_warnings || 0}</strong>
+                </div>
+                <div className="flex justify-between border-b pb-1.5">
+                  <span className="text-slate-500 font-semibold">Blocked Interactions</span>
+                  <strong className="text-rose-600 font-extrabold">{drugStats.blocked_interactions || 0}</strong>
+                </div>
+                <div className="flex justify-between border-b pb-1.5">
+                  <span className="text-slate-500 font-semibold">Physician Overrides</span>
+                  <strong className="text-blue-600 font-extrabold">{drugStats.overrides || 0}</strong>
+                </div>
+                <div className="flex justify-between pb-0">
+                  <span className="text-slate-500 font-semibold">Avg Check Latency</span>
+                  <strong className="text-slate-800 font-extrabold">{drugStats.avg_latency_ms?.toFixed(1) || '0.0'} ms</strong>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 italic">No drug validation statistics available.</p>
+            )}
+          </Card>
         </div>
       </div>
     </div>

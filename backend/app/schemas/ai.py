@@ -282,6 +282,49 @@ class DrugAITelemetryResponse(BaseModel):
     model_usage: Dict[str, int] = Field(..., description="Distribution of models used")
 
 
+class DrugPatientSafetyResponse(BaseModel):
+    """Response schema for patient drug safety view"""
+    active_medications: List[str] = Field(..., description="List of patient active medications")
+    interactions: List[Dict[str, Any]] = Field(..., description="Detected interaction details")
+    severity: str = Field(..., description="Overall safety severity level")
+    patient_explanation: str = Field(..., description="AI patient-friendly explanation")
+
+
+class DrugDoctorSafetyResponse(BaseModel):
+    """Response schema for doctor drug safety view"""
+    interaction_details: List[Dict[str, Any]] = Field(..., description="Details of detected interactions")
+    doctor_explanation: str = Field(..., description="AI clinician-focused explanation")
+    monitoring_advice: str = Field(..., description="Precautions and clinical monitoring indicators")
+    recommendations: List[str] = Field(..., description="Actionable health recommendations")
+
+
+class DrugValidationHistoryItem(BaseModel):
+    """Schema representing an item in validation history log"""
+    id: str = Field(..., description="History item ID")
+    patient_id: str = Field(..., description="Target patient ID")
+    incoming_medications: List[str] = Field(default_factory=list, description="Incoming medications tested")
+    collected_medications: List[str] = Field(default_factory=list, description="Baseline medications at test time")
+    decision: str = Field(..., description="Validation decision outcome: ALLOW, WARNING, BLOCK")
+    severity: str = Field(..., description="Detected severity classification")
+    recommendations: List[str] = Field(default_factory=list)
+    detected_interactions: List[Dict[str, Any]] = Field(default_factory=list)
+    source: str = Field(..., description="Validation origin source (api, reminder, prescription, sync)")
+    override_reason: Optional[str] = None
+    overridden_by: Optional[str] = None
+    latency_ms: float = Field(0.0)
+    created_at: datetime
+
+
+class DrugDashboardStatisticsResponse(BaseModel):
+    """Response schema for drug safety dashboard stats"""
+    validations: int = Field(..., description="Total validation checks executed")
+    active_warnings: int = Field(..., description="Total warning decisions recorded")
+    blocked_interactions: int = Field(..., description="Total block decisions recorded")
+    overrides: int = Field(..., description="Total overrides authorized")
+    highest_severity_distribution: Dict[str, int] = Field(..., description="Distribution of high/medium/low severity levels")
+    avg_latency_ms: float = Field(..., description="Average latency of validation operations")
+
+
 
 
 

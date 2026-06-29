@@ -22,6 +22,12 @@ from app.core.dependencies import (
     get_doctor_profile_repository,
     get_user_repository,
     get_appointment_repository,
+    get_reminder_service,
+)
+from app.schemas.reminder import (
+    ReminderCreateSchema,
+    ReminderUpdateSchema,
+    ReminderResponse,
 )
 from app.services.consultation_service import ConsultationService
 from app.services.prescription_service import PrescriptionService
@@ -301,3 +307,143 @@ async def get_patient_prescription_details(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve prescription details",
         ) from exc
+
+
+@router.get(
+    "/reminders",
+    response_model=SuccessResponse,
+    summary="Get patient's active reminders",
+)
+async def get_patient_reminders(
+    current_user: UserInDB = Depends(require_exact_patient),
+    reminder_service = Depends(get_reminder_service),
+):
+    try:
+        reminders = await reminder_service.list_active_reminders(str(current_user.id))
+        data = [reminder_service.to_response(r).model_dump() for r in reminders]
+        return SuccessResponse(success=True, message="Reminders retrieved", data=data)
+    except Exception as e:
+        logger.exception("Failed to retrieve reminders for user %s", current_user.id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve reminders: {str(e)}"
+        )
+
+
+@router.post(
+    "/reminders",
+    response_model=SuccessResponse,
+    summary="Create a new reminder",
+)
+async def create_patient_reminder(
+    schema: ReminderCreateSchema,
+    current_user: UserInDB = Depends(require_exact_patient),
+    reminder_service = Depends(get_reminder_service),
+):
+    # Enforce patient_id check
+    if schema.patient_id != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: patient_id mismatch."
+        )
+        
+    try:
+        # Enforce current user role context for safety overrides
+        schema.user_role = current_user.role.value
+        reminder = await reminder_service.create_reminder(schema)
+        return SuccessResponse(
+            success=True,
+            message="Reminder created successfully",
+            data=reminder_service.to_response(reminder).model_dump()
+        )
+    except ValueError as val_err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(val_err)
+        )
+    except Exception as e:
+        logger.exception("Failed to create reminder for user %s", current_user.id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create reminder: {str(e)}"
+        )
+
+
+@router.put(
+    "/reminders/{reminder_id}",
+    response_model=SuccessResponse,
+    summary="Update an existing reminder",
+)
+async def update_patient_reminder(
+    reminder_id: str,
+    schema: ReminderUpdateSchema,
+    current_user: UserInDB = Depends(require_exact_patient),
+    reminder_service = Depends(get_reminder_service),
+):
+    existing = await reminder_service.get_reminder_by_id(reminder_id)
+    if not existing or existing.patient_id != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Reminder not found or access denied"
+        )
+        
+    try:
+        schema.user_role = current_user.role.value
+        updated = await reminder_service.update_reminder(reminder_id, schema)
+        if not updated:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to update reminder"
+            )
+        return SuccessResponse(
+            success=True,
+            message="Reminder updated successfully",
+            data=reminder_service.to_response(updated).model_dump()
+        )
+    except ValueError as val_err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(val_err)
+        )
+    except Exception as e:
+        logger.exception("Failed to update reminder %s", reminder_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update reminder: {str(e)}"
+        )
+
+
+@router.delete(
+    "/reminders/{reminder_id}",
+    response_model=SuccessResponse,
+    summary="Delete a reminder",
+)
+async def delete_patient_reminder(
+    reminder_id: str,
+    current_user: UserInDB = Depends(require_exact_patient),
+    reminder_service = Depends(get_reminder_service),
+):
+    existing = await reminder_service.get_reminder_by_id(reminder_id)
+    if not existing or existing.patient_id != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Reminder not found or access denied"
+        )
+        
+    try:
+        success = await reminder_service.delete_reminder(reminder_id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to delete reminder"
+            )
+        return SuccessResponse(
+            success=True,
+            message="Reminder deleted successfully"
+        )
+    except Exception as e:
+        logger.exception("Failed to delete reminder %s", reminder_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete reminder: {str(e)}"
+        )

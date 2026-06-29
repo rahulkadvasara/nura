@@ -206,5 +206,11 @@ async def setup_database(database: AsyncIOMotorDatabase) -> None:
     await drug_master_collection.create_index("normalized_name", unique=True, name="normalized_name_unique")
     await drug_master_collection.create_index("aliases", name="aliases_index")
     logger.info("Created drug_master collection indexes")
+
+    # drug_validation_history collection
+    drug_validation_history_collection = database.drug_validation_history
+    await drug_validation_history_collection.create_index("patient_id", name="patient_id_index")
+    await drug_validation_history_collection.create_index("created_at", name="created_at_index")
+    logger.info("Created drug_validation_history collection indexes")
     
     logger.info("Database setup completed")

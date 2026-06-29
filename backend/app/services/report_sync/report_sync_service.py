@@ -124,7 +124,12 @@ class ReportSyncService:
                     # Save interaction findings directly to the report document
                     await self.report_repository.collection.update_one(
                         {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id},
-                        {"$set": {"interaction_findings": findings}}
+                        {"$set": {
+                            "interaction_findings": findings,
+                            "overall_severity": val_res.get("severity", "NONE"),
+                            "validation_timestamp": datetime.now(timezone.utc),
+                            "summary": f"Detected {len(findings)} interaction(s)."
+                        }}
                     )
 
                 # Re-evaluate the patient's full active list and update validation_summary inside patient_memory

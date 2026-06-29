@@ -25,6 +25,9 @@ class ReminderCreateSchema(BaseModel):
     status: ReminderStatus = Field(default=ReminderStatus.ACTIVE, description="Status of the reminder")
     source_type: ReminderSourceType = Field(default=ReminderSourceType.MANUAL, description="Source type")
     source_id: Optional[str] = Field(None, description="Optional reference to the source entity ID")
+    override: Optional[bool] = Field(default=False, description="Override safety validations if block occurs")
+    override_reason: Optional[str] = Field(default=None, description="Reason for override")
+    user_role: Optional[str] = Field(default=None, description="Role of the user initiating creation")
 
 
 class ReminderUpdateSchema(BaseModel):
@@ -38,6 +41,9 @@ class ReminderUpdateSchema(BaseModel):
     status: Optional[ReminderStatus] = None
     source_type: Optional[ReminderSourceType] = None
     source_id: Optional[str] = None
+    override: Optional[bool] = Field(default=False)
+    override_reason: Optional[str] = Field(default=None)
+    user_role: Optional[str] = Field(default=None)
 
 
 class ReminderResponse(BaseModel):

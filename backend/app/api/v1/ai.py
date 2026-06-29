@@ -16,6 +16,7 @@ from app.core.dependencies import (
     get_patient_context_service,
     require_exact_patient,
     get_current_user,
+    require_active_user,
     get_doctor_profile_service,
     get_ai_orchestrator,
     get_document_indexing_service,
@@ -66,6 +67,10 @@ from app.schemas.ai import (
     MedicationValidateResponse,
     DrugAIExplanationResponse,
     DrugAITelemetryResponse,
+    DrugPatientSafetyResponse,
+    DrugDoctorSafetyResponse,
+    DrugValidationHistoryItem,
+    DrugDashboardStatisticsResponse,
     DocumentIndexRequest,
     DocumentIndexResponse,
     BatchDocumentIndexRequest,
@@ -77,6 +82,7 @@ from app.schemas.ai import (
     SyncRebuildResponse,
     SyncStatisticsResponse,
 )
+from app.schemas.auth import SuccessResponse
 from app.schemas.graph import (
     GraphHealthResponse,
     GraphNodesResponse,
@@ -2003,6 +2009,208 @@ async def get_drug_ai_statistics(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch Drug AI statistics: {str(e)}"
         )
+
+
+@router.get(
+    "/drug/patient/{patient_id}",
+    response_model=SuccessResponse,
+    summary="Get patient-friendly drug safety and interaction status",
+)
+async def get_patient_drug_safety(
+    patient_id: str,
+    current_user: UserInDB = Depends(require_active_user),
+    validation_service = Depends(get_medication_validation_service),
+    explanation_service = Depends(get_drug_explanation_service),
+):
+    if current_user.role == UserRole.PATIENT and str(current_user.id) != patient_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: patients can only access their own drug safety data."
+        )
+
+    active_meds = await validation_service.collector.collect(patient_id)
+    val_res = await validation_service.validate_medications(
+        patient_id=patient_id,
+        incoming_medications=[],
+        source="api"
+    )
+
+    explain_res = await explanation_service.explain_safety(
+        medications=active_meds,
+        severity=val_res.get("severity", "NONE"),
+        recommendations=val_res.get("recommendations", []),
+        interactions=val_res.get("detected_interactions", [])
+    )
+
+    cleaned_interactions = []
+    for inter in val_res.get("detected_interactions", []):
+        cleaned_interactions.append({
+            "drug_a": inter.drug_a,
+            "drug_b": inter.drug_b,
+            "drug_a_normalized": inter.drug_a_normalized,
+            "drug_b_normalized": inter.drug_b_normalized,
+            "severity": inter.severity,
+            "description": inter.description
+        })
+
+    data = DrugPatientSafetyResponse(
+        active_medications=active_meds,
+        interactions=cleaned_interactions,
+        severity=val_res.get("severity", "NONE"),
+        patient_explanation=explain_res.get("patient_explanation", "No safety risks detected.")
+    )
+    return SuccessResponse(success=True, message="Patient drug safety retrieved", data=data.model_dump())
+
+
+@router.get(
+    "/drug/doctor/{patient_id}",
+    response_model=SuccessResponse,
+    summary="Get doctor clinical drug safety and interaction status",
+)
+async def get_doctor_drug_safety(
+    patient_id: str,
+    current_user: UserInDB = Depends(require_active_user),
+    validation_service = Depends(get_medication_validation_service),
+    explanation_service = Depends(get_drug_explanation_service),
+):
+    if current_user.role not in (UserRole.DOCTOR, UserRole.ADMIN):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Guarded: Doctors & Admins Only."
+        )
+
+    active_meds = await validation_service.collector.collect(patient_id)
+    val_res = await validation_service.validate_medications(
+        patient_id=patient_id,
+        incoming_medications=[],
+        source="api"
+    )
+
+    explain_res = await explanation_service.explain_safety(
+        medications=active_meds,
+        severity=val_res.get("severity", "NONE"),
+        recommendations=val_res.get("recommendations", []),
+        interactions=val_res.get("detected_interactions", [])
+    )
+
+    cleaned_interactions = []
+    for inter in val_res.get("detected_interactions", []):
+        cleaned_interactions.append({
+            "drug_a": inter.drug_a,
+            "drug_b": inter.drug_b,
+            "drug_a_normalized": inter.drug_a_normalized,
+            "drug_b_normalized": inter.drug_b_normalized,
+            "severity": inter.severity,
+            "description": inter.description
+        })
+
+    monitoring = explain_res.get("precautions", "") or "Monitor patient for side effects."
+
+    data = DrugDoctorSafetyResponse(
+        interaction_details=cleaned_interactions,
+        doctor_explanation=explain_res.get("doctor_explanation", "No interactions found."),
+        monitoring_advice=monitoring,
+        recommendations=val_res.get("recommendations", [])
+    )
+    return SuccessResponse(success=True, message="Doctor drug safety retrieved", data=data.model_dump())
+
+
+@router.get(
+    "/drug/history/{patient_id}",
+    response_model=SuccessResponse,
+    summary="Get patient drug safety validation history",
+)
+async def get_drug_validation_history(
+    patient_id: str,
+    current_user: UserInDB = Depends(require_active_user),
+):
+    if current_user.role == UserRole.PATIENT and str(current_user.id) != patient_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: patients can only access their own drug safety history."
+        )
+
+    from app.db.mongodb import get_database
+    db = get_database()
+    
+    cursor = db.drug_validation_history.find({"patient_id": patient_id}).sort("created_at", -1)
+    history_items = await cursor.to_list(length=100)
+
+    cleaned_history = []
+    for item in history_items:
+        item_id = str(item.get("_id"))
+        
+        cleaned_interactions = []
+        for inter in item.get("detected_interactions", []):
+            if isinstance(inter, dict):
+                cleaned_interactions.append(inter)
+            else:
+                cleaned_interactions.append({
+                    "drug_a": getattr(inter, "drug_a", ""),
+                    "drug_b": getattr(inter, "drug_b", ""),
+                    "severity": getattr(inter, "severity", ""),
+                    "description": getattr(inter, "description", "")
+                })
+
+        cleaned_history.append(
+            DrugValidationHistoryItem(
+                id=item_id,
+                patient_id=item.get("patient_id"),
+                incoming_medications=item.get("incoming_medications") or [],
+                collected_medications=item.get("collected_medications") or [],
+                decision=item.get("decision", "ALLOW"),
+                severity=item.get("severity", "NONE"),
+                recommendations=item.get("recommendations") or [],
+                detected_interactions=cleaned_interactions,
+                source=item.get("source", "api"),
+                override_reason=item.get("override_reason"),
+                overridden_by=item.get("overridden_by"),
+                latency_ms=item.get("latency_ms", 0.0),
+                created_at=item.get("created_at")
+            ).model_dump()
+        )
+
+    return SuccessResponse(success=True, message="Validation history retrieved", data=cleaned_history)
+
+
+@router.get(
+    "/drug/dashboard/statistics",
+    response_model=SuccessResponse,
+    summary="Get drug safety dashboard statistics for admin",
+)
+async def get_drug_dashboard_statistics(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+):
+    from app.db.mongodb import get_database
+    db = get_database()
+
+    total_validations = await db.drug_validation_history.count_documents({})
+    active_warnings = await db.drug_validation_history.count_documents({"decision": "WARNING"})
+    blocked_interactions = await db.drug_validation_history.count_documents({"decision": "BLOCK"})
+    overrides = await db.drug_validation_history.count_documents({"override_reason": {"$ne": None}})
+
+    severity_distribution = {
+        "NONE": await db.drug_validation_history.count_documents({"severity": "NONE"}),
+        "LOW": await db.drug_validation_history.count_documents({"severity": "LOW"}),
+        "MEDIUM": await db.drug_validation_history.count_documents({"severity": "MEDIUM"}),
+        "HIGH": await db.drug_validation_history.count_documents({"severity": "HIGH"}),
+        "CRITICAL": await db.drug_validation_history.count_documents({"severity": "CRITICAL"}),
+    }
+
+    from app.services.drug_safety.telemetry import drug_safety_telemetry
+    tel = drug_safety_telemetry.get_statistics()
+    avg_latency = tel.get("validation_avg_latency_ms", 0.0)
+
+    data = DrugDashboardStatisticsResponse(
+        validations=total_validations,
+        active_warnings=active_warnings,
+        blocked_interactions=blocked_interactions,
+        overrides=overrides,
+        highest_severity_distribution=severity_distribution,
+        avg_latency_ms=avg_latency
+    )
+
+    return SuccessResponse(success=True, message="Drug safety dashboard statistics retrieved", data=data.model_dump())
 
 
 

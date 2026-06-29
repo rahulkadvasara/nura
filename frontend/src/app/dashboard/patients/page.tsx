@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 
 import { useDoctorPatients, useDoctorPatient } from '@/hooks/use-doctor-patient'
+import { useDoctorDrugSafety, useDrugValidationHistory } from '@/hooks/use-ai'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -35,7 +36,7 @@ export default function DoctorPatientsPage() {
   const [limit] = useState(20)
   const [skip, setSkip] = useState(0)
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'insights' | 'history' | 'records'>('insights')
+  const [activeTab, setActiveTab] = useState<'insights' | 'safety' | 'history' | 'records'>('insights')
   
   // Reports inspection states
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null)
@@ -56,6 +57,9 @@ export default function DoctorPatientsPage() {
   const { data: detailData, isLoading: isDetailLoading, isError: isDetailError } = useDoctorPatient(
     selectedPatientId || ''
   )
+
+  const { data: safetyData, isLoading: safetyLoading } = useDoctorDrugSafety(selectedPatientId || '')
+  const { data: historyData, isLoading: historyLoading } = useDrugValidationHistory(selectedPatientId || '')
 
   const getRiskBadgeColor = (risk?: string) => {
     switch (risk?.toLowerCase()) {
@@ -413,6 +417,16 @@ export default function DoctorPatientsPage() {
                           Insights & Reminders
                         </button>
                         <button
+                          onClick={() => setActiveTab('safety')}
+                          className={`flex-1 py-3 text-center text-sm font-semibold border-b-2 transition-all ${
+                            activeTab === 'safety'
+                              ? 'border-teal-600 text-teal-600'
+                              : 'border-transparent text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          Medication Safety
+                        </button>
+                        <button
                           onClick={() => setActiveTab('history')}
                           className={`flex-1 py-3 text-center text-sm font-semibold border-b-2 transition-all ${
                             activeTab === 'history'
@@ -686,6 +700,122 @@ export default function DoctorPatientsPage() {
                                 </div>
                               )}
                             </div>
+                          </div>
+                        )}
+
+                        {/* Tab: Medication Safety */}
+                        {activeTab === 'safety' && (
+                          <div className="space-y-6 text-xs text-slate-700">
+                            {safetyLoading ? (
+                              <div className="flex flex-col items-center justify-center py-10 space-y-2">
+                                <RefreshCw className="h-8 w-8 animate-spin text-teal-600" />
+                                <p className="text-sm font-semibold text-slate-550">Analyzing patient medication safety...</p>
+                              </div>
+                            ) : safetyData ? (
+                              <div className="space-y-6">
+                                {/* Overall Severity & Summary Card */}
+                                <Card className="border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+                                  <div className="flex justify-between items-center">
+                                    <h4 className="font-bold text-slate-800 text-sm">Medication Safety Panel</h4>
+                                    <Badge className={`uppercase text-[10px] font-bold py-1 border ${
+                                      safetyData.interaction_details?.length > 0 ? 'bg-red-50 text-red-700 border-red-200 animate-pulse' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    }`}>
+                                      {safetyData.interaction_details?.length > 0 ? 'INTERACTION DETECTED' : 'SAFE'}
+                                    </Badge>
+                                  </div>
+
+                                  <div className="p-3.5 bg-slate-50 border rounded-lg space-y-1">
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Clinical Safety Recommendation</span>
+                                    <p className="text-slate-800 text-xs font-semibold leading-relaxed">
+                                      {safetyData.recommendations?.[0] || 'No contraindications identified.'}
+                                    </p>
+                                  </div>
+                                </Card>
+
+                                {/* AI Clinician Safety Summary */}
+                                {safetyData.doctor_explanation && (
+                                  <Card className="border border-slate-200 bg-white p-4 shadow-sm space-y-2">
+                                    <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">AI Clinician-Focused Summary</h4>
+                                    <p className="text-slate-600 leading-relaxed font-medium">
+                                      {safetyData.doctor_explanation}
+                                    </p>
+                                  </Card>
+                                )}
+
+                                {/* Monitoring Advice & Precautions */}
+                                {safetyData.monitoring_advice && (
+                                  <Card className="border border-slate-250 bg-amber-50/10 border-amber-100 p-4 shadow-sm space-y-2">
+                                    <h4 className="font-bold text-amber-900 text-xs uppercase tracking-wider">Monitoring & Precautions Indicators</h4>
+                                    <p className="text-slate-700 leading-relaxed font-medium">
+                                      {safetyData.monitoring_advice}
+                                    </p>
+                                  </Card>
+                                )}
+
+                                {/* Detected Interactions List Table */}
+                                <Card className="border border-slate-200 bg-white shadow-sm overflow-hidden">
+                                  <div className="p-4 border-b bg-slate-50/50">
+                                    <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">Detected Interactions Details</h4>
+                                  </div>
+                                  <div className="divide-y divide-slate-100">
+                                    {safetyData.interaction_details?.length > 0 ? (
+                                      safetyData.interaction_details.map((item: any, i: number) => (
+                                        <div key={i} className="p-4 space-y-2 hover:bg-slate-50/20 transition-colors">
+                                          <div className="flex justify-between items-center">
+                                            <span className="font-bold text-slate-900">{item.drug_a} ↔ {item.drug_b}</span>
+                                            <Badge className="bg-red-50 text-red-700 border border-red-250 uppercase rounded text-[9px] font-bold">
+                                              {item.severity}
+                                            </Badge>
+                                          </div>
+                                          <p className="text-slate-600 text-[11px] leading-relaxed mt-0.5">{item.description}</p>
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <div className="p-6 text-center text-slate-400 italic">No contraindications identified in this patient's profile.</div>
+                                    )}
+                                  </div>
+                                </Card>
+
+                                {/* Validation History Log */}
+                                <Card className="border border-slate-200 bg-white shadow-sm">
+                                  <div className="p-4 border-b bg-slate-50/50">
+                                    <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">Clinical Validation History</h4>
+                                  </div>
+                                  <div className="p-4 space-y-4 max-h-[300px] overflow-y-auto">
+                                    {historyData && historyData.length > 0 ? (
+                                      historyData.map((item: any, i: number) => (
+                                        <div key={i} className="border-b last:border-b-0 pb-3 last:pb-0 space-y-1.5 text-[11px]">
+                                          <div className="flex justify-between items-center text-[10px]">
+                                            <span className="font-bold text-slate-500 uppercase">Run #{historyData.length - i}</span>
+                                            <span className="text-slate-400 font-semibold">{new Date(item.created_at).toLocaleDateString()}</span>
+                                          </div>
+                                          <div className="flex flex-wrap gap-1">
+                                            {item.incoming_medications?.map((med: string, idx: number) => (
+                                              <Badge key={idx} className="bg-slate-100 border text-slate-700 font-medium hover:bg-slate-100 text-[8px] py-0 px-1">
+                                                {med}
+                                              </Badge>
+                                            ))}
+                                          </div>
+                                          <div className="flex justify-between items-center text-[10px]">
+                                            <span>Outcome: <strong className={item.decision === 'BLOCK' ? 'text-red-600' : item.decision === 'WARNING' ? 'text-amber-600' : 'text-emerald-600'}>{item.decision}</strong></span>
+                                            <Badge className="text-[8px] bg-slate-50 text-slate-600 border border-slate-200 py-0">{item.severity}</Badge>
+                                          </div>
+                                          {item.override_reason && (
+                                            <p className="text-[10px] bg-amber-50 border border-amber-100 text-amber-900 p-2 rounded font-mono">
+                                              Reason: {item.override_reason}
+                                            </p>
+                                          )}
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <p className="text-xs text-slate-400 italic text-center py-4">No historical validation logs found.</p>
+                                    )}
+                                  </div>
+                                </Card>
+                              </div>
+                            ) : (
+                              <p className="text-slate-400 italic text-center py-6">Failed to load patient safety panel.</p>
+                            )}
                           </div>
                         )}
 

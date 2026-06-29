@@ -183,6 +183,7 @@ class PrescriptionBase(BaseModel):
     medications: List[Medication] = Field(default_factory=list, description="List of prescribed medications")
     dosage_instructions: Optional[str] = Field(None, max_length=2000, description="Additional dosage instructions")
     notes: Optional[str] = Field(None, max_length=2000, description="General notes about the prescription")
+    override_reason: Optional[str] = Field(None, max_length=2000, description="Override reason if prescription has drug interactions")
 
 
 class PrescriptionCreate(PrescriptionBase):
@@ -198,6 +199,7 @@ class PrescriptionUpdate(BaseModel):
     medications: Optional[List[Medication]] = None
     dosage_instructions: Optional[str] = Field(None, max_length=2000)
     notes: Optional[str] = Field(None, max_length=2000)
+    override_reason: Optional[str] = Field(None, max_length=2000)
 
 
 class PrescriptionInDB(PrescriptionBase):

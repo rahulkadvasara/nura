@@ -827,6 +827,69 @@ export function useDrugAISafetyStatistics() {
   })
 }
 
+/**
+ * Hook to retrieve patient-friendly drug safety and interaction status.
+ */
+export function usePatientDrugSafety(patientId: string) {
+  return useQuery<any, Error>({
+    queryKey: ['patient', 'drug-safety', patientId],
+    queryFn: async () => {
+      const res = await aiService.getPatientDrugSafety(patientId)
+      if (res.success && res.data) return res.data
+      throw new Error(res.message || 'Failed to load safety data')
+    },
+    enabled: !!patientId,
+    staleTime: 10_000,
+  })
+}
+
+/**
+ * Hook to retrieve doctor-clinical drug safety and interaction status.
+ */
+export function useDoctorDrugSafety(patientId: string) {
+  return useQuery<any, Error>({
+    queryKey: ['doctor', 'drug-safety', patientId],
+    queryFn: async () => {
+      const res = await aiService.getDoctorDrugSafety(patientId)
+      if (res.success && res.data) return res.data
+      throw new Error(res.message || 'Failed to load doctor safety data')
+    },
+    enabled: !!patientId,
+    staleTime: 10_000,
+  })
+}
+
+/**
+ * Hook to retrieve patient drug safety validation history.
+ */
+export function useDrugValidationHistory(patientId: string) {
+  return useQuery<any, Error>({
+    queryKey: ['patient', 'drug-validation-history', patientId],
+    queryFn: async () => {
+      const res = await aiService.getDrugValidationHistory(patientId)
+      if (res.success && res.data) return res.data
+      throw new Error(res.message || 'Failed to load validation history')
+    },
+    enabled: !!patientId,
+    staleTime: 10_000,
+  })
+}
+
+/**
+ * Hook to retrieve drug safety dashboard statistics for admin.
+ */
+export function useDrugDashboardStatistics() {
+  return useQuery<any, Error>({
+    queryKey: ['admin', 'drug-dashboard-statistics'],
+    queryFn: async () => {
+      const res = await aiService.getDrugDashboardStatistics()
+      if (res.success && res.data) return res.data
+      throw new Error(res.message || 'Failed to load statistics')
+    },
+    refetchInterval: 10000,
+  })
+}
+
 
 
 

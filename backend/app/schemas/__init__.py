@@ -167,6 +167,10 @@ from app.schemas.ai import (
     DrugAIExplanationTokenUsage,
     DrugAIExplanationResponse,
     DrugAITelemetryResponse,
+    DrugPatientSafetyResponse,
+    DrugDoctorSafetyResponse,
+    DrugValidationHistoryItem,
+    DrugDashboardStatisticsResponse,
 )
 
 from app.schemas.graph import (
@@ -384,4 +388,8 @@ __all__ = [
     "DrugAIExplanationTokenUsage",
     "DrugAIExplanationResponse",
     "DrugAITelemetryResponse",
+    "DrugPatientSafetyResponse",
+    "DrugDoctorSafetyResponse",
+    "DrugValidationHistoryItem",
+    "DrugDashboardStatisticsResponse",
 ]

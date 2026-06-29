@@ -1326,6 +1326,45 @@ export default function PatientRecordsPage() {
                 {/* Medication Details Tab */}
                 {inspectTab === 'meds' && (
                   <div className="space-y-4">
+                    {/* Medication Safety / Interactions Section */}
+                    {((inspectingReport as any).interaction_findings && (inspectingReport as any).interaction_findings.length > 0) ? (
+                      <div className="p-4 rounded-lg border border-red-200 bg-red-50/50 mb-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-red-800 uppercase tracking-wider flex items-center gap-1.5">
+                            <AlertTriangle className="h-4 w-4 text-red-600 animate-pulse" />
+                            Drug Interaction Warning: {(inspectingReport as any).overall_severity || 'HIGH'}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-semibold">
+                            Checked: {(inspectingReport as any).validation_timestamp ? new Date((inspectingReport as any).validation_timestamp).toLocaleString() : 'Recent'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-red-700 leading-relaxed font-semibold">
+                          {(inspectingReport as any).summary || 'Critical drug-drug interactions detected between medications in this report.'}
+                        </p>
+                        <div className="space-y-2 mt-2">
+                          {(inspectingReport as any).interaction_findings.map((item: any, i: number) => (
+                            <div key={i} className="bg-white border border-red-100 p-3 rounded-lg text-xs space-y-1 shadow-2xs">
+                              <div className="flex justify-between items-center">
+                                <span className="font-bold text-slate-800">{item.drug_a} ↔ {item.drug_b}</span>
+                                <Badge className="bg-red-100 text-red-800 border-red-200 uppercase rounded text-[9px] font-bold">
+                                  {item.severity}
+                                </Badge>
+                              </div>
+                              <p className="text-slate-600 text-[11px] leading-relaxed mt-0.5">{item.description}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-4 rounded-lg border border-emerald-200 bg-emerald-50/50 mb-4 flex items-center gap-2">
+                        <Shield className="h-5 w-5 text-emerald-600" />
+                        <div>
+                          <p className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Medication Safety: Safe</p>
+                          <p className="text-[11px] text-emerald-700">No drug interactions detected between medications in this report.</p>
+                        </div>
+                      </div>
+                    )}
+
                     {loadingExtraction ? (
                       <div className="text-center py-10">
                         <RefreshCw className="h-6 w-6 animate-spin text-teal-600 mx-auto mb-2" />

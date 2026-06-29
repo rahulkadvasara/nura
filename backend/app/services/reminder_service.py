@@ -11,6 +11,7 @@ from app.models.reminder import (
     ReminderUpdate,
     ReminderInDB,
     ReminderStatus,
+    ReminderType,
 )
 from app.schemas.reminder import (
     ReminderCreateSchema,
@@ -76,6 +77,38 @@ class ReminderService(BaseService[ReminderInDB, ReminderCreate, ReminderUpdate])
         patient = await self.user_repository.get(schema.patient_id)
         if not patient:
             raise ValueError(f"Patient user with ID {schema.patient_id} does not exist")
+
+        # Drug Safety checks for medication reminder
+        if schema.reminder_type == ReminderType.MEDICATION:
+            from app.core.dependencies import get_medication_validation_service
+            validation_service = get_medication_validation_service()
+            
+            # Clean title
+            title = schema.title or ""
+            clean_name = title.strip()
+            if clean_name.lower().startswith("take "):
+                clean_name = clean_name[5:].strip()
+                
+            # Perform validation
+            val_res = await validation_service.validate_medications(
+                patient_id=schema.patient_id,
+                incoming_medications=[clean_name],
+                source="reminder",
+                override_reason=schema.override_reason if schema.override else None,
+                overridden_by=schema.user_role if schema.override else None
+            )
+            
+            if val_res.get("decision") == "BLOCK":
+                is_override_authorized = schema.override and schema.user_role in ("doctor", "admin")
+                if not is_override_authorized:
+                    raise ValueError(
+                        f"Medication reminder creation blocked due to critical interaction: "
+                        f"{val_res.get('recommendations', ['Critical risk interaction'])[0]}. "
+                        f"Requires authorized doctor/admin override."
+                    )
+            
+            # Re-evaluate the patient's full active list and update validation_summary inside patient_memory
+            await validation_service.validate_and_update_patient_memory(schema.patient_id)
 
         now = utc_now()
         reminder_create = ReminderCreate(
@@ -148,6 +181,41 @@ class ReminderService(BaseService[ReminderInDB, ReminderCreate, ReminderUpdate])
         schema: ReminderUpdateSchema,
     ) -> Optional[ReminderInDB]:
         """Update an existing reminder record"""
+        existing = await self.reminder_repository.get(reminder_id)
+        if not existing:
+            return None
+            
+        patient_id = existing.patient_id
+        rem_type = schema.reminder_type or existing.reminder_type
+        title = schema.title or existing.title
+        
+        if rem_type == ReminderType.MEDICATION:
+            from app.core.dependencies import get_medication_validation_service
+            validation_service = get_medication_validation_service()
+            
+            clean_name = title.strip()
+            if clean_name.lower().startswith("take "):
+                clean_name = clean_name[5:].strip()
+                
+            val_res = await validation_service.validate_medications(
+                patient_id=patient_id,
+                incoming_medications=[clean_name],
+                source="reminder",
+                override_reason=schema.override_reason if schema.override else None,
+                overridden_by=schema.user_role if schema.override else None
+            )
+            
+            if val_res.get("decision") == "BLOCK":
+                is_override_authorized = schema.override and schema.user_role in ("doctor", "admin")
+                if not is_override_authorized:
+                    raise ValueError(
+                        f"Medication reminder update blocked due to critical interaction. "
+                        f"Requires authorized doctor/admin override."
+                    )
+            
+            # Re-evaluate memory
+            await validation_service.validate_and_update_patient_memory(patient_id)
+
         update = ReminderUpdate(**schema.model_dump(exclude_unset=True))
         updated_reminder = await self.reminder_repository.update(reminder_id, update)
         
@@ -168,7 +236,16 @@ class ReminderService(BaseService[ReminderInDB, ReminderCreate, ReminderUpdate])
 
     async def delete_reminder(self, reminder_id: str) -> bool:
         """Permanently delete a reminder record"""
-        return await self.reminder_repository.delete(reminder_id)
+        existing = await self.reminder_repository.get(reminder_id)
+        success = await self.reminder_repository.delete(reminder_id)
+        if success and existing:
+            try:
+                from app.core.dependencies import get_medication_validation_service
+                validation_service = get_medication_validation_service()
+                await validation_service.validate_and_update_patient_memory(existing.patient_id)
+            except Exception as e:
+                logger.error(f"Failed to update patient memory validation summary on reminder deletion: {e}")
+        return success
 
     def to_response(self, reminder: ReminderInDB) -> ReminderResponse:
         """Convert internal model to API response"""

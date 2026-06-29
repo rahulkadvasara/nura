@@ -80,9 +80,32 @@ class MedicationValidationService:
             # Collect current normalized medications
             current_normalized = await self.collector.collect(patient_id)
             
+            # Fetch existing patient memory to update historical values
+            existing = await self.patient_memory_col.find_one({"patient_id": patient_id})
+            
+            prev_validation_summaries = []
+            interaction_history = []
+            highest_historical_severity = "NONE"
+            
+            if existing:
+                prev_validation_summaries = existing.get("previous_validation_summaries") or []
+                interaction_history = existing.get("interaction_history") or []
+                highest_historical_severity = existing.get("highest_historical_severity") or "NONE"
+                
+                # Push the current validation_summary if it exists to prev_validation_summaries
+                old_summary = existing.get("validation_summary")
+                if old_summary:
+                    prev_validation_summaries.append(old_summary)
+                    prev_validation_summaries = prev_validation_summaries[-20:]
+
             # If 0 or 1 medications, there can be no interactions, overall severity is NONE
             if len(current_normalized) <= 1:
                 summary_dict = {
+                    "active_medications": current_normalized,
+                    "interaction_findings": [],
+                    "overall_severity": "NONE",
+                    "validation_timestamp": datetime.now(timezone.utc).isoformat(),
+                    "summary": "No known interactions detected.",
                     "latest_validation_date": datetime.now(timezone.utc).isoformat(),
                     "active_interaction_count": 0,
                     "highest_severity": "NONE",
@@ -92,15 +115,50 @@ class MedicationValidationService:
                 # Run complete interaction check on all current medications
                 check_res = await self.interaction_engine.check_interactions(current_normalized)
                 
+                findings = [
+                    {
+                        "drug_a": inter.drug_a,
+                        "drug_b": inter.drug_b,
+                        "drug_a_normalized": inter.drug_a_normalized,
+                        "drug_b_normalized": inter.drug_b_normalized,
+                        "severity": inter.severity,
+                        "description": inter.description
+                    } for inter in check_res.detected_interactions
+                ]
+                
                 summary_dict = {
+                    "active_medications": current_normalized,
+                    "interaction_findings": findings,
+                    "overall_severity": check_res.severity,
+                    "validation_timestamp": datetime.now(timezone.utc).isoformat(),
+                    "summary": (
+                        f"Detected {len(findings)} interaction(s). "
+                        f"Highest severity: {check_res.severity}."
+                    ) if len(findings) > 0 else "No known interactions detected.",
                     "latest_validation_date": datetime.now(timezone.utc).isoformat(),
-                    "active_interaction_count": len(check_res.detected_interactions),
+                    "active_interaction_count": len(findings),
                     "highest_severity": check_res.severity,
                     "interaction_summary": (
-                        f"Detected {len(check_res.detected_interactions)} interaction(s). "
+                        f"Detected {len(findings)} interaction(s). "
                         f"Highest severity: {check_res.severity}."
-                    ) if len(check_res.detected_interactions) > 0 else "No known interactions detected."
+                    ) if len(findings) > 0 else "No known interactions detected."
                 }
+
+            # Update highest historical severity
+            weights = {"NONE": 0, "LOW": 1, "MEDIUM": 2, "HIGH": 3, "CRITICAL": 4}
+            new_weight = weights.get(summary_dict["overall_severity"].upper(), 0)
+            old_weight = weights.get(highest_historical_severity.upper(), 0)
+            if new_weight > old_weight:
+                highest_historical_severity = summary_dict["overall_severity"]
+
+            # Log to interaction_history
+            interaction_history.append({
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "active_medications": current_normalized,
+                "overall_severity": summary_dict["overall_severity"],
+                "active_interaction_count": summary_dict["active_interaction_count"]
+            })
+            interaction_history = interaction_history[-50:]
 
             # Update patient memory document directly
             # If the document does not exist, we upsert a basic one
@@ -109,11 +167,15 @@ class MedicationValidationService:
                 {
                     "$set": {
                         "validation_summary": summary_dict,
+                        "medications": current_normalized,
+                        "previous_validation_summaries": prev_validation_summaries,
+                        "interaction_history": interaction_history,
+                        "highest_historical_severity": highest_historical_severity,
+                        "latest_validation_timestamp": datetime.now(timezone.utc),
                         "last_updated": datetime.now(timezone.utc)
                     },
                     "$setOnInsert": {
-                        "ai_summary": "Initial baseline context.",
-                        "medications": current_normalized
+                        "ai_summary": "Initial baseline context."
                     }
                 },
                 upsert=True

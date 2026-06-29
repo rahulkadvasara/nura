@@ -113,6 +113,40 @@ class PrescriptionService(BaseService[PrescriptionInDB, PrescriptionCreate, Pres
             for med in schema.medications
         ]
 
+        # Medication validation integration
+        override_reason_val = None
+        try:
+            from app.core.dependencies import get_medication_validation_service
+            validation_service = get_medication_validation_service()
+            
+            incoming_meds = [m.drug_name for m in medications_list]
+            val_res = await validation_service.validate_medications(
+                patient_id=consultation.patient_id,
+                incoming_medications=incoming_meds,
+                source="prescription",
+                override_reason=schema.override_reason,
+                overridden_by=doctor_user_id
+            )
+            
+            if val_res.get("decision") in ("WARNING", "BLOCK"):
+                if not schema.override_reason:
+                    raise ValueError(
+                        f"Potential drug safety warnings/block detected: "
+                        f"{val_res.get('recommendations', ['Potential interaction'])[0]}. "
+                        f"An override reason is required."
+                    )
+                override_reason_val = schema.override_reason
+
+            # Refresh patient memory active medications & validation summary
+            await validation_service.validate_and_update_patient_memory(consultation.patient_id)
+        except ValueError:
+            raise
+        except Exception as validation_err:
+            import logging
+            logging.getLogger("nura.services.prescription").error(
+                f"Error executing medication validation during prescription creation: {validation_err}"
+            )
+
         prescription_create = PrescriptionCreate(
             consultation_id=consultation_id,
             patient_id=consultation.patient_id,
@@ -120,6 +154,7 @@ class PrescriptionService(BaseService[PrescriptionInDB, PrescriptionCreate, Pres
             medications=medications_list,
             dosage_instructions=schema.dosage_instructions,
             notes=schema.notes,
+            override_reason=override_reason_val,
         )
 
         doc_dict = prescription_create.model_dump()
@@ -256,21 +291,47 @@ class PrescriptionService(BaseService[PrescriptionInDB, PrescriptionCreate, Pres
                 for m in schema.medications
             ]
 
-        # Prepare update document
-        update_data = {}
+        # Medication validation integration
+        override_reason_val = None
         if meds_update is not None:
-            update_data["medications"] = [m.model_dump() for m in meds_update]
-        if schema.dosage_instructions is not None:
-            update_data["dosage_instructions"] = schema.dosage_instructions
-        if schema.notes is not None:
-            update_data["notes"] = schema.notes
-        update_data["updated_at"] = now
+            try:
+                from app.core.dependencies import get_medication_validation_service
+                validation_service = get_medication_validation_service()
+                
+                incoming_meds = [m.drug_name for m in meds_update]
+                val_res = await validation_service.validate_medications(
+                    patient_id=prescription.patient_id,
+                    incoming_medications=incoming_meds,
+                    source="prescription",
+                    override_reason=schema.override_reason,
+                    overridden_by=doctor_user_id
+                )
+                
+                if val_res.get("decision") in ("WARNING", "BLOCK"):
+                    if not schema.override_reason:
+                        raise ValueError(
+                            f"Potential drug safety warnings/block detected: "
+                            f"{val_res.get('recommendations', ['Potential interaction'])[0]}. "
+                            f"An override reason is required."
+                        )
+                    override_reason_val = schema.override_reason
+
+                # Refresh patient memory active medications & validation summary
+                await validation_service.validate_and_update_patient_memory(prescription.patient_id)
+            except ValueError:
+                raise
+            except Exception as validation_err:
+                import logging
+                logging.getLogger("nura.services.prescription").error(
+                    f"Error executing medication validation during prescription update: {validation_err}"
+                )
 
         # Convert to model to call base repository update if possible, or perform update directly
         update_model = PrescriptionUpdate(
             medications=meds_update,
             dosage_instructions=schema.dosage_instructions,
-            notes=schema.notes
+            notes=schema.notes,
+            override_reason=override_reason_val
         )
         updated = await self.prescription_repository.update(prescription_id, update_model)
         if not updated:
@@ -308,7 +369,19 @@ class PrescriptionService(BaseService[PrescriptionInDB, PrescriptionCreate, Pres
 
     async def delete_prescription(self, prescription_id: str) -> bool:
         """Permanently delete a prescription"""
-        return await self.prescription_repository.delete(prescription_id)
+        existing = await self.prescription_repository.get(prescription_id)
+        success = await self.prescription_repository.delete(prescription_id)
+        if success and existing:
+            try:
+                from app.core.dependencies import get_medication_validation_service
+                validation_service = get_medication_validation_service()
+                await validation_service.validate_and_update_patient_memory(existing.patient_id)
+            except Exception as e:
+                import logging
+                logging.getLogger("nura.services.prescription").error(
+                    f"Failed to update patient memory validation summary on prescription deletion: {e}"
+                )
+        return success
 
     def to_response(self, prescription: PrescriptionInDB) -> PrescriptionResponse:
         """Convert internal model to API response"""
