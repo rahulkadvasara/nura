@@ -82,6 +82,11 @@ from app.schemas.chat import (
     ChatMessageCreateSchema,
     ChatMessageUpdateSchema,
     ChatMessageResponse,
+    ChatSessionCreate,
+    ChatSessionUpdate,
+    ChatMessageCreate,
+    ChatHistoryResponse,
+    ChatStatisticsResponse,
 )
 
 from app.schemas.payment import (
@@ -291,6 +296,11 @@ __all__ = [
     "ChatMessageCreateSchema",
     "ChatMessageUpdateSchema",
     "ChatMessageResponse",
+    "ChatSessionCreate",
+    "ChatSessionUpdate",
+    "ChatMessageCreate",
+    "ChatHistoryResponse",
+    "ChatStatisticsResponse",
 
     # Payment and doctor wallet schemas
     "PaymentCreateSchema",

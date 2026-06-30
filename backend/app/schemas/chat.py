@@ -1,6 +1,6 @@
 """
 Nura - Chat and Messaging Schemas
-Pydantic v2 schemas for chat API requests and responses, preparing for future AI layers
+Pydantic v2 schemas for chat API requests and responses
 """
 
 from datetime import datetime
@@ -9,13 +9,13 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from app.models.chat import (
     SessionType,
-    SenderType,
-    MessageType,
+    SessionStatus,
+    MessageRole,
 )
 
 
 # ---------------------------------------------------------------------------
-# Future AI & RAG Schema Design (Task 7 Preparation)
+# Chat Message Metadata Schema
 # ---------------------------------------------------------------------------
 
 class ChatMessageMetadata(BaseModel):
@@ -50,31 +50,42 @@ class ChatMessageMetadata(BaseModel):
 # Chat Session Schemas
 # ---------------------------------------------------------------------------
 
-class ChatSessionCreateSchema(BaseModel):
+class ChatSessionCreate(BaseModel):
     """Request schema for creating a new chat session"""
     patient_id: str = Field(..., description="Reference to the patient user ID")
     title: str = Field(..., min_length=1, max_length=200, description="Title/topic of the chat session")
-    session_type: SessionType = Field(..., description="Type of chat session")
-    active: bool = Field(default=True, description="Whether the session is active")
+    description: Optional[str] = Field(None, description="Optional description of the session")
+    session_type: Optional[SessionType] = Field(SessionType.AI_CHAT, description="Type of session")
 
 
-class ChatSessionUpdateSchema(BaseModel):
+class ChatSessionUpdate(BaseModel):
     """Request schema for updating a chat session"""
     title: Optional[str] = Field(None, min_length=1, max_length=200)
-    active: Optional[bool] = None
-    last_message_at: Optional[datetime] = None
+    description: Optional[str] = Field(None, description="Optional description")
+    pinned: Optional[bool] = Field(None, description="Pin state")
+    archived: Optional[bool] = Field(None, description="Archive state")
+    status: Optional[SessionStatus] = Field(None, description="Session status")
 
 
 class ChatSessionResponse(BaseModel):
     """Response schema for a chat session"""
-    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+    model_config = ConfigDict(from_attributes=True, json_encoders={datetime: lambda dt: dt.isoformat()})
 
     id: str = Field(..., description="Session ID")
     patient_id: str = Field(..., description="Patient user ID")
     title: str = Field(..., description="Title/topic of the session")
+    description: Optional[str] = Field(None, description="Description of the session")
+    status: SessionStatus = Field(..., description="Status of the session")
     session_type: SessionType = Field(..., description="Session type")
     active: bool = Field(..., description="Active status")
     last_message_at: datetime = Field(..., description="Timestamp of last message")
+    message_count: int = Field(..., description="Number of messages in session")
+    total_tokens: int = Field(..., description="Total tokens consumed")
+    total_cost: float = Field(..., description="Total cost of API execution")
+    last_agent_used: Optional[str] = Field(None, description="Last AI agent used")
+    pinned: bool = Field(..., description="Pin status")
+    archived: bool = Field(..., description="Archive status")
+    metadata: Dict[str, Any] = Field(..., description="Session metadata")
     created_at: datetime = Field(..., description="Session creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
@@ -83,31 +94,69 @@ class ChatSessionResponse(BaseModel):
 # Chat Message Schemas
 # ---------------------------------------------------------------------------
 
-class ChatMessageCreateSchema(BaseModel):
+class ChatMessageCreate(BaseModel):
     """Request schema for creating a new chat message"""
     session_id: str = Field(..., description="Reference to the chat session ID")
-    sender_type: SenderType = Field(..., description="Sender type")
-    sender_id: str = Field(..., description="User ID of the sender")
-    message: str = Field(..., min_length=1, max_length=5000, description="Message text content")
-    message_type: MessageType = Field(default=MessageType.TEXT, description="Type of message content")
-    metadata: Optional[ChatMessageMetadata] = Field(default_factory=ChatMessageMetadata, description="Message metadata")
+    patient_id: str = Field(..., description="Reference to the patient user ID")
+    role: MessageRole = Field(..., description="Role of the message author")
+    content: str = Field(..., min_length=1, max_length=10000, description="Message text content")
+    citations: Optional[List[Dict[str, Any]]] = Field(default_factory=list, description="Citations used in response")
+    attachments: Optional[List[Dict[str, Any]]] = Field(default_factory=list, description="Attachments")
+    token_usage: Optional[Dict[str, int]] = Field(default_factory=dict, description="Token consumption metrics")
+    latency_ms: Optional[int] = Field(None, description="Latency in ms")
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Message metadata")
 
 
-class ChatMessageUpdateSchema(BaseModel):
+class ChatMessageUpdate(BaseModel):
     """Request schema for updating an existing chat message"""
-    message: Optional[str] = Field(None, min_length=1, max_length=5000)
-    metadata: Optional[ChatMessageMetadata] = None
+    content: Optional[str] = Field(None, min_length=1, max_length=10000)
+    metadata: Optional[Dict[str, Any]] = None
 
 
 class ChatMessageResponse(BaseModel):
     """Response schema for a chat message"""
-    model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
+    model_config = ConfigDict(from_attributes=True, json_encoders={datetime: lambda dt: dt.isoformat()})
 
     id: str = Field(..., description="Message ID")
     session_id: str = Field(..., description="Session ID")
-    sender_type: SenderType = Field(..., description="Sender type")
-    sender_id: str = Field(..., description="User ID of the sender")
-    message: str = Field(..., description="Message text content")
-    message_type: MessageType = Field(..., description="Type of message content")
-    metadata: ChatMessageMetadata = Field(..., description="Message metadata")
+    patient_id: str = Field(..., description="Patient user ID")
+    role: MessageRole = Field(..., description="Role of the message sender")
+    content: str = Field(..., description="Message content")
+    citations: List[Dict[str, Any]] = Field(..., description="References or citations")
+    attachments: List[Dict[str, Any]] = Field(..., description="Attached items")
+    token_usage: Dict[str, int] = Field(..., description="Tokens consumed")
+    latency_ms: Optional[int] = Field(None, description="Response generation latency in ms")
+    metadata: Dict[str, Any] = Field(..., description="Message metadata")
     created_at: datetime = Field(..., description="Message creation timestamp")
+    edited_at: Optional[datetime] = Field(None, description="Message edit timestamp")
+    deleted: bool = Field(..., description="Deleted status")
+
+
+# ---------------------------------------------------------------------------
+# History and Statistics
+# ---------------------------------------------------------------------------
+
+class ChatHistoryResponse(BaseModel):
+    """Response schema for a paginated list of chat messages"""
+    messages: List[ChatMessageResponse] = Field(..., description="List of messages")
+    total: int = Field(..., description="Total count of messages")
+    limit: int = Field(..., description="Pagination limit")
+    skip: int = Field(..., description="Pagination skip")
+
+
+class ChatStatisticsResponse(BaseModel):
+    """Response schema for telemetry statistics"""
+    sessions_created: int = Field(..., description="Total sessions created")
+    sessions_archived: int = Field(..., description="Total sessions archived")
+    sessions_deleted: int = Field(..., description="Total sessions deleted (soft delete)")
+    messages_created: int = Field(..., description="Total messages created")
+    messages_edited: int = Field(..., description="Total messages edited")
+    messages_deleted: int = Field(..., description="Total messages deleted")
+    average_messages_per_session: float = Field(..., description="Average messages per session")
+
+
+# Backwards compatibility aliases
+ChatSessionCreateSchema = ChatSessionCreate
+ChatSessionUpdateSchema = ChatSessionUpdate
+ChatMessageCreateSchema = ChatMessageCreate
+ChatMessageUpdateSchema = ChatMessageUpdate

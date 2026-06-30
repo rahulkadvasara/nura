@@ -27,6 +27,8 @@ from app.repositories import (
     DoctorWalletRepository,
     PatientMemoryRepository,
     ReportRepository,
+    ChatSessionRepository,
+    ChatMessageRepository,
 )
 from app.services import (
     UserService,
@@ -59,6 +61,8 @@ from app.services import (
     PatientSummaryBuilder,
     MemorySyncService,
     ReminderService,
+    ChatSessionService,
+    ChatMessageService,
 )
 from app.events import EventDispatcher, EventQueue
 from app.agents import (
@@ -94,6 +98,33 @@ def get_otp_repository() -> OTPRepository:
     """Get OTPRepository instance"""
     database: AsyncIOMotorDatabase = get_database()
     return OTPRepository(database.otp_verifications)
+
+
+def get_chat_session_repository() -> ChatSessionRepository:
+    """Get ChatSessionRepository instance"""
+    database: AsyncIOMotorDatabase = get_database()
+    return ChatSessionRepository(database.chat_sessions)
+
+
+def get_chat_message_repository() -> ChatMessageRepository:
+    """Get ChatMessageRepository instance"""
+    database: AsyncIOMotorDatabase = get_database()
+    return ChatMessageRepository(database.chat_messages)
+
+
+def get_chat_session_service() -> ChatSessionService:
+    """Get ChatSessionService instance"""
+    chat_session_repository = get_chat_session_repository()
+    user_repository = get_user_repository()
+    return ChatSessionService(chat_session_repository, user_repository)
+
+
+def get_chat_message_service() -> ChatMessageService:
+    """Get ChatMessageService instance"""
+    chat_message_repository = get_chat_message_repository()
+    chat_session_repository = get_chat_session_repository()
+    user_repository = get_user_repository()
+    return ChatMessageService(chat_message_repository, chat_session_repository, user_repository)
 
 
 def get_user_service() -> UserService:

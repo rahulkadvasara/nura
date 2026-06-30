@@ -3,11 +3,11 @@ Nura - Chat Session Repository
 MongoDB repository for chat_sessions collection
 """
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from motor.motor_asyncio import AsyncIOMotorCollection
 
-from app.models.chat import ChatSessionCreate, ChatSessionUpdate, ChatSessionInDB
-from app.repositories.base import BaseRepository
+from app.models.chat import ChatSessionCreate, ChatSessionUpdate, ChatSessionInDB, SessionStatus
+from app.repositories.base import BaseRepository, _to_model
 
 
 class ChatSessionRepository(BaseRepository[ChatSessionInDB, ChatSessionCreate, ChatSessionUpdate]):
@@ -21,16 +21,51 @@ class ChatSessionRepository(BaseRepository[ChatSessionInDB, ChatSessionCreate, C
         return await self.get(id)
 
     async def list(self, limit: int = 100, skip: int = 0) -> List[ChatSessionInDB]:
-        """List all chat sessions"""
-        return await self.get_many({}, limit=limit, skip=skip)
+        """List all chat sessions, excluding DELETED ones"""
+        cursor = self.collection.find({"status": {"$ne": SessionStatus.DELETED}}).skip(skip).limit(limit)
+        docs = await cursor.to_list(length=limit)
+        return [_to_model(self.model_class, doc) for doc in docs]
 
-    async def get_by_patient_id(self, patient_id: str, limit: int = 100, skip: int = 0) -> List[ChatSessionInDB]:
-        """Fetch all chat sessions for a given patient"""
-        return await self.get_many({"patient_id": patient_id}, limit=limit, skip=skip)
+    async def get_by_patient_id(
+        self,
+        patient_id: str,
+        limit: int = 100,
+        skip: int = 0,
+        include_archived: bool = True
+    ) -> List[ChatSessionInDB]:
+        """Fetch all non-deleted chat sessions for a patient, ordered by pinned first, then newest first"""
+        query: Dict[str, Any] = {
+            "patient_id": patient_id,
+            "status": {"$ne": SessionStatus.DELETED}
+        }
+        if not include_archived:
+            query["status"] = SessionStatus.ACTIVE
 
-    async def get_active_sessions(self, patient_id: Optional[str] = None, limit: int = 100, skip: int = 0) -> List[ChatSessionInDB]:
+        cursor = (
+            self.collection.find(query)
+            .sort([("pinned", -1), ("last_message_at", -1), ("created_at", -1)])
+            .skip(skip)
+            .limit(limit)
+        )
+        docs = await cursor.to_list(length=limit)
+        return [_to_model(self.model_class, doc) for doc in docs]
+
+    async def get_active_sessions(
+        self,
+        patient_id: Optional[str] = None,
+        limit: int = 100,
+        skip: int = 0
+    ) -> List[ChatSessionInDB]:
         """Fetch all active chat sessions, optionally filtered by patient ID"""
-        query = {"active": True}
+        query: Dict[str, Any] = {"status": SessionStatus.ACTIVE}
         if patient_id:
             query["patient_id"] = patient_id
-        return await self.get_many(query, limit=limit, skip=skip)
+        
+        cursor = (
+            self.collection.find(query)
+            .sort([("pinned", -1), ("last_message_at", -1), ("created_at", -1)])
+            .skip(skip)
+            .limit(limit)
+        )
+        docs = await cursor.to_list(length=limit)
+        return [_to_model(self.model_class, doc) for doc in docs]
