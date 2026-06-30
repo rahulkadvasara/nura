@@ -47,6 +47,11 @@ from app.core.dependencies import (
     get_drug_interaction_engine,
     get_medication_validation_service,
     get_drug_explanation_service,
+    get_drug_cache_service,
+    get_drug_background_telemetry,
+    get_drug_queue_manager,
+    get_drug_worker_scheduler,
+    get_batch_validation_service,
 )
 from app.models import UserRole, UserInDB
 from app.schemas.ai import (
@@ -2211,6 +2216,191 @@ async def get_drug_dashboard_statistics(
     )
 
     return SuccessResponse(success=True, message="Drug safety dashboard statistics retrieved", data=data.model_dump())
+
+
+@router.get(
+    "/drug/system/health",
+    response_model=SuccessResponse,
+    summary="Get drug safety subsystem health status",
+)
+async def get_drug_system_health(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    queue_manager=Depends(get_drug_queue_manager),
+):
+    from app.services.groq_service import get_groq_service
+    from app.db.mongodb import get_database
+    
+    # 1. MongoDB connectivity check
+    mongodb_status = "healthy"
+    try:
+        db = get_database()
+        await db.command("ping")
+    except Exception:
+        mongodb_status = "unhealthy"
+
+    # 2. AI Health check (Groq)
+    groq_status = "healthy"
+    try:
+        groq_service = get_groq_service()
+        from app.utils.circuit_breaker import get_circuit_breaker
+        breaker = get_circuit_breaker("groq")
+        if breaker.state == "OPEN":
+            groq_status = "degraded"
+    except Exception:
+        groq_status = "unhealthy"
+
+    # 3. Cache Health check
+    cache_status = "healthy"
+    from app.services.drug_cache import get_drug_cache_service
+    cache_stats = get_drug_cache_service().get_stats()
+
+    # 4. Worker health
+    worker_status = "healthy"
+    from app.services.drug_background.scheduler import get_drug_worker_scheduler
+    scheduler = get_drug_worker_scheduler()
+    active_workers = scheduler.worker_count_active()
+    idle_workers = scheduler.worker_count_idle()
+    total_workers = scheduler.worker_count
+    
+    # Check if workers are running
+    if total_workers > 0 and (active_workers + idle_workers) == 0:
+        worker_status = "degraded"
+
+    # 5. Queue Depth
+    queue_stats = await queue_manager.get_queue_stats()
+    queue_depth = queue_stats.get("queued", 0)
+
+    # 6. Overall Health
+    overall = "healthy"
+    if mongodb_status == "unhealthy" or groq_status == "unhealthy":
+        overall = "unhealthy"
+    elif worker_status == "degraded" or groq_status == "degraded":
+        overall = "degraded"
+
+    return SuccessResponse(
+        success=True,
+        message="Drug safety subsystem health retrieved",
+        data={
+            "status": overall,
+            "mongodb": mongodb_status,
+            "cache": cache_status,
+            "workers": worker_status,
+            "ai": groq_status,
+            "queue_depth": queue_depth
+        }
+    )
+
+
+@router.get(
+    "/drug/system/cache",
+    response_model=SuccessResponse,
+    summary="Get drug safety cache diagnostics",
+)
+async def get_drug_system_cache(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    cache_service=Depends(get_drug_cache_service),
+):
+    stats = cache_service.get_stats()
+    return SuccessResponse(
+        success=True,
+        message="Drug safety cache statistics retrieved",
+        data={
+            "lookup_cache": {
+                "size": stats.get("lookup_cache_size", 0),
+                "hits": stats.get("lookup_hits", 0),
+                "misses": stats.get("lookup_misses", 0),
+                "hit_ratio": stats.get("lookup_hit_ratio", 0.0),
+                "ttl_seconds": 86400
+            },
+            "interaction_cache": {
+                "size": stats.get("interaction_cache_size", 0),
+                "hits": stats.get("interaction_hits", 0),
+                "misses": stats.get("interaction_misses", 0),
+                "hit_ratio": stats.get("interaction_hit_ratio", 0.0),
+                "ttl_seconds": 900
+            },
+            "explanation_cache": {
+                "size": stats.get("explanation_cache_size", 0),
+                "hits": stats.get("explanation_hits", 0),
+                "misses": stats.get("explanation_misses", 0),
+                "hit_ratio": stats.get("explanation_hit_ratio", 0.0),
+                "ttl_seconds": 21600
+            },
+            "total_invalidations": stats.get("invalidations", 0),
+            "tracked_patients": stats.get("tracked_patients_count", 0)
+        }
+    )
+
+
+@router.get(
+    "/drug/system/workers",
+    response_model=SuccessResponse,
+    summary="Get drug safety background worker diagnostics",
+)
+async def get_drug_system_workers(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    scheduler=Depends(get_drug_worker_scheduler),
+    queue_manager=Depends(get_drug_queue_manager),
+):
+    worker_status = scheduler.get_worker_status()
+    heartbeats = await scheduler.get_heartbeats()
+    
+    # Query MongoDB for pending/queued jobs detail
+    cursor = queue_manager.collection.find(
+        {"status": {"$in": ["queued", "processing"]}},
+        sort=[("priority_order", 1), ("created_at", 1)],
+        limit=50
+    )
+    active_jobs = []
+    async for doc in cursor:
+        doc["_id"] = str(doc["_id"])
+        doc["created_at"] = doc["created_at"].isoformat() if doc.get("created_at") else None
+        doc["updated_at"] = doc["updated_at"].isoformat() if doc.get("updated_at") else None
+        doc["started_at"] = doc["started_at"].isoformat() if doc.get("started_at") else None
+        doc["completed_at"] = doc["completed_at"].isoformat() if doc.get("completed_at") else None
+        active_jobs.append(doc)
+
+    return SuccessResponse(
+        success=True,
+        message="Drug safety workers and queue retrieved",
+        data={
+            "total_workers": scheduler.worker_count,
+            "active_workers": scheduler.worker_count_active(),
+            "idle_workers": scheduler.worker_count_idle(),
+            "workers": worker_status,
+            "heartbeats": heartbeats,
+            "active_jobs": active_jobs
+        }
+    )
+
+
+@router.get(
+    "/drug/system/statistics",
+    response_model=SuccessResponse,
+    summary="Get comprehensive drug safety telemetry statistics",
+)
+async def get_drug_system_statistics(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    bg_telemetry=Depends(get_drug_background_telemetry),
+):
+    from app.services.drug_safety.telemetry import drug_safety_telemetry
+    core_stats = drug_safety_telemetry.get_statistics()
+    bg_stats = bg_telemetry.get_stats()
+    
+    from app.db.mongodb import get_database
+    db = get_database()
+    db_overrides = await db.drug_validation_history.count_documents({"override_reason": {"$ne": None}})
+    core_stats["prescription_overrides"] = db_overrides
+
+    return SuccessResponse(
+        success=True,
+        message="Drug safety statistics retrieved",
+        data={
+            "core": core_stats,
+            "background": bg_stats
+        }
+    )
+
 
 
 

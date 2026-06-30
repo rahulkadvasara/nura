@@ -890,6 +890,66 @@ export function useDrugDashboardStatistics() {
   })
 }
 
+/**
+ * Hook to monitor backend drug safety health status periodically.
+ */
+export function useDrugHealth() {
+  return useQuery<any, Error>({
+    queryKey: ['admin', 'ai', 'drug', 'health'],
+    queryFn: async () => {
+      const res = await aiService.getDrugHealth()
+      if (res.success && res.data) return res.data
+      throw new Error(res.message || 'Failed to load health status')
+    },
+    refetchInterval: 10000,
+  })
+}
+
+/**
+ * Hook to monitor backend drug safety cache stats periodically.
+ */
+export function useDrugCacheStats() {
+  return useQuery<any, Error>({
+    queryKey: ['admin', 'ai', 'drug', 'cache-stats'],
+    queryFn: async () => {
+      const res = await aiService.getDrugCacheStats()
+      if (res.success && res.data) return res.data
+      throw new Error(res.message || 'Failed to load cache stats')
+    },
+    refetchInterval: 10000,
+  })
+}
+
+/**
+ * Hook to monitor backend drug safety background worker statuses periodically.
+ */
+export function useDrugWorkerStatus() {
+  return useQuery<any, Error>({
+    queryKey: ['admin', 'ai', 'drug', 'worker-status'],
+    queryFn: async () => {
+      const res = await aiService.getDrugWorkerStatus()
+      if (res.success && res.data) return res.data
+      throw new Error(res.message || 'Failed to load worker status')
+    },
+    refetchInterval: 5000,
+  })
+}
+
+/**
+ * Hook to retrieve full drug safety telemetry statistics periodically.
+ */
+export function useDrugTelemetryStats() {
+  return useQuery<any, Error>({
+    queryKey: ['admin', 'ai', 'drug', 'telemetry-stats'],
+    queryFn: async () => {
+      const res = await aiService.getDrugTelemetryStats()
+      if (res.success && res.data) return res.data
+      throw new Error(res.message || 'Failed to load telemetry stats')
+    },
+    refetchInterval: 5000,
+  })
+}
+
 
 
 

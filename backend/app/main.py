@@ -69,10 +69,39 @@ async def lifespan(app: FastAPI):
             event_queue.push(event)
             
         event_dispatcher.register_handler("*", background_queue_pusher)
+
+        # Drug validation background event handler
+        async def drug_validation_event_handler(event):
+            try:
+                payload = event.payload or {}
+                patient_id = payload.get("patient_id")
+                if patient_id:
+                    from app.core.dependencies import get_drug_queue_manager
+                    q_mgr = get_drug_queue_manager()
+                    # Determine priority based on event type
+                    priority = "high" if "Prescription" in event.event_type else "normal"
+                    await q_mgr.enqueue(patient_id=patient_id, priority=priority)
+            except Exception as ex:
+                import logging
+                logging.getLogger("nura.main").error(f"Error enqueuing background drug validation: {ex}")
+
+        # Register event handlers for automatic validations
+        event_dispatcher.register_handler("ReminderCreated", drug_validation_event_handler)
+        event_dispatcher.register_handler("ReminderUpdated", drug_validation_event_handler)
+        event_dispatcher.register_handler("PrescriptionCreated", drug_validation_event_handler)
+        event_dispatcher.register_handler("PrescriptionUpdated", drug_validation_event_handler)
+        event_dispatcher.register_handler("PatientProfileUpdated", drug_validation_event_handler)
+        event_dispatcher.register_handler("MedicalHistoryUpdated", drug_validation_event_handler)
+        event_dispatcher.register_handler("PipelineCompleted", drug_validation_event_handler)
         
+        # Start drug validation background worker scheduler
+        from app.services.drug_background.scheduler import get_drug_worker_scheduler
+        drug_scheduler = get_drug_worker_scheduler()
+        await drug_scheduler.start()
+
     except Exception as e:
         import logging
-        logging.getLogger("nura.main").error(f"Failed to start EventQueue background worker: {e}")
+        logging.getLogger("nura.main").error(f"Failed to start EventQueue background worker or drug scheduler: {e}")
 
     yield
     
@@ -84,6 +113,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         import logging
         logging.getLogger("nura.main").error(f"Failed to stop EventQueue background worker: {e}")
+
+    # Stop drug validation background worker scheduler
+    try:
+        from app.services.drug_background.scheduler import get_drug_worker_scheduler
+        drug_scheduler = get_drug_worker_scheduler()
+        await drug_scheduler.stop()
+    except Exception as e:
+        import logging
+        logging.getLogger("nura.main").error(f"Failed to stop drug worker scheduler: {e}")
     
     # Shutdown
     await close_mongodb_connection()

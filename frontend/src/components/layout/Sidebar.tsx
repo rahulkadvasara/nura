@@ -60,6 +60,7 @@ export function Sidebar() {
         { name: 'System Health', href: '/dashboard/admin/system', icon: Cpu },
         { name: 'OCR Reports', href: '/dashboard/admin/reports', icon: FileText },
         { name: 'AI Playground', href: '/dashboard/admin/ai', icon: Sparkles },
+        { name: 'Drug Safety Monitor', href: '/dashboard/admin/monitoring', icon: Pill },
         { name: 'AI Orchestrator', href: '/dashboard/admin/ai/orchestrator', icon: Sparkles },
         { name: 'RAG Sync', href: '/dashboard/admin/rag', icon: RefreshCw },
         { name: 'Settings', href: '/dashboard/settings/profile', icon: Settings },

@@ -77,6 +77,10 @@ class MedicationValidationService:
         start_time = time.perf_counter()
         
         try:
+            # Invalidate cached interactions/explanations for this patient as their profile is updating
+            from app.services.drug_cache.drug_cache_service import get_drug_cache_service
+            get_drug_cache_service().invalidate_patient(patient_id)
+
             # Collect current normalized medications
             current_normalized = await self.collector.collect(patient_id)
             
@@ -97,7 +101,7 @@ class MedicationValidationService:
                 if old_summary:
                     prev_validation_summaries.append(old_summary)
                     prev_validation_summaries = prev_validation_summaries[-20:]
-
+ 
             # If 0 or 1 medications, there can be no interactions, overall severity is NONE
             if len(current_normalized) <= 1:
                 summary_dict = {
@@ -113,7 +117,7 @@ class MedicationValidationService:
                 }
             else:
                 # Run complete interaction check on all current medications
-                check_res = await self.interaction_engine.check_interactions(current_normalized)
+                check_res = await self.interaction_engine.check_interactions(current_normalized, patient_id=patient_id)
                 
                 findings = [
                     {

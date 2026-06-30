@@ -506,6 +506,26 @@ export const aiService = {
   getDrugDashboardStatistics: async (): Promise<any> => {
     const response = await apiClient.get<any>('/ai/drug/dashboard/statistics')
     return response.data
+  },
+
+  getDrugHealth: async (): Promise<any> => {
+    const response = await apiClient.get<any>('/ai/drug/system/health')
+    return response.data
+  },
+
+  getDrugCacheStats: async (): Promise<any> => {
+    const response = await apiClient.get<any>('/ai/drug/system/cache')
+    return response.data
+  },
+
+  getDrugWorkerStatus: async (): Promise<any> => {
+    const response = await apiClient.get<any>('/ai/drug/system/workers')
+    return response.data
+  },
+
+  getDrugTelemetryStats: async (): Promise<any> => {
+    const response = await apiClient.get<any>('/ai/drug/system/statistics')
+    return response.data
   }
 }
 

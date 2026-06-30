@@ -2,7 +2,7 @@ import threading
 from typing import Dict, Any
 
 class DrugSafetyTelemetry:
-    """Thread-safe telemetry tracker for Drug Safety lookup, normalization, interaction checking, and validations."""
+    """Thread-safe telemetry tracker for Drug Safety lookup, normalization, interaction checking, AI explanation, and validations."""
     
     def __init__(self):
         self._lock = threading.Lock()
@@ -40,16 +40,26 @@ class DrugSafetyTelemetry:
         self.warning_decisions = 0
         self.blocked_decisions = 0
 
+        # AI Explanation & Cost telemetry
+        self.explanation_checks = 0
+        self.explanation_avg_latency_ms = 0.0
+        self.fallback_executions = 0
+        self.ai_cost = 0.0
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
+        self.total_tokens = 0
+
+        # Core Block & Override telemetry
+        self.reminder_blocks = 0
+        self.prescription_overrides = 0
+
     def record_normalization(self) -> None:
         """Increment count of normalization operations performed."""
         with self._lock:
             self.normalization_count += 1
 
     def record_lookup(self, cache_hit: bool, latency_ms: float, is_unknown: bool = False) -> None:
-        """
-        Record telemetry for a single drug lookup.
-        Updates hit/miss count, unknown counts, and calculates a running average latency.
-        """
+        """Record telemetry for a single drug lookup."""
         with self._lock:
             self.total_lookups += 1
             if cache_hit:
@@ -60,23 +70,18 @@ class DrugSafetyTelemetry:
             if is_unknown:
                 self.unknown_drug_count += 1
                 
-            # Running average latency calculation
             n = self.total_lookups
             self.avg_latency_ms = (self.avg_latency_ms * (n - 1) + latency_ms) / n
 
     def record_interaction_check(self, pairs_count: int, latency_ms: float, overall_severity: str) -> None:
-        """
-        Record telemetry for an interaction check execution.
-        """
+        """Record telemetry for an interaction check execution."""
         with self._lock:
             self.interaction_checks += 1
             self.pairs_evaluated += pairs_count
             
-            # Running average latency
             n = self.interaction_checks
             self.interaction_avg_latency_ms = (self.interaction_avg_latency_ms * (n - 1) + latency_ms) / n
             
-            # Increment severity distribution count
             sev_key = overall_severity.upper()
             if sev_key in self.severity_distribution:
                 self.severity_distribution[sev_key] += 1
@@ -88,11 +93,9 @@ class DrugSafetyTelemetry:
         with self._lock:
             self.validation_checks += 1
             
-            # Running average latency
             n = self.validation_checks
             self.validation_avg_latency_ms = (self.validation_avg_latency_ms * (n - 1) + latency_ms) / n
             
-            # Increment source counters
             src = source.lower()
             if src == "reminder":
                 self.reminder_validations += 1
@@ -105,7 +108,6 @@ class DrugSafetyTelemetry:
             else:
                 self.other_validations += 1
                 
-            # Increment decision counters
             dec = decision.upper()
             if dec == "ALLOW":
                 self.allow_decisions += 1
@@ -113,6 +115,32 @@ class DrugSafetyTelemetry:
                 self.warning_decisions += 1
             elif dec == "BLOCK":
                 self.blocked_decisions += 1
+                if src == "reminder":
+                    self.reminder_blocks += 1
+
+    def record_explanation(self, latency_ms: float, prompt_tokens: int, completion_tokens: int, cost: float, fallback_used: bool) -> None:
+        """Record telemetry for an AI explanation service invocation."""
+        with self._lock:
+            self.explanation_checks += 1
+            n = self.explanation_checks
+            self.explanation_avg_latency_ms = (self.explanation_avg_latency_ms * (n - 1) + latency_ms) / n
+            
+            self.prompt_tokens += prompt_tokens
+            self.completion_tokens += completion_tokens
+            self.total_tokens += (prompt_tokens + completion_tokens)
+            self.ai_cost += cost
+            if fallback_used:
+                self.fallback_executions += 1
+
+    def record_prescription_override(self) -> None:
+        """Increment count of prescription overrides."""
+        with self._lock:
+            self.prescription_overrides += 1
+
+    def record_reminder_block(self) -> None:
+        """Increment count of reminder blocks."""
+        with self._lock:
+            self.reminder_blocks += 1
 
     def get_statistics(self) -> Dict[str, Any]:
         """Return a snapshot dictionary of the current telemetry metrics."""
@@ -147,7 +175,20 @@ class DrugSafetyTelemetry:
                 "other_validations": self.other_validations,
                 "allow_decisions": self.allow_decisions,
                 "warning_decisions": self.warning_decisions,
-                "blocked_decisions": self.blocked_decisions
+                "blocked_decisions": self.blocked_decisions,
+
+                # AI Explanation & Cost Stats
+                "explanation_checks": self.explanation_checks,
+                "explanation_avg_latency_ms": round(self.explanation_avg_latency_ms, 2),
+                "fallback_executions": self.fallback_executions,
+                "ai_cost": round(self.ai_cost, 6),
+                "prompt_tokens": self.prompt_tokens,
+                "completion_tokens": self.completion_tokens,
+                "total_tokens": self.total_tokens,
+
+                # Block & Override Stats
+                "reminder_blocks": self.reminder_blocks,
+                "prescription_overrides": self.prescription_overrides
             }
 
     def reset(self) -> None:
@@ -181,6 +222,16 @@ class DrugSafetyTelemetry:
             self.allow_decisions = 0
             self.warning_decisions = 0
             self.blocked_decisions = 0
+
+            self.explanation_checks = 0
+            self.explanation_avg_latency_ms = 0.0
+            self.fallback_executions = 0
+            self.ai_cost = 0.0
+            self.prompt_tokens = 0
+            self.completion_tokens = 0
+            self.total_tokens = 0
+            self.reminder_blocks = 0
+            self.prescription_overrides = 0
 
 
 # Global telemetry tracker instance

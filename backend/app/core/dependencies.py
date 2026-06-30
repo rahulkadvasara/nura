@@ -1528,6 +1528,53 @@ def get_worker_scheduler():
     return _worker_scheduler_instance
 
 
+_drug_queue_manager_instance = None
+_drug_worker_scheduler_instance = None
+
+def get_drug_cache_service():
+    """Retrieve DrugCacheService singleton."""
+    from app.services.drug_cache.drug_cache_service import get_drug_cache_service as _get_cache
+    return _get_cache()
+
+def get_drug_background_telemetry():
+    """Retrieve DrugBackgroundTelemetry singleton."""
+    from app.services.drug_background.telemetry import get_drug_background_telemetry as _get_bg_tel
+    return _get_bg_tel()
+
+def get_drug_queue_manager():
+    """Retrieve DrugQueueManager singleton."""
+    global _drug_queue_manager_instance
+    if _drug_queue_manager_instance is None:
+        from app.services.drug_background.queue_manager import DrugQueueManager
+        _drug_queue_manager_instance = DrugQueueManager(db=get_database())
+    return _drug_queue_manager_instance
+
+def get_drug_worker_scheduler():
+    """Retrieve WorkerScheduler singleton for drug validation background tasks."""
+    global _drug_worker_scheduler_instance
+    if _drug_worker_scheduler_instance is None:
+        import os
+        from app.services.drug_background.scheduler import WorkerScheduler
+        worker_count = int(os.environ.get("DRUG_WORKER_COUNT", "2"))
+        _drug_worker_scheduler_instance = WorkerScheduler(
+            queue_manager=get_drug_queue_manager(),
+            validation_service=get_medication_validation_service(),
+            telemetry=get_drug_background_telemetry(),
+            worker_count=worker_count,
+            db=get_database(),
+        )
+    return _drug_worker_scheduler_instance
+
+def get_batch_validation_service():
+    """Retrieve BatchValidationService singleton."""
+    from app.services.drug_safety.batch_validation_service import BatchValidationService
+    return BatchValidationService(
+        database=get_database(),
+        validation_service=get_medication_validation_service()
+    )
+
+
+
 
 
 
