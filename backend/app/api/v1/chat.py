@@ -17,14 +17,22 @@ from app.schemas.chat import (
     ChatMessageResponse,
     ChatHistoryResponse,
     ChatStatisticsResponse,
+    ChatExecutionRequest,
+    ChatExecutionResponse,
+    ChatSessionStatisticsResponse,
 )
+from app.models.chat import MessageRole
 from app.core.dependencies import (
     get_current_user,
     require_exact_patient,
     require_role,
     get_chat_session_service,
     get_chat_message_service,
+    get_chat_execution_service,
+    get_chat_message_repository,
 )
+from app.repositories.chat_message_repository import ChatMessageRepository
+from app.services.chat.chat_execution_service import ChatExecutionService
 from app.services.chat_session_service import ChatSessionService
 from app.services.chat_message_service import ChatMessageService
 from app.services.chat.telemetry import get_chat_statistics
@@ -280,6 +288,100 @@ async def get_messages(
     except Exception as e:
         logger.exception("Failed to get messages history")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve history")
+
+
+@router.post(
+    "/message/execute",
+    response_model=SuccessResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Execute Message through AI Orchestrator",
+    description="Stores the user message, invokes the Multi-Agent Orchestrator, and returns the response."
+)
+async def execute_message(
+    schema: ChatExecutionRequest,
+    current_user: UserInDB = Depends(require_exact_patient),
+    execution_service: ChatExecutionService = Depends(get_chat_execution_service),
+) -> SuccessResponse:
+    try:
+        response = await execution_service.execute_chat_message(
+            session_id=schema.session_id,
+            patient_id=current_user.id,
+            message=schema.message
+        )
+        return SuccessResponse(
+            success=True,
+            message="AI execution complete",
+            data=response.model_dump()
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("AI Chat execution crashed")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get(
+    "/session/{session_id}/statistics",
+    response_model=SuccessResponse,
+    summary="Get Chat Session Statistics",
+    description="Retrieves message count, total tokens, cost, latency, and last agent for a single session."
+)
+async def get_session_statistics(
+    session_id: str,
+    current_user: UserInDB = Depends(require_exact_patient),
+    session_service: ChatSessionService = Depends(get_chat_session_service),
+    message_repo: ChatMessageRepository = Depends(get_chat_message_repository),
+) -> SuccessResponse:
+    session = await session_service.get_session_by_id(session_id)
+    if not session or session.patient_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Chat session not found"
+        )
+    try:
+        # Fetch all messages in the session
+        messages = await message_repo.get_by_session_id(
+            session_id=session_id,
+            limit=1000,
+            skip=0,
+            include_deleted=False
+        )
+
+        message_count = len(messages)
+        
+        # Calculate tokens sum
+        total_tokens = 0
+        assistant_latencies = []
+        
+        for msg in messages:
+            if msg.role == MessageRole.ASSISTANT:
+                usage = msg.token_usage or {}
+                total_tokens += usage.get("total_tokens", 0)
+                if msg.latency_ms is not None:
+                    assistant_latencies.append(msg.latency_ms)
+
+        average_latency = 0.0
+        if assistant_latencies:
+            average_latency = sum(assistant_latencies) / len(assistant_latencies)
+
+        stats = ChatSessionStatisticsResponse(
+            message_count=message_count,
+            total_tokens=total_tokens,
+            total_cost=session.total_cost,
+            average_latency=average_latency,
+            last_agent_used=session.last_agent_used,
+        )
+
+        return SuccessResponse(
+            success=True,
+            message="Session statistics retrieved successfully",
+            data=stats.model_dump()
+        )
+    except Exception as e:
+        logger.exception("Failed to retrieve chat session statistics")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve session statistics")
 
 
 # ---------------------------------------------------------------------------

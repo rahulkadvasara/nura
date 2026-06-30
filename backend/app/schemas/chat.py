@@ -153,6 +153,12 @@ class ChatStatisticsResponse(BaseModel):
     messages_edited: int = Field(..., description="Total messages edited")
     messages_deleted: int = Field(..., description="Total messages deleted")
     average_messages_per_session: float = Field(..., description="Average messages per session")
+    ai_requests: int = Field(default=0, description="Total AI requests count")
+    failures: int = Field(default=0, description="Total failed requests count")
+    agent_distribution: Dict[str, int] = Field(default_factory=dict, description="Counts of execution by agent name")
+    average_latency: float = Field(default=0.0, description="Average response generation latency in milliseconds")
+    token_usage: Dict[str, int] = Field(default_factory=dict, description="Total tokens usage details")
+
 
 
 # Backwards compatibility aliases
@@ -160,3 +166,33 @@ ChatSessionCreateSchema = ChatSessionCreate
 ChatSessionUpdateSchema = ChatSessionUpdate
 ChatMessageCreateSchema = ChatMessageCreate
 ChatMessageUpdateSchema = ChatMessageUpdate
+
+
+# ---------------------------------------------------------------------------
+# Sprint 2 AI Chat Execution Schemas
+# ---------------------------------------------------------------------------
+
+class ChatExecutionRequest(BaseModel):
+    """Request schema for executing an AI message response"""
+    session_id: str = Field(..., description="Reference to the chat session ID")
+    message: str = Field(..., min_length=1, description="User input message text")
+
+
+class ChatExecutionResponse(BaseModel):
+    """Response schema returned after executing an AI query through the orchestrator"""
+    assistant_message: str = Field(..., description="Final generated response from the assistant")
+    agent_used: Optional[str] = Field(None, description="Winning agent name that executed the query")
+    citations: List[Dict[str, Any]] = Field(default_factory=list, description="List of references or citations")
+    usage: Dict[str, int] = Field(default_factory=dict, description="LLM token usage statistics")
+    latency_ms: float = Field(..., description="Total execution latency in milliseconds")
+    cost: float = Field(..., description="Estimated cost of workflow completion")
+
+
+class ChatSessionStatisticsResponse(BaseModel):
+    """Response schema summarizing session statistics and cost metrics"""
+    message_count: int = Field(..., description="Total count of messages in this session")
+    total_tokens: int = Field(..., description="Cumulative token count consumed by this session")
+    total_cost: float = Field(..., description="Cumulative USD cost incurred by this session")
+    average_latency: float = Field(..., description="Average response latency in milliseconds")
+    last_agent_used: Optional[str] = Field(None, description="Last AI agent triggered for this session")
+

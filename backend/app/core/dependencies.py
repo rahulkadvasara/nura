@@ -127,6 +127,24 @@ def get_chat_message_service() -> ChatMessageService:
     return ChatMessageService(chat_message_repository, chat_session_repository, user_repository)
 
 
+def get_multi_agent_orchestrator():
+    """Get MultiAgentOrchestrator instance"""
+    from app.services.multi_agent_orchestrator import MultiAgentOrchestrator
+    return MultiAgentOrchestrator()
+
+
+def get_chat_execution_service() -> Any:
+    """Get ChatExecutionService instance"""
+    from app.services.chat.chat_execution_service import ChatExecutionService
+    return ChatExecutionService(
+        chat_session_repository=get_chat_session_repository(),
+        chat_message_repository=get_chat_message_repository(),
+        chat_message_service=get_chat_message_service(),
+        chat_session_service=get_chat_session_service(),
+        orchestrator=get_multi_agent_orchestrator(),
+    )
+
+
 def get_user_service() -> UserService:
     """Get UserService instance"""
     user_repository = get_user_repository()

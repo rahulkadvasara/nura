@@ -54,6 +54,23 @@ export interface ChatStatistics {
   average_messages_per_session: number
 }
 
+export interface ChatExecutionResponse {
+  assistant_message: string
+  agent_used?: string
+  citations: any[]
+  usage: Record<string, number>
+  latency_ms: number
+  cost: number
+}
+
+export interface ChatSessionStatisticsResponse {
+  message_count: number
+  total_tokens: number
+  total_cost: number
+  average_latency: number
+  last_agent_used?: string
+}
+
 export const chatService = {
   createSession: async (patientId: string, title: string, description?: string): Promise<ApiResponse<ChatSession>> => {
     const response = await apiClient.post<ApiResponse<ChatSession>>('/chat/session', {
@@ -113,6 +130,19 @@ export const chatService = {
 
   getChatStatistics: async (): Promise<ApiResponse<ChatStatistics>> => {
     const response = await apiClient.get<ApiResponse<ChatStatistics>>('/chat/statistics')
+    return response.data
+  },
+
+  executeMessage: async (sessionId: string, message: string): Promise<ApiResponse<ChatExecutionResponse>> => {
+    const response = await apiClient.post<ApiResponse<ChatExecutionResponse>>('/chat/message/execute', {
+      session_id: sessionId,
+      message
+    })
+    return response.data
+  },
+
+  getSessionStatistics: async (sessionId: string): Promise<ApiResponse<ChatSessionStatisticsResponse>> => {
+    const response = await apiClient.get<ApiResponse<ChatSessionStatisticsResponse>>(`/chat/session/${sessionId}/statistics`)
     return response.data
   }
 }

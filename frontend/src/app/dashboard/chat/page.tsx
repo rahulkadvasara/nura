@@ -10,6 +10,8 @@ import {
   useUpdateSession,
   useDeleteSession,
   useCreateMessage,
+  useExecuteMessage,
+  useSessionStatistics,
 } from '@/hooks/use-chat'
 import {
   Plus,
@@ -25,6 +27,9 @@ import {
   X,
   MessageSquare,
   Search,
+  Code,
+  DollarSign,
+  Cpu,
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 
@@ -37,6 +42,9 @@ export default function ChatPage() {
   
   // Search session state
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Developer mode toggle
+  const [developerMode, setDeveloperMode] = useState(false)
 
   // New session inline creation toggle and input
   const [isCreating, setIsCreating] = useState(false)
@@ -54,11 +62,13 @@ export default function ChatPage() {
   const { data: sessions = [], isLoading: loadingSessions } = useSessions(100, 0, true)
   const { data: activeSession } = useSession(selectedSessionId)
   const { data: history = { messages: [] }, isLoading: loadingMessages } = useMessages(selectedSessionId)
+  const { data: stats } = useSessionStatistics(selectedSessionId)
 
   const createSessionMutation = useCreateSession()
   const updateSessionMutation = useUpdateSession()
   const deleteSessionMutation = useDeleteSession()
   const createMessageMutation = useCreateMessage()
+  const executeMessageMutation = useExecuteMessage()
 
   // Filter sessions by search query
   const filteredSessions = sessions.filter(session =>
@@ -148,17 +158,29 @@ export default function ChatPage() {
     e.preventDefault()
     if (!messageText.trim() || !selectedSessionId) return
 
+    const queryText = messageText.trim()
+    setMessageText('')
+
     try {
-      await createMessageMutation.mutateAsync({
-        session_id: selectedSessionId,
-        patient_id: patientId,
-        role: messageRole,
-        content: messageText.trim(),
-      })
-      setMessageText('')
-      toast.success('Message logged')
+      if (messageRole === 'USER') {
+        // Run AI pipeline execution
+        await executeMessageMutation.mutateAsync({
+          sessionId: selectedSessionId,
+          message: queryText,
+        })
+        toast.success('AI response compiled')
+      } else {
+        // Manual simulation fallback
+        await createMessageMutation.mutateAsync({
+          session_id: selectedSessionId,
+          patient_id: patientId,
+          role: messageRole,
+          content: queryText,
+        })
+        toast.success('Manual message stored')
+      }
     } catch (err: any) {
-      toast.error(err.message || 'Failed to log message')
+      toast.error(err.message || 'AI Chat execution crashed')
     }
   }
 
@@ -356,51 +378,98 @@ export default function ChatPage() {
         {selectedSessionId && activeSession ? (
           <>
             {/* Conversation Header */}
-            <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-white">
-              <div>
-                <h1 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                  <span>{activeSession.title}</span>
-                  {activeSession.pinned && <Pin className="h-3 w-3 text-amber-500 fill-amber-500" />}
-                </h1>
-                <p className="text-[10px] text-slate-400">
-                  Patient ID: <span className="font-mono text-slate-500">{activeSession.patient_id}</span>
-                </p>
+            <div className="flex flex-col p-4 border-b border-slate-100 bg-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <span>{activeSession.title}</span>
+                    {activeSession.pinned && <Pin className="h-3 w-3 text-amber-500 fill-amber-500" />}
+                  </h1>
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Patient ID: <span className="font-mono text-slate-500">{activeSession.patient_id}</span>
+                  </p>
+                </div>
+
+                {/* Header Action Buttons */}
+                <div className="flex items-center gap-2">
+                  {/* Developer mode toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setDeveloperMode(!developerMode)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                      developerMode
+                        ? 'border-teal-500 bg-teal-50 text-teal-700'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                    title="Toggle developer metadata traces"
+                  >
+                    <Code className="h-3.5 w-3.5" />
+                    <span>Dev Mode: {developerMode ? 'On' : 'Off'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleTogglePin(activeSession)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                      activeSession.pinned
+                        ? 'border-amber-200 bg-amber-50 text-amber-700'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Pin className="h-3.5 w-3.5" />
+                    <span>{activeSession.pinned ? 'Pinned' : 'Pin'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleToggleArchive(activeSession)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                      activeSession.archived
+                        ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Archive className="h-3.5 w-3.5" />
+                    <span>{activeSession.archived ? 'Archived' : 'Archive'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteSession(activeSession.id)}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-red-200 bg-red-50/50 text-red-600 hover:bg-red-50 transition-all"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Delete</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Header Action Buttons */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleTogglePin(activeSession)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
-                    activeSession.pinned
-                      ? 'border-amber-200 bg-amber-50 text-amber-700'
-                      : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <Pin className="h-3.5 w-3.5" />
-                  <span>{activeSession.pinned ? 'Pinned' : 'Pin'}</span>
-                </button>
-
-                <button
-                  onClick={() => handleToggleArchive(activeSession)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
-                    activeSession.archived
-                      ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
-                      : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <Archive className="h-3.5 w-3.5" />
-                  <span>{activeSession.archived ? 'Archived' : 'Archive'}</span>
-                </button>
-
-                <button
-                  onClick={() => handleDeleteSession(activeSession.id)}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-red-200 bg-red-50/50 text-red-600 hover:bg-red-50 transition-all"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  <span>Delete</span>
-                </button>
-              </div>
+              {/* Session Stats Bar */}
+              {stats && (
+                <div className="flex items-center gap-4 text-[10px] text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 mt-2.5">
+                  <span className="flex items-center gap-1">
+                    <MessageSquare className="h-3.5 w-3.5 text-teal-600" />
+                    Messages: <strong className="text-slate-700">{stats.message_count}</strong>
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Cpu className="h-3.5 w-3.5 text-teal-600" />
+                    Tokens: <strong className="text-slate-700">{stats.total_tokens}</strong>
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <DollarSign className="h-3.5 w-3.5 text-teal-600" />
+                    Cost: <strong className="text-slate-700">${stats.total_cost.toFixed(4)}</strong>
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Activity className="h-3.5 w-3.5 text-teal-600" />
+                    Avg Latency: <strong className="text-slate-700">{stats.average_latency.toFixed(0)}ms</strong>
+                  </span>
+                  {stats.last_agent_used && (
+                    <span className="ml-auto bg-teal-50 text-teal-700 px-2 py-0.5 rounded border border-teal-100 font-semibold">
+                      Agent: {stats.last_agent_used}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Conversation Message List */}
@@ -414,9 +483,9 @@ export default function ChatPage() {
                   <div className="h-10 w-10 rounded-full bg-teal-50 flex items-center justify-center mb-3">
                     <Sparkles className="h-5 w-5 text-teal-600" />
                   </div>
-                  <h3 className="text-sm font-bold text-slate-800 mb-1">Infrastructure Configured</h3>
+                  <h3 className="text-sm font-bold text-slate-800 mb-1">Nura AI Chat Ready</h3>
                   <p className="text-xs text-slate-400 leading-relaxed">
-                    This chat session is fully set up in MongoDB. Write a message below to test storing it in the database.
+                    Write a clinical question or symptom check below. The request runs through intent routers and vector retrieval.
                   </p>
                 </div>
               ) : (
@@ -434,6 +503,10 @@ export default function ChatPage() {
                       </div>
                     )
                   }
+
+                  const metadata = message.metadata || {}
+                  const agentUsed = metadata.agent || null
+                  const citations = message.citations || []
 
                   return (
                     <div
@@ -454,7 +527,7 @@ export default function ChatPage() {
                       </div>
 
                       {/* Bubble */}
-                      <div className="flex flex-col">
+                      <div className="flex flex-col max-w-full">
                         <div
                           className={`px-4 py-2.5 rounded-2xl text-xs leading-relaxed shadow-sm transition-all ${
                             isUser
@@ -463,17 +536,78 @@ export default function ChatPage() {
                           }`}
                         >
                           <p className="whitespace-pre-line">{message.content}</p>
+
+                          {/* Citations section if present */}
+                          {!isUser && citations && citations.length > 0 && (
+                            <div className="mt-3 pt-2.5 border-t border-slate-100">
+                              <span className="text-[10px] font-bold text-slate-400 block mb-1">Citations & References:</span>
+                              <div className="space-y-1 font-mono text-[9px] text-teal-700">
+                                {citations.map((cit: any, idx: number) => (
+                                  <div key={idx} className="bg-teal-50/50 border border-teal-100/50 rounded px-2 py-0.5 truncate" title={cit.source || cit.collection}>
+                                    [{idx + 1}] {cit.source || cit.collection || 'Record reference'} {cit.score ? `(Match: ${(cit.score * 100).toFixed(0)}%)` : ''}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <span className={`text-[9px] text-slate-400 mt-1 ${isUser ? 'text-right' : ''}`}>
-                          {new Date(message.created_at).toLocaleTimeString(undefined, {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
+
+                        {/* Metadata Tagline (latency, tokens, agent) */}
+                        <div className={`flex flex-wrap gap-2 mt-1 text-[9px] text-slate-400 ${isUser ? 'justify-end' : 'justify-start'}`}>
+                          <span>
+                            {new Date(message.created_at).toLocaleTimeString(undefined, {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+
+                          {!isUser && agentUsed && (
+                            <span className="font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/50">
+                              agent: {agentUsed}
+                            </span>
+                          )}
+
+                          {!isUser && developerMode && (
+                            <>
+                              {message.latency_ms && (
+                                <span className="bg-slate-100 text-indigo-600 px-1.5 py-0.5 rounded border border-slate-200/50">
+                                  latency: {message.latency_ms}ms
+                                </span>
+                              )}
+                              {message.token_usage && Object.keys(message.token_usage).length > 0 && (
+                                <span className="bg-slate-100 text-amber-600 px-1.5 py-0.5 rounded border border-slate-200/50 font-mono">
+                                  tokens: {message.token_usage.total_tokens || 0}
+                                </span>
+                              )}
+                              {metadata.cost !== undefined && (
+                                <span className="bg-slate-100 text-emerald-600 px-1.5 py-0.5 rounded border border-slate-200/50">
+                                  cost: ${metadata.cost.toFixed(4)}
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )
                 })
+              )}
+
+              {/* Floating Typing Indicator */}
+              {executeMessageMutation.isPending && (
+                <div className="flex gap-3 max-w-[75%] animate-in fade-in slide-in-from-bottom duration-200">
+                  <div className="h-8 w-8 rounded-full bg-teal-50 border border-teal-200 flex items-center justify-center flex-shrink-0 shadow-sm animate-pulse">
+                    <Sparkles className="h-4 w-4 text-teal-600" />
+                  </div>
+                  <div className="flex flex-col">
+                    <div className="px-4 py-2.5 rounded-2xl bg-white border border-slate-150 text-slate-400 rounded-tl-none text-xs flex items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 bg-teal-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="h-1.5 w-1.5 bg-teal-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="h-1.5 w-1.5 bg-teal-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                      <span className="ml-1 text-[10px] text-slate-400 font-semibold animate-pulse">Nura is orchestrating agents...</span>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
 
@@ -485,8 +619,8 @@ export default function ChatPage() {
                     rows={2}
                     value={messageText}
                     onChange={(e) => setMessageText(e.target.value)}
-                    placeholder="Type your message here..."
-                    className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500 bg-slate-50 resize-none"
+                    placeholder="Ask Nura about your health (e.g. 'check my prescriptions safety')..."
+                    className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500 bg-slate-50 resize-none placeholder-slate-400"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault()
@@ -502,17 +636,17 @@ export default function ChatPage() {
                       value={messageRole}
                       onChange={(e) => setMessageRole(e.target.value as any)}
                       className="px-2 py-1 text-[10px] rounded border border-slate-200 bg-slate-50 font-semibold text-slate-600 focus:outline-none"
-                      title="Sender Role (Simulation)"
+                      title="Sender Role (Simulation / Sandbox)"
                     >
                       <option value="USER">Patient (User)</option>
-                      <option value="ASSISTANT">Nura (Assistant)</option>
-                      <option value="SYSTEM">System (Event)</option>
+                      <option value="ASSISTANT">Manual Nura (Assistant)</option>
+                      <option value="SYSTEM">Manual Event (System)</option>
                     </select>
 
                     <button
                       type="submit"
-                      disabled={!messageText.trim() || createMessageMutation.isPending}
-                      className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-teal-600 text-white font-bold text-xs hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                      disabled={!messageText.trim() || executeMessageMutation.isPending}
+                      className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-teal-600 text-white font-bold text-xs hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-teal-600/10"
                     >
                       <Send className="h-3.5 w-3.5" />
                       <span>Send</span>

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { chatService, ChatSession, ChatMessage, ChatHistory, ChatStatistics } from '@/services/chat.service'
+import { chatService, ChatSession, ChatMessage, ChatHistory, ChatStatistics, ChatExecutionResponse, ChatSessionStatisticsResponse } from '@/services/chat.service'
 
 export function useSessions(limit = 50, skip = 0, includeArchived = true) {
   return useQuery<ChatSession[], Error>({
@@ -138,5 +138,44 @@ export function useChatStatistics() {
       throw new Error(response.message || 'Failed to fetch chat statistics')
     },
     staleTime: 10000,
+  })
+}
+
+export function useExecuteMessage() {
+  const queryClient = useQueryClient()
+  return useMutation<
+    ChatExecutionResponse,
+    Error,
+    { sessionId: string; message: string }
+  >({
+    mutationFn: async ({ sessionId, message }) => {
+      const response = await chatService.executeMessage(sessionId, message)
+      if (response.success && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'AI execution failed')
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['chat', 'messages', variables.sessionId] })
+      queryClient.invalidateQueries({ queryKey: ['chat', 'session', variables.sessionId] })
+      queryClient.invalidateQueries({ queryKey: ['chat', 'sessions'] })
+      queryClient.invalidateQueries({ queryKey: ['chat', 'session-statistics', variables.sessionId] })
+    }
+  })
+}
+
+export function useSessionStatistics(sessionId: string | null) {
+  return useQuery<ChatSessionStatisticsResponse | null, Error>({
+    queryKey: ['chat', 'session-statistics', sessionId],
+    queryFn: async () => {
+      if (!sessionId) return null
+      const response = await chatService.getSessionStatistics(sessionId)
+      if (response.success && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to fetch session statistics')
+    },
+    enabled: !!sessionId,
+    staleTime: 5000,
   })
 }

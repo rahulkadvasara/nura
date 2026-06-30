@@ -151,39 +151,61 @@ stateDiagram-v2
 
 ---
 
-## 4. Future Streaming & AI Integration Architecture
+## 4. Active AI execution Pipeline Architecture
 
-In subsequent phases, the platform will support Server-Sent Events (SSE) streaming and multi-agent pipeline orchestration.
+The AI Chat Execution Pipeline links the persistent MongoDB chat storage to the LangGraph Multi-Agent Orchestrator. 
 
-### Future Architecture Flow
+### Sequence Diagram of Chat Execution
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Patient as Patient (UI)
     participant API as FastAPI Router
+    participant ExecService as ChatExecutionService
+    participant ContextBuilder as ContextBuilder
     participant Orchestrator as Multi-Agent Orchestrator
-    participant RAG as Retrieval Agent (Qdrant)
-    participant LLM as LLM Engine (Groq)
-    participant DB as MongoDB
+    participant Agents as Target Agent (e.g. Memory/Symptom)
+    participant DB as MongoDB (Chat Collections)
 
-    Patient->>API: POST /message (role=USER, content="...")
-    API->>DB: Save User Message
-    API->>Patient: Send SSE Connection Established
-    API animate Orchestrator: Trigger AI Pipeline
-    Orchestrator->>RAG: Assembles Context (Retrieves records)
-    RAG-->>Orchestrator: Assembled Context & Citations
-    Orchestrator->>LLM: Stream completion (Structured Prompt)
-    LLM-->>API: Stream token chunks
-    API-->>Patient: Send chunk (SSE event: message)
-    LLM-->>Orchestrator: Stream complete (tokens used, latency)
-    Orchestrator->>DB: Save Assistant Message (citations, token_usage, latency)
-    Orchestrator->>DB: Update Session stats (count, tokens, cost)
-    API-->>Patient: Send SSE close signal
+    Patient->>API: POST /message/execute (session_id, query)
+    API->>ExecService: execute_chat_message(...)
+    ExecService->>DB: Save USER Message (content=query)
+    ExecService->>ContextBuilder: build_conversation_context(...)
+    ContextBuilder->>DB: Fetch last 20 messages (excluding deleted)
+    DB-->>ContextBuilder: Raw message history documents
+    ContextBuilder-->>ExecService: Formatted context list [{"role", "content"}]
+    ExecService->>Orchestrator: execute(AIExecuteRequest) with context in metadata
+    Orchestrator->>Agents: Intent router dispatch
+    Agents-->>Orchestrator: AgentResponse (citations, tokens, latency, cost)
+    Orchestrator-->>ExecService: StandardResponseContract
+    ExecService->>DB: Save ASSISTANT Message (content, citations, tokens, latency)
+    ExecService->>DB: Update Session costs (total_cost, last_agent_used)
+    ExecService-->>API: ChatExecutionResponse
+    API-->>Patient: 201 Created (assistant_message, citations, usage, cost)
 ```
 
-### Citations and AI Trace Details
-The message metadata field is reserved for embedding:
-1. **RAG Citations**: List of document chunks retrieved from the patient's record during query parsing.
-2. **Execution Logs**: Performance logs containing latencies for intent routing, vector database lookups, context assembly, and inference execution.
-3. **Budget Constraints**: Tracking prompt/completion tokens to enforce per-user usage limits and platform cost control.
+---
+
+## 5. Components Details
+
+### 5.1 Context Builder
+The `build_conversation_context` utility aggregates the temporal chat history:
+* Retrieves the last `limit` messages from `chat_messages` (default limit of 20).
+* Translates message schemas: `USER` → `user`, `ASSISTANT` → `assistant`, `SYSTEM` → `system`.
+* Appends metadata descriptions at the top of the context window as a `system` instruction.
+
+### 5.2 Error Handling & Resilience
+In the event of an orchestrator crash or Groq API failure:
+* The user's query remains persisted in the `chat_messages` collection, preserving conversation logs.
+* No assistant reply document is created.
+* An error response is returned to the user interface, prompting them to retry.
+
+### 5.3 Telemetry Flow
+Admin statistics are aggregated on-the-fly directly from MongoDB collections:
+* **AI Requests**: Count of assistant messages.
+* **Failures**: Real-time counter queried from the thread-safe `MultiAgentTelemetryTracker` singleton.
+* **Latency**: Calculated using MongoDB `$avg` pipeline on `$latency_ms`.
+* **Token Usage & Costs**: Summarized using MongoDB `$sum` operators on the nested tokens and cost properties.
+* **Agent Distribution**: Formed using MongoDB `$group` on `metadata.agent`.
+
