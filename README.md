@@ -3,7 +3,7 @@
 Nura is an AI-powered healthcare assistant platform designed to help patients manage their healthcare journey through intelligent assistance, medical report analysis, medication safety validation, appointment management, and personalized health insights.
 
 ## 🏗️ Architecture
- 
+  
 - **Frontend:** Next.js 15 + TypeScript + Tailwind CSS
 - **Backend:** FastAPI + Python
 - **Database:** MongoDB Atlas (Primary) + Qdrant (Vector DB)
@@ -23,7 +23,7 @@ Nura is an AI-powered healthcare assistant platform designed to help patients ma
 - Groq API key
 
 ### Backend Setup
-
+ 
 1. **Navigate to backend directory:**
    ```bash
    cd backend
