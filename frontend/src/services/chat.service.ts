@@ -21,6 +21,25 @@ export interface ChatSession {
   updated_at: string
 }
 
+export interface RichCardAction {
+  action_type: string
+  label: string
+  url: string
+  method: string
+  payload?: Record<string, any>
+}
+
+export interface RichCard {
+  card_type: 'report' | 'medication' | 'drug_safety' | 'appointment' | 'reminder' | 'doctor' | 'laboratory' | 'risk'
+  title: string
+  subtitle?: string
+  icon?: string
+  status?: string
+  summary?: string
+  metadata: Record<string, any>
+  actions: RichCardAction[]
+}
+
 export interface ChatMessage {
   id: string
   session_id: string
@@ -35,6 +54,8 @@ export interface ChatMessage {
   created_at: string
   edited_at?: string
   deleted: boolean
+  cards?: RichCard[]
+  actions?: RichCardAction[]
 }
 
 export interface ChatHistory {
@@ -61,6 +82,8 @@ export interface ChatExecutionResponse {
   usage: Record<string, number>
   latency_ms: number
   cost: number
+  cards?: RichCard[]
+  actions?: RichCardAction[]
 }
 
 export interface ChatSessionStatisticsResponse {

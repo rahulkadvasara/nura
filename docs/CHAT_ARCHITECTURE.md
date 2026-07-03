@@ -302,4 +302,46 @@ When clinical threshold is crossed, structured medical parameters are appended t
 * **Concatenation**: Lifestyle recommendations are appended to the patient's lifestyle notes.
 
 
+---
+
+## 8. Healthcare Integrations & Rich Cards (Sprint 6)
+
+Sprint 6 bridges the Conversational Chat Platform with Nura's healthcare dashboard modules (reports, medications, reminders, appointments, doctors, laboratory values, risk analysis, drug safety) by parsing conversation context and embedding rich interactive UI cards directly below message bubbles.
+
+### 8.1 Integration Flow & Services Architecture
+
+```mermaid
+graph TD
+    A[Patient Message] --> B[FastAPI Chat Router]
+    B --> C[Orchestrator Execution Pipeline]
+    C --> D[Healthcare Context Resolver]
+    D --> E{Keyword Triggers?}
+    E -- Yes --> F[Query Database Services: Report/Reminder/Appointment/Prescription/Doctor]
+    E -- No --> G[Empty Context]
+    F --> H[Rich Card Service]
+    H --> I[Format Cards: Title, Subtitle, Status, Summary, Metadata, CTA Links]
+    I --> J[Save in Message Metadata & Return API response]
+```
+
+### 8.2 Resolved Healthcare Modules & Card Schemas
+
+1. **Reports Card**: Triggered by keywords like `report`, `ocr`, `upload`. Details include OCR document classification, AI clinical summary, risk levels, and actions to `OPEN_REPORT` or `DOWNLOAD_REPORT`.
+2. **Medications Card**: Triggered by keywords like `medicine`, `prescription`, `medication`. Details include drug name, dosage, frequency, and actions to view medications and check safety.
+3. **Drug Safety Card**: Triggered by keywords like `safety`, `interaction`. Displays interaction warnings, severity classification, active interaction counts, and actions to check safety on the dashboard.
+4. **Appointment Card**: Triggered by keywords like `appointment`, `visit`, `consult`. Renders doctor consultations, dates/times, status, reason summaries, and actions to book a follow-up.
+5. **Reminder Card**: Triggered by keywords like `reminder`, `remind`, `schedule`. Renders configured title, schedule, status, descriptions, and deep-link actions to view reminders.
+6. **Doctor Card**: Triggered by keywords like `doctor`, `specialty`. Renders specialization, bio summary, consultation fees, and actions to view profile or book appointments.
+7. **Laboratory Card**: Triggered by keywords like `lab`, `value`, `result`, `cholesterol`, `blood test`. Parses laboratory results (test name, value, status, reference range) and deep-links to the full report.
+8. **Risk Card**: Triggered by keywords like `risk`, `finding`. Renders risk levels, clinical condition analysis, findings, and deep-links to the risk analysis panel on the dashboard.
+
+### 8.3 Frontend Interactive Actions & Deep Linking
+
+Interactive buttons on cards resolve to standardized relative dashboard URLs using the `DeepLinkService` helper:
+* **Report View**: `/dashboard/records/{report_id}`
+* **Reminder List**: `/dashboard/reminders`
+* **Appointment Scheduling**: `/dashboard/appointments`
+* **Practitioner Details**: `/dashboard/doctors/{doctor_id}`
+* **Longitudinal Memory & Safety**: `/dashboard/patient`
+
+
 

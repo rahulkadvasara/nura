@@ -51,9 +51,32 @@ import {
   Download,
   Star,
   ExternalLink,
+  FileText,
+  Pill,
+  AlertTriangle,
+  Calendar,
+  Bell,
+  UserCheck,
+  ShieldAlert,
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { useQueryClient } from '@tanstack/react-query'
+const IconMap: Record<string, React.ComponentType<any>> = {
+  FileText,
+  Pill,
+  AlertTriangle,
+  Calendar,
+  Bell,
+  UserCheck,
+  ShieldAlert,
+  Activity,
+  Sparkles,
+}
+
+function RenderIcon({ name, className }: { name: string; className?: string }) {
+  const IconComponent = IconMap[name] || FileText
+  return <IconComponent className={className} />
+}
 
 export default function ChatPage() {
   const { user } = useAuthStore()
@@ -1177,6 +1200,76 @@ export default function ChatPage() {
                               )}
                             </div>
                           </div>
+
+                          {/* Sprint 6: Healthcare Cards List */}
+                          {message.cards && message.cards.length > 0 && (
+                            <div className="mt-2.5 space-y-3 max-w-md w-full animate-in slide-in-from-bottom-2 duration-300">
+                              {message.cards.map((card, cidx) => (
+                                <div
+                                  key={cidx}
+                                  className={`p-3.5 rounded-xl border bg-white/70 backdrop-blur-md shadow-sm hover:shadow-md hover:scale-[1.01] transition-all duration-200 flex flex-col gap-3 ${
+                                    card.card_type === 'drug_safety' && card.status !== 'NONE'
+                                      ? 'border-red-250 bg-red-50/20'
+                                      : 'border-slate-150'
+                                  }`}
+                                >
+                                  <div className="flex items-start gap-3">
+                                    <div className={`p-2 rounded-lg ${
+                                      card.card_type === 'drug_safety' && card.status !== 'NONE'
+                                        ? 'bg-red-55 text-red-600'
+                                        : 'bg-teal-50 text-teal-650'
+                                    }`}>
+                                      <RenderIcon name={card.icon || 'FileText'} className="h-4.5 w-4.5" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        <h4 className="text-xs font-bold text-slate-800 truncate">{card.title}</h4>
+                                        {card.status && (
+                                          <span className={`text-[8px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${
+                                            card.status.toLowerCase() === 'high' || card.status.toLowerCase() === 'critical' || (card.card_type === 'drug_safety' && card.status !== 'NONE')
+                                              ? 'bg-red-50 text-red-700 border border-red-100'
+                                              : card.status.toLowerCase() === 'medium' || card.status.toLowerCase() === 'warning'
+                                              ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                                              : 'bg-teal-50 text-teal-700 border border-teal-100'
+                                          }`}>
+                                            {card.status}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {card.subtitle && (
+                                        <p className="text-[10px] text-slate-500 font-semibold mt-0.5">{card.subtitle}</p>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {card.summary && (
+                                    <p className="text-[10px] text-slate-600 leading-normal font-medium bg-slate-50/50 p-2 rounded-lg border border-slate-100/50">
+                                      {card.summary}
+                                    </p>
+                                  )}
+
+                                  {card.actions && card.actions.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mt-0.5">
+                                      {card.actions.map((action, aidx) => (
+                                        <a
+                                          key={aidx}
+                                          href={action.url}
+                                          className={`px-3 py-1.5 rounded-lg text-[9px] font-bold transition-all flex items-center gap-1 shadow-sm hover:scale-[1.02] active:scale-[0.98] ${
+                                            action.action_type.includes('DOWNLOAD')
+                                              ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                                              : 'bg-teal-600 text-white hover:bg-teal-700'
+                                          }`}
+                                        >
+                                          <span>{action.label}</span>
+                                          <ChevronRight className="h-3 w-3" />
+                                        </a>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
 
                           {/* Metadata row under assistant bubble */}
                           <div className={`flex flex-wrap gap-2 mt-1 text-[9px] text-slate-400 ${isUser ? 'justify-end' : 'justify-start'}`}>

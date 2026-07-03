@@ -133,6 +133,26 @@ def get_multi_agent_orchestrator():
     return MultiAgentOrchestrator()
 
 
+def get_healthcare_context_resolver() -> Any:
+    """Get HealthcareContextResolver instance"""
+    from app.services.chat.context_resolver import HealthcareContextResolver
+    database = get_database()
+    return HealthcareContextResolver(
+        report_service=get_report_service(),
+        reminder_service=get_reminder_service(),
+        appointment_service=get_appointment_service(),
+        prescription_service=get_prescription_service(),
+        doctor_service=get_doctor_profile_service(),
+        database=database
+    )
+
+
+def get_rich_card_service() -> Any:
+    """Get RichCardService instance"""
+    from app.services.chat.rich_card_service import RichCardService
+    return RichCardService()
+
+
 def get_chat_execution_service() -> Any:
     """Get ChatExecutionService instance"""
     from app.services.chat.chat_execution_service import ChatExecutionService
@@ -142,6 +162,8 @@ def get_chat_execution_service() -> Any:
         chat_message_service=get_chat_message_service(),
         chat_session_service=get_chat_session_service(),
         orchestrator=get_multi_agent_orchestrator(),
+        context_resolver=get_healthcare_context_resolver(),
+        rich_card_service=get_rich_card_service(),
     )
 
 
@@ -154,6 +176,8 @@ def get_chat_streaming_service() -> Any:
         chat_message_service=get_chat_message_service(),
         chat_session_service=get_chat_session_service(),
         orchestrator=get_multi_agent_orchestrator(),
+        context_resolver=get_healthcare_context_resolver(),
+        rich_card_service=get_rich_card_service(),
     )
 
 

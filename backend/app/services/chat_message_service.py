@@ -31,6 +31,14 @@ def utc_now() -> datetime:
 
 
 def _message_to_response(message: ChatMessageInDB) -> ChatMessageResponse:
+    cards = None
+    actions = None
+    if message.metadata:
+        if "cards" in message.metadata:
+            cards = message.metadata["cards"]
+        if "actions" in message.metadata:
+            actions = message.metadata["actions"]
+
     return ChatMessageResponse(
         id=message.id,
         session_id=message.session_id,
@@ -45,6 +53,8 @@ def _message_to_response(message: ChatMessageInDB) -> ChatMessageResponse:
         created_at=message.created_at,
         edited_at=message.edited_at,
         deleted=message.deleted,
+        cards=cards,
+        actions=actions,
     )
 
 

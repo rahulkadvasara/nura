@@ -36,12 +36,26 @@ class ChatStreamingService:
         chat_message_service: ChatMessageService,
         chat_session_service: ChatSessionService,
         orchestrator: MultiAgentOrchestrator,
+        context_resolver = None,
+        rich_card_service = None,
     ):
         self.chat_session_repository = chat_session_repository
         self.chat_message_repository = chat_message_repository
         self.chat_message_service = chat_message_service
         self.chat_session_service = chat_session_service
         self.orchestrator = orchestrator
+
+        if context_resolver is None:
+            from app.core.dependencies import get_healthcare_context_resolver
+            self.context_resolver = get_healthcare_context_resolver()
+        else:
+            self.context_resolver = context_resolver
+
+        if rich_card_service is None:
+            from app.core.dependencies import get_rich_card_service
+            self.rich_card_service = get_rich_card_service()
+        else:
+            self.rich_card_service = rich_card_service
 
     async def stream_chat_message(
         self,
@@ -126,6 +140,15 @@ class ChatStreamingService:
                 await asyncio.sleep(0.01)
 
             # 6. Store completed Assistant Response in MongoDB (once fully complete)
+            # Resolve Healthcare Context & Cards
+            resolved_ctx = await self.context_resolver.resolve_context(patient_id, message)
+            cards = self.rich_card_service.build_cards(resolved_ctx)
+            
+            # Build actions from cards
+            actions = []
+            for card in cards:
+                actions.extend(card.actions)
+
             assistant_msg_schema = CreateSchema(
                 session_id=session_id,
                 patient_id=patient_id,
@@ -138,6 +161,8 @@ class ChatStreamingService:
                     "agent": contract.agent,
                     "intent": contract.intent,
                     "cost": contract.cost,
+                    "cards": [card.model_dump() for card in cards],
+                    "actions": [act.model_dump() for act in actions],
                 }
             )
             assistant_msg = await self.chat_message_service.create_message(assistant_msg_schema)
@@ -178,7 +203,9 @@ class ChatStreamingService:
                 citations=contract.citations,
                 usage=contract.usage,
                 latency_ms=latency_ms,
-                cost=contract.cost
+                cost=contract.cost,
+                cards=cards,
+                actions=actions,
             )
             yield f"data: {meta_chunk.model_dump_json()}\n\n"
 

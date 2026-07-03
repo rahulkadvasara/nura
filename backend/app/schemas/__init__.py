@@ -110,6 +110,15 @@ from app.schemas.chat import (
     BookmarkRequest,
     BookmarkResponse,
     ConversationMetadataResponse,
+    RichCardAction,
+    RichCardResponse,
+    ReportCard,
+    MedicationCard,
+    AppointmentCard,
+    ReminderCard,
+    DoctorCard,
+    RiskCard,
+    LaboratoryCard,
 )
 
 from app.schemas.payment import (
@@ -347,6 +356,15 @@ __all__ = [
     "BookmarkRequest",
     "BookmarkResponse",
     "ConversationMetadataResponse",
+    "RichCardAction",
+    "RichCardResponse",
+    "ReportCard",
+    "MedicationCard",
+    "AppointmentCard",
+    "ReminderCard",
+    "DoctorCard",
+    "RiskCard",
+    "LaboratoryCard",
 
     # Payment and doctor wallet schemas
     "PaymentCreateSchema",

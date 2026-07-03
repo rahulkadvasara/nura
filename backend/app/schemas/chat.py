@@ -15,6 +15,58 @@ from app.models.chat import (
 
 
 # ---------------------------------------------------------------------------
+# Sprint 6 Chat Dashboard & Healthcare Cards Schemas
+# ---------------------------------------------------------------------------
+
+class RichCardAction(BaseModel):
+    """Structured action/CTA buttons on cards"""
+    action_type: str = Field(..., description="Action ID: OPEN_REPORT, DOWNLOAD_REPORT, VIEW_DOCTOR, BOOK_APPOINTMENT, CREATE_REMINDER, VIEW_REMINDER, VIEW_MEDICATION, CHECK_DRUG_SAFETY, VIEW_RISK_ANALYSIS, VIEW_LABORATORY_RESULTS")
+    label: str = Field(..., description="Readable label")
+    url: str = Field(..., description="Deep link URL path")
+    method: str = Field("GET", description="HTTP request method")
+    payload: Optional[Dict[str, Any]] = Field(None, description="Optional request payload parameters")
+
+class RichCardResponse(BaseModel):
+    """Base schema for structured healthcare dashboard cards"""
+    card_type: str = Field(..., description="Card type: report, medication, drug_safety, appointment, reminder, doctor, laboratory, risk")
+    title: str = Field(..., description="Descriptive card title")
+    subtitle: Optional[str] = Field(None, description="Secondary card subtitle details")
+    icon: Optional[str] = Field(None, description="Lucide icon name string")
+    status: Optional[str] = Field(None, description="Badge status string")
+    summary: Optional[str] = Field(None, description="Short textual summary content")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Metadata dictionary")
+    actions: List[RichCardAction] = Field(default_factory=list, description="List of card actions")
+
+class ReportCard(RichCardResponse):
+    """Structured medical report card representation"""
+    pass
+
+class MedicationCard(RichCardResponse):
+    """Structured prescribed medication card representation"""
+    pass
+
+class AppointmentCard(RichCardResponse):
+    """Structured consultation appointment card representation"""
+    pass
+
+class ReminderCard(RichCardResponse):
+    """Structured patient reminder alert card representation"""
+    pass
+
+class DoctorCard(RichCardResponse):
+    """Structured doctor profile reference card representation"""
+    pass
+
+class RiskCard(RichCardResponse):
+    """Structured clinical risk findings card representation"""
+    pass
+
+class LaboratoryCard(RichCardResponse):
+    """Structured parsed laboratory test card representation"""
+    pass
+
+
+# ---------------------------------------------------------------------------
 # Chat Message Metadata Schema
 # ---------------------------------------------------------------------------
 
@@ -130,6 +182,8 @@ class ChatMessageResponse(BaseModel):
     created_at: datetime = Field(..., description="Message creation timestamp")
     edited_at: Optional[datetime] = Field(None, description="Message edit timestamp")
     deleted: bool = Field(..., description="Deleted status")
+    cards: Optional[List[RichCardResponse]] = Field(None, description="Healthcare cards attached")
+    actions: Optional[List[RichCardAction]] = Field(None, description="Healthcare actions attached")
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +222,7 @@ ChatMessageCreateSchema = ChatMessageCreate
 ChatMessageUpdateSchema = ChatMessageUpdate
 
 
+
 # ---------------------------------------------------------------------------
 # Sprint 2 AI Chat Execution Schemas
 # ---------------------------------------------------------------------------
@@ -186,6 +241,8 @@ class ChatExecutionResponse(BaseModel):
     usage: Dict[str, int] = Field(default_factory=dict, description="LLM token usage statistics")
     latency_ms: float = Field(..., description="Total execution latency in milliseconds")
     cost: float = Field(..., description="Estimated cost of workflow completion")
+    cards: List[RichCardResponse] = Field(default_factory=list, description="Structured healthcare cards attached")
+    actions: List[RichCardAction] = Field(default_factory=list, description="Interactive actions/CTAs")
 
 
 class ChatSessionStatisticsResponse(BaseModel):
@@ -211,6 +268,8 @@ class ChatStreamChunk(BaseModel):
     latency_ms: Optional[float] = Field(None, description="Latency details")
     cost: Optional[float] = Field(None, description="Cost details")
     error: Optional[str] = Field(None, description="Error message details if type=error")
+    cards: Optional[List[RichCardResponse]] = Field(None, description="Healthcare cards list if type=metadata")
+    actions: Optional[List[RichCardAction]] = Field(None, description="Interactive actions list if type=metadata")
 
 
 class RegenerateRequest(BaseModel):
