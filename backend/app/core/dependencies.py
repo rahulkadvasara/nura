@@ -164,6 +164,43 @@ def get_conversation_intelligence_service() -> Any:
     return ConversationIntelligenceService(
         groq_service=get_groq_service(),
         chat_session_repository=get_chat_session_repository(),
+        chat_message_repository=get_chat_message_repository(),
+    )
+
+
+def get_bookmark_repository() -> Any:
+    """Get BookmarkRepository instance"""
+    from app.repositories.bookmark_repository import BookmarkRepository
+    from app.db.mongodb import get_database
+    db = get_database()
+    return BookmarkRepository(db.chat_bookmarks)
+
+
+def get_bookmark_service() -> Any:
+    """Get BookmarkService instance"""
+    from app.services.chat.bookmark_service import BookmarkService
+    return BookmarkService(
+        bookmark_repository=get_bookmark_repository(),
+        chat_message_repository=get_chat_message_repository(),
+        chat_session_repository=get_chat_session_repository()
+    )
+
+
+def get_conversation_search_service() -> Any:
+    """Get ConversationSearchService instance"""
+    from app.services.chat.conversation_search_service import ConversationSearchService
+    return ConversationSearchService(
+        chat_session_repository=get_chat_session_repository(),
+        chat_message_repository=get_chat_message_repository()
+    )
+
+
+def get_export_service() -> Any:
+    """Get ExportService instance"""
+    from app.services.chat.export_service import ExportService
+    return ExportService(
+        chat_session_repository=get_chat_session_repository(),
+        chat_message_repository=get_chat_message_repository()
     )
 
 
@@ -192,6 +229,35 @@ def get_citation_service() -> Any:
     from app.services.chat.citation_service import CitationService
     return CitationService(
         chat_message_repository=get_chat_message_repository(),
+    )
+
+
+def get_conversation_evaluator() -> Any:
+    """Get ConversationEvaluator instance"""
+    from app.services.chat_memory.conversation_evaluator import ConversationEvaluator
+    return ConversationEvaluator(
+        chat_message_repository=get_chat_message_repository()
+    )
+
+
+def get_conversation_summary_service() -> Any:
+    """Get ConversationSummaryService instance"""
+    from app.services.chat_memory.conversation_summary_service import ConversationSummaryService
+    from app.services.groq_service import get_groq_service
+    return ConversationSummaryService(
+        groq_service=get_groq_service()
+    )
+
+
+def get_memory_update_service() -> Any:
+    """Get MemoryUpdateService instance"""
+    from app.services.chat_memory.memory_update_service import MemoryUpdateService
+    return MemoryUpdateService(
+        patient_memory_repository=get_patient_memory_repository(),
+        embedding_service=get_embedding_service(),
+        vector_service=get_vector_service(),
+        evaluator=get_conversation_evaluator(),
+        summary_service=get_conversation_summary_service(),
     )
 
 

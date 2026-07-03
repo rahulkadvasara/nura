@@ -239,6 +239,7 @@ class FeedbackResponse(BaseModel):
     """Response schema for feedback acknowledgement"""
     success: bool = Field(..., description="Success check")
     message: str = Field(..., description="Status message")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Optional feedback metadata")
 
 
 class CitationResponse(BaseModel):
@@ -248,10 +249,120 @@ class CitationResponse(BaseModel):
     page: Optional[int] = Field(None, description="Page number details if applicable")
     section: Optional[str] = Field(None, description="Clinical section matched")
     confidence: Optional[float] = Field(None, description="Matching confidence score (0.0 - 1.0)")
+    report_title: Optional[str] = Field(None, description="Title of the source report document")
+    clickable_metadata: Optional[Dict[str, Any]] = Field(None, description="Additional click-through details/links")
 
 
 class SuggestedQuestionsResponse(BaseModel):
     """Response schema listing suggested follow-up prompts"""
     questions: List[str] = Field(..., description="List of generated question prompts")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Optional metadata containing tags, last topic, and category")
+
+
+# ---------------------------------------------------------------------------
+# Sprint 4 Memory & Intelligence Schemas
+# ---------------------------------------------------------------------------
+
+class ConversationEvaluationResponse(BaseModel):
+    """Response schema summarizing conversation worthiness scores"""
+    memory_score: float = Field(..., description="Overall memory worthiness score")
+    semantic_score: float = Field(..., description="Semantic value score")
+    clinical_score: float = Field(..., description="Clinical relevance score")
+    should_store_chat_memory: bool = Field(..., description="Whether to store in Qdrant chat_memory")
+    should_update_patient_memory: bool = Field(..., description="Whether to update structured MongoDB patient_memory")
+
+
+class MemoryUpdateRequest(BaseModel):
+    """Request schema to force memory evaluation and synchronization for a session"""
+    session_id: str = Field(..., description="Session ID to synchronize memory for")
+
+
+class MemoryUpdateResponse(BaseModel):
+    """Response schema for memory update check status"""
+    success: bool = Field(..., description="Indicates if sync finished successfully")
+    status: str = Field(..., description="Summary status statement")
+
+
+class ConversationSummaryResponse(BaseModel):
+    """Response schema representing computed memory summary payload details"""
+    summary: str = Field(..., description="Consolidated semantic RAG-optimized summary text")
+    keywords: List[str] = Field(default_factory=list, description="Extracted keywords")
+    entities: List[str] = Field(default_factory=list, description="Extracted clinical entities")
+
+
+class MemoryStatisticsResponse(BaseModel):
+    """Response schema returning memory pipeline execution statistics"""
+    evaluations_count: int = Field(..., description="Total sessions evaluated")
+    stored_count: int = Field(..., description="Total evaluations resulting in database storage")
+    skipped_count: int = Field(..., description="Total sessions skipped")
+    patient_memory_updates: int = Field(..., description="Total MongoDB updates performed")
+    qdrant_updates: int = Field(..., description="Total Qdrant points upserted")
+    avg_scores: Dict[str, float] = Field(..., description="Score aggregates dictionary")
+
+
+class SessionMemoryListResponse(BaseModel):
+    """Success response wrapper specifically for list response payload data"""
+    success: bool = Field(default=True, description="Success status")
+    message: str = Field(..., description="Success message")
+    data: List[Dict[str, Any]] = Field(default_factory=list, description="Response list data")
+
+
+class SearchHit(BaseModel):
+    """Represents a single match within conversation search"""
+    session_id: str = Field(..., description="Matching session ID")
+    session_title: str = Field(..., description="Title of matching session")
+    message_id: Optional[str] = Field(None, description="Optional ID of matching message")
+    role: Optional[str] = Field(None, description="Optional message role")
+    content: str = Field(..., description="Content snippet")
+    highlighted_snippet: str = Field(..., description="Content snippet with <mark> highlighting")
+    timestamp: datetime = Field(..., description="Timestamp of match")
+
+
+class ConversationSearchRequest(BaseModel):
+    """Request query payload for full-text search"""
+    query: str = Field(..., description="Search query term")
+    session_id: Optional[str] = Field(None, description="Filter by session ID")
+    date_from: Optional[datetime] = Field(None, description="Filter from start date")
+    date_to: Optional[datetime] = Field(None, description="Filter to end date")
+
+
+class ConversationSearchResponse(BaseModel):
+    """Response containing matched search results"""
+    results: List[SearchHit] = Field(default_factory=list, description="List of search result hits")
+
+
+class ExportResponse(BaseModel):
+    """Export status metadata wrapper"""
+    success: bool = Field(default=True, description="Success status")
+    message: str = Field(..., description="Success message")
+    download_url: Optional[str] = Field(None, description="Optional relative URL for download stream")
+
+
+class BookmarkRequest(BaseModel):
+    """Request payload to bookmark a chat message"""
+    message_id: str = Field(..., description="Message ID to bookmark")
+
+
+class BookmarkResponse(BaseModel):
+    """Response representation of a chat bookmark"""
+    id: str = Field(..., description="Bookmark ID")
+    message_id: str = Field(..., description="ID of bookmarked message")
+    session_id: str = Field(..., description="ID of chat session")
+    patient_id: str = Field(..., description="User ID of patient")
+    bookmarked_at: datetime = Field(..., description="Timestamp bookmarked")
+    message_content: str = Field(..., description="Cached message content")
+    message_role: str = Field(..., description="Cached role string")
+
+
+class ConversationMetadataResponse(BaseModel):
+    """Incremental metadata details for a session"""
+    session_id: str = Field(..., description="Session ID")
+    title: str = Field(..., description="Descriptive session title")
+    summary: str = Field(..., description="Incremental AI-generated summary")
+    tags: List[str] = Field(default_factory=list, description="Clinical/topic tags")
+    last_topic: str = Field(..., description="Last active topic discussed")
+    category: str = Field(..., description="Clinical categorization")
+
+
 
 

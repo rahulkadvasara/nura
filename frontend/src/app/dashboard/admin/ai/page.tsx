@@ -83,6 +83,8 @@ import {
   Layers,
   Brain
 } from 'lucide-react'
+import { toast } from 'react-hot-toast'
+import { useEvaluateMemory, useForceMemorySync, useMemoryStatistics } from '@/hooks/use-chat'
 
 
 function LLMHealthBadge() {
@@ -7064,9 +7066,218 @@ function DrugAIExplanationPlaygroundView() {
   )
 }
 
+function ConversationMemoryDashboardView() {
+  const { data: stats, isLoading, refetch } = useMemoryStatistics()
+  const [sessionIdInput, setSessionIdInput] = useState('')
+  const evaluateMutation = useEvaluateMemory()
+  const forceSyncMutation = useForceMemorySync()
+  const [sandboxResult, setSandboxResult] = useState<any>(null)
+
+  const handleEvaluate = () => {
+    if (!sessionIdInput.trim()) return
+    evaluateMutation.mutate({ sessionId: sessionIdInput.trim() }, {
+      onSuccess: (res) => {
+        setSandboxResult({ type: 'eval', data: res })
+        toast.success('Worthiness evaluated!')
+      },
+      onError: (err) => {
+        toast.error(err.message)
+      }
+    })
+  }
+
+  const handleForceSync = () => {
+    if (!sessionIdInput.trim()) return
+    forceSyncMutation.mutate({ sessionId: sessionIdInput.trim() }, {
+      onSuccess: (res) => {
+        setSandboxResult({ type: 'sync', data: res })
+        toast.success(res.status)
+        refetch()
+      },
+      onError: (err) => {
+        toast.error(err.message)
+      }
+    })
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
+      {/* Sandbox sandbox container */}
+      <div className="lg:col-span-2 space-y-6">
+        <Card className="border-slate-200 shadow-md bg-white">
+          <CardHeader className="border-b border-slate-100 bg-slate-50/50">
+            <CardTitle className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+              <Brain className="h-5 w-5 text-teal-600 animate-pulse" />
+              Conversation Memory Sandbox
+            </CardTitle>
+            <CardDescription>
+              Test worthiness evaluation, generate summaries, and force synchronization indices.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6 space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">Chat Session Identifier</label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Enter Chat Session ID..."
+                  value={sessionIdInput}
+                  onChange={(e) => setSessionIdInput(e.target.value)}
+                  className="border-slate-200 focus:border-teal-500 focus:ring-teal-500"
+                />
+                <Button
+                  onClick={handleEvaluate}
+                  disabled={!sessionIdInput.trim() || evaluateMutation.isPending}
+                  variant="outline"
+                  className="border-slate-200 text-slate-700 hover:bg-slate-50 font-medium"
+                >
+                  {evaluateMutation.isPending ? 'Evaluating...' : 'Evaluate'}
+                </Button>
+                <Button
+                  onClick={handleForceSync}
+                  disabled={!sessionIdInput.trim() || forceSyncMutation.isPending}
+                  className="bg-teal-600 hover:bg-teal-700 text-white font-medium shadow-sm transition-all"
+                >
+                  {forceSyncMutation.isPending ? 'Syncing...' : 'Force Sync'}
+                </Button>
+              </div>
+            </div>
+
+            {sandboxResult && (
+              <div className="pt-4 border-t border-slate-150 space-y-4">
+                <h4 className="text-sm font-bold text-slate-800">Sandbox Result:</h4>
+                
+                {sandboxResult.type === 'eval' ? (
+                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-150 space-y-3">
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                      <div className="p-2 bg-white rounded border border-slate-200">
+                        <div className="text-[10px] text-slate-400 font-extrabold uppercase">Memory Score</div>
+                        <div className="text-lg font-bold text-indigo-600 font-mono mt-0.5">
+                          {sandboxResult.data.memory_score.toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="p-2 bg-white rounded border border-slate-200">
+                        <div className="text-[10px] text-slate-400 font-extrabold uppercase">Clinical Score</div>
+                        <div className="text-lg font-bold text-emerald-600 font-mono mt-0.5">
+                          {sandboxResult.data.clinical_score.toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="p-2 bg-white rounded border border-slate-200">
+                        <div className="text-[10px] text-slate-400 font-extrabold uppercase">Semantic Score</div>
+                        <div className="text-lg font-bold text-amber-600 font-mono mt-0.5">
+                          {sandboxResult.data.semantic_score.toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex flex-col gap-1.5 text-xs font-semibold text-slate-600">
+                      <div className="flex items-center justify-between">
+                        <span>Should store in Qdrant (chat_memory):</span>
+                        <span className={`px-2 py-0.5 rounded font-bold ${sandboxResult.data.should_store_chat_memory ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          {sandboxResult.data.should_store_chat_memory ? 'Yes' : 'No'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>Should store in MongoDB (patient_memory):</span>
+                        <span className={`px-2 py-0.5 rounded font-bold ${sandboxResult.data.should_update_patient_memory ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          {sandboxResult.data.should_update_patient_memory ? 'Yes' : 'No'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-teal-50 text-teal-800 rounded-xl border border-teal-100 text-sm font-semibold">
+                    {sandboxResult.data.status}
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Memory stats card */}
+      <div className="space-y-6">
+        <Card className="border-slate-200 shadow-md bg-white">
+          <CardHeader className="pb-3 border-b border-slate-100">
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-sm font-semibold text-slate-700">
+                Global Memory Telemetry
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => refetch()}
+                className="h-8 w-8 text-slate-400 hover:text-slate-600"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4 space-y-4 text-sm text-slate-600">
+            {isLoading ? (
+              <div className="text-center py-4 text-xs text-slate-450 animate-pulse">Loading telemetry...</div>
+            ) : (
+              <>
+                <div className="flex justify-between items-center">
+                  <span>Sessions Evaluated:</span>
+                  <span className="font-semibold text-slate-800">{stats?.evaluations_count ?? 0}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>Memories Stored:</span>
+                  <span className="font-semibold text-slate-800 text-green-600">{stats?.stored_count ?? 0}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>Sessions Skipped:</span>
+                  <span className="font-semibold text-slate-800 text-amber-600">{stats?.skipped_count ?? 0}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>Qdrant Vectors:</span>
+                  <span className="font-semibold text-slate-800">{stats?.qdrant_updates ?? 0}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>MongoDB Updates:</span>
+                  <span className="font-semibold text-slate-800">{stats?.patient_memory_updates ?? 0}</span>
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 space-y-2">
+                  <h5 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Average Scores</h5>
+                  <div className="flex justify-between items-center text-xs">
+                    <span>Memory Score:</span>
+                    <span className="font-semibold text-indigo-600">{stats?.avg_scores?.memory_score?.toFixed(2) ?? '0.00'}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span>Clinical Relevance:</span>
+                    <span className="font-semibold text-emerald-600">{stats?.avg_scores?.clinical_score?.toFixed(2) ?? '0.00'}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span>Semantic Value:</span>
+                    <span className="font-semibold text-amber-600">{stats?.avg_scores?.semantic_score?.toFixed(2) ?? '0.00'}</span>
+                  </div>
+                </div>
+
+                {stats?.memory_score_distribution && (
+                  <div className="pt-2 border-t border-slate-100 space-y-2">
+                    <h5 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Score Distribution</h5>
+                    {Object.entries(stats.memory_score_distribution).map(([range, count]) => (
+                      <div key={range} className="flex justify-between items-center text-xs">
+                        <span>Range {range}:</span>
+                        <span className="font-semibold">{count as number} runs</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
 
 function AIPlaygroundContent() {
-  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent' | 'workflow-engine' | 'router-agent' | 'core-agents' | 'healthcare-agents' | 'operations-agents' | 'drug-lookup' | 'drug-interactions' | 'drug-validation' | 'drug-explain'>('llm')
+  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent' | 'workflow-engine' | 'router-agent' | 'core-agents' | 'healthcare-agents' | 'operations-agents' | 'drug-lookup' | 'drug-interactions' | 'drug-validation' | 'drug-explain' | 'chat-memory'>('llm')
 
   return (
     <div className="space-y-6">
@@ -7298,6 +7509,17 @@ function AIPlaygroundContent() {
           Drug AI Explanation
         </button>
         <button
+          onClick={() => setActiveTab('chat-memory')}
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
+            activeTab === 'chat-memory'
+              ? 'border-teal-600 text-teal-600 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Brain className="h-4 w-4" />
+          Conversation Memory
+        </button>
+        <button
           onClick={() => setActiveTab('integration')}
           className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
             activeTab === 'integration'
@@ -7344,6 +7566,8 @@ function AIPlaygroundContent() {
         <MedicationValidationPlaygroundView />
       ) : activeTab === 'drug-explain' ? (
         <DrugAIExplanationPlaygroundView />
+      ) : activeTab === 'chat-memory' ? (
+        <ConversationMemoryDashboardView />
       ) : (
         <IntegrationPlaygroundView />
       )}

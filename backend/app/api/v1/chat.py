@@ -4,8 +4,9 @@ API endpoints for managing chat sessions, messages, and telemetry
 """
 
 import logging
+from datetime import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Response
 from fastapi.responses import StreamingResponse
 
 from app.models.user import UserInDB, UserRole
@@ -28,6 +29,16 @@ from app.schemas.chat import (
     FeedbackResponse,
     CitationResponse,
     SuggestedQuestionsResponse,
+    ConversationEvaluationResponse,
+    MemoryUpdateRequest,
+    MemoryUpdateResponse,
+    ConversationSummaryResponse,
+    MemoryStatisticsResponse,
+    SessionMemoryListResponse,
+    ConversationSearchResponse,
+    BookmarkRequest,
+    BookmarkResponse,
+    ConversationMetadataResponse,
 )
 from app.models.chat import MessageRole
 from app.core.dependencies import (
@@ -43,6 +54,12 @@ from app.core.dependencies import (
     get_feedback_service,
     get_citation_service,
     get_conversation_intelligence_service,
+    get_conversation_evaluator,
+    get_memory_update_service,
+    get_vector_service,
+    get_conversation_search_service,
+    get_export_service,
+    get_bookmark_service,
 )
 from app.repositories.chat_message_repository import ChatMessageRepository
 from app.services.chat_session_service import ChatSessionService
@@ -50,9 +67,15 @@ from app.services.chat_message_service import ChatMessageService
 from app.services.chat.chat_execution_service import ChatExecutionService
 from app.services.chat.chat_streaming_service import ChatStreamingService
 from app.services.chat.regeneration_service import RegenerationService
+from app.services.chat_memory.conversation_evaluator import ConversationEvaluator
+from app.services.chat_memory.memory_update_service import MemoryUpdateService
+from app.services.vector_service import VectorService
 from app.services.chat.feedback_service import FeedbackService
 from app.services.chat.citation_service import CitationService
 from app.services.chat.conversation_intelligence import ConversationIntelligenceService
+from app.services.chat.conversation_search_service import ConversationSearchService
+from app.services.chat.export_service import ExportService
+from app.services.chat.bookmark_service import BookmarkService
 from app.services.chat.telemetry import get_chat_statistics
 from app.db import get_database
 
@@ -565,6 +588,142 @@ async def get_followup_questions(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
+@router.post(
+    "/memory/evaluate",
+    response_model=SuccessResponse,
+    summary="Evaluate Conversation Memory",
+    description="Evaluates worthiness of conversation session for memory storage without saving it. Admin only."
+)
+async def evaluate_conversation_memory(
+    schema: MemoryUpdateRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    evaluator: ConversationEvaluator = Depends(get_conversation_evaluator),
+) -> SuccessResponse:
+    try:
+        results = await evaluator.evaluate_session(schema.session_id)
+        validated = ConversationEvaluationResponse(**results)
+        return SuccessResponse(
+            success=True,
+            message="Evaluation complete",
+            data=validated.model_dump()
+        )
+    except Exception as e:
+        logger.exception("Failed to evaluate conversation worthiness")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post(
+    "/memory/update",
+    response_model=SuccessResponse,
+    summary="Force Memory Synchronization",
+    description="Forces evaluation and updates structured patient memory and semantic chat memory collections. Admin only."
+)
+async def force_memory_update(
+    schema: MemoryUpdateRequest,
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+    update_service: MemoryUpdateService = Depends(get_memory_update_service),
+    message_repo: ChatMessageRepository = Depends(get_chat_message_repository),
+    session_service: ChatSessionService = Depends(get_chat_session_service),
+) -> SuccessResponse:
+    try:
+        messages = await message_repo.get_by_session_id(schema.session_id, limit=200, skip=0, include_deleted=False)
+        message_ids = [m.id for m in messages]
+        
+        session = await session_service.get_session_by_id(schema.session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        results = await update_service.evaluate_and_sync_session(
+            session_id=schema.session_id,
+            patient_id=session.patient_id,
+            message_ids=message_ids
+        )
+        
+        status_str = results.get("status", "skipped")
+        res = MemoryUpdateResponse(
+            success=True,
+            status=f"Session synchronization complete: {status_str}"
+        )
+        return SuccessResponse(
+            success=True,
+            message="Memory update synchronized",
+            data=res.model_dump()
+        )
+    except Exception as e:
+        logger.exception("Failed to force synchronize session memory")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get(
+    "/memory/statistics",
+    response_model=SuccessResponse,
+    summary="Get Memory Telemetry",
+    description="Returns global memory sync metrics, evaluation distributions, and latencies. Admin only."
+)
+async def get_memory_statistics(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN)),
+) -> SuccessResponse:
+    try:
+        from app.services.chat_memory.telemetry import memory_telemetry
+        stats = memory_telemetry.get_statistics()
+        validated = MemoryStatisticsResponse(**stats)
+        return SuccessResponse(
+            success=True,
+            message="Memory statistics retrieved successfully",
+            data=validated.model_dump()
+        )
+    except Exception as e:
+        logger.exception("Failed to retrieve memory statistics")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get(
+    "/session/{session_id}/memory",
+    response_model=SessionMemoryListResponse,
+    summary="Get Session Memory",
+    description="Retrieves computed semantic RAG summaries and keywords saved in Qdrant for this session."
+)
+async def get_session_memory(
+    session_id: str,
+    current_user: UserInDB = Depends(require_exact_patient),
+    session_service: ChatSessionService = Depends(get_chat_session_service),
+    vector_service: VectorService = Depends(get_vector_service),
+) -> SuccessResponse:
+    try:
+        session = await session_service.get_session_by_id(session_id)
+        if not session or session.patient_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+        # Scroll chat_memory from Qdrant matching session_id
+        await vector_service.create_collection("chat_memory")
+        points, _ = await vector_service.scroll(
+            collection_name="chat_memory",
+            filter_dict={"session_id": session_id},
+            limit=50
+        )
+        
+        memories = []
+        for p in points:
+            payload = p.get("payload", {})
+            memories.append({
+                "summary": payload.get("summary", ""),
+                "keywords": payload.get("keywords", []),
+                "entities": payload.get("entities", []),
+                "timestamp": payload.get("timestamp", "")
+            })
+            
+        return SessionMemoryListResponse(
+            success=True,
+            message="Session memory details retrieved",
+            data=memories
+        )
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.exception("Failed to fetch session memories from Qdrant")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 # ---------------------------------------------------------------------------
 # Admin Telemetry Endpoint
 # ---------------------------------------------------------------------------
@@ -591,3 +750,161 @@ async def get_statistics(
     except Exception as e:
         logger.exception("Failed to retrieve chat statistics")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve statistics")
+
+
+# ---------------------------------------------------------------------------
+# Search, Export, and Bookmarks Endpoints
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/search",
+    response_model=SuccessResponse,
+    summary="Search Conversations",
+    description="Returns conversations and messages matching a full-text query with highlights."
+)
+async def search_conversations(
+    query: str = Query(..., description="Query term to search"),
+    session_id: Optional[str] = Query(None, description="Filter by session ID"),
+    date_from: Optional[datetime] = Query(None, description="Filter from date"),
+    date_to: Optional[datetime] = Query(None, description="Filter to date"),
+    favorites: Optional[bool] = Query(None, description="Filter by favorite pinned sessions"),
+    archived: Optional[bool] = Query(None, description="Filter by archived sessions"),
+    agent: Optional[str] = Query(None, description="Filter by AI agent used"),
+    current_user: UserInDB = Depends(require_exact_patient),
+    search_service: ConversationSearchService = Depends(get_conversation_search_service)
+) -> SuccessResponse:
+    try:
+        results = await search_service.search_conversations(
+            patient_id=current_user.id,
+            query=query,
+            session_id=session_id,
+            date_from=date_from,
+            date_to=date_to,
+            favorites=favorites,
+            archived=archived,
+            agent=agent
+        )
+        return SuccessResponse(
+            success=True,
+            message="Search results compiled",
+            data=results.model_dump()
+        )
+    except Exception as e:
+        logger.exception("Failed to search conversations")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/export/{session_id}",
+    summary="Export Conversation History",
+    description="Downloads conversation transcript in Markdown, PDF, or JSON format."
+)
+async def export_conversation(
+    session_id: str,
+    format: str = Query("md", regex="^(md|pdf|json)$", description="File format: md, pdf, or json"),
+    current_user: UserInDB = Depends(require_exact_patient),
+    export_service: ExportService = Depends(get_export_service)
+):
+    try:
+        data = await export_service.get_export_data(session_id, current_user.id)
+        session = data["session"]
+        messages = data["messages"]
+
+        if format == "json":
+            content = export_service.export_as_json(session, messages)
+            media_type = "application/json"
+            filename = f"conversation_{session_id}.json"
+        elif format == "pdf":
+            content = export_service.export_as_pdf(session, messages)
+            media_type = "application/pdf"
+            filename = f"conversation_{session_id}.pdf"
+        else:
+            content = export_service.export_as_markdown(session, messages)
+            media_type = "text/markdown"
+            filename = f"conversation_{session_id}.md"
+
+        headers = {
+            "Content-Disposition": f"attachment; filename={filename}"
+        }
+        return Response(content=content, media_type=media_type, headers=headers)
+    except PermissionError as pe:
+        raise HTTPException(status_code=403, detail=str(pe))
+    except Exception as e:
+        logger.exception("Failed to export conversation")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/bookmark",
+    response_model=SuccessResponse,
+    summary="Bookmark Chat Message",
+    description="Bookmarks a specific assistant or user message log."
+)
+async def add_bookmark(
+    schema: BookmarkRequest,
+    current_user: UserInDB = Depends(require_exact_patient),
+    bookmark_service: BookmarkService = Depends(get_bookmark_service)
+) -> SuccessResponse:
+    try:
+        res = await bookmark_service.add_bookmark(current_user.id, schema.message_id)
+        return SuccessResponse(
+            success=True,
+            message="Message bookmarked successfully",
+            data=res.model_dump()
+        )
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except PermissionError as pe:
+        raise HTTPException(status_code=403, detail=str(pe))
+    except Exception as e:
+        logger.exception("Failed to add message bookmark")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete(
+    "/bookmark/{message_id}",
+    response_model=SuccessResponse,
+    summary="Delete Chat Bookmark",
+    description="Removes bookmark metadata from a message."
+)
+async def remove_bookmark(
+    message_id: str,
+    current_user: UserInDB = Depends(require_exact_patient),
+    bookmark_service: BookmarkService = Depends(get_bookmark_service)
+) -> SuccessResponse:
+    try:
+        removed = await bookmark_service.remove_bookmark(current_user.id, message_id)
+        if not removed:
+            raise HTTPException(status_code=404, detail="Bookmark not found")
+        return SuccessResponse(
+            success=True,
+            message="Bookmark removed successfully",
+            data={"deleted": True}
+        )
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.exception("Failed to remove bookmark")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/bookmarks",
+    response_model=SuccessResponse,
+    summary="List Bookmarked Messages",
+    description="Retrieves scroll history list of patient's bookmarked message logs."
+)
+async def list_bookmarks(
+    current_user: UserInDB = Depends(require_exact_patient),
+    bookmark_service: BookmarkService = Depends(get_bookmark_service)
+) -> SuccessResponse:
+    try:
+        bookmarks = await bookmark_service.get_bookmarks(current_user.id)
+        return SuccessResponse(
+            success=True,
+            message="Bookmarked messages retrieved",
+            data={"bookmarks": [b.model_dump() for b in bookmarks]}
+        )
+    except Exception as e:
+        logger.exception("Failed to list bookmarked messages")
+        raise HTTPException(status_code=500, detail=str(e))

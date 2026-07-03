@@ -73,7 +73,7 @@ class ChatStreamingService:
             role=MessageRole.USER,
             content=message.strip(),
         )
-        await self.chat_message_service.create_message(user_msg_schema)
+        user_msg = await self.chat_message_service.create_message(user_msg_schema)
 
         # Yield stream initiation token
         init_chunk = ChatStreamChunk(type="token", content="")
@@ -140,7 +140,7 @@ class ChatStreamingService:
                     "cost": contract.cost,
                 }
             )
-            await self.chat_message_service.create_message(assistant_msg_schema)
+            assistant_msg = await self.chat_message_service.create_message(assistant_msg_schema)
 
             # Update parent session metadata (total cost, last agent used)
             sess_update = ChatSessionUpdate(
@@ -148,6 +148,28 @@ class ChatStreamingService:
                 last_agent_used=contract.agent or "UnknownAgent",
             )
             await self.chat_session_repository.update(session_id, sess_update)
+
+            # Trigger background updates asynchronously
+            async def run_bg_session_updates():
+                try:
+                    from app.core.dependencies import get_memory_update_service
+                    memory_update_service = get_memory_update_service()
+                    await memory_update_service.evaluate_and_sync_session(
+                        session_id=session_id,
+                        patient_id=patient_id,
+                        message_ids=[user_msg.id, assistant_msg.id]
+                    )
+                except Exception as bg_err:
+                    logger.error(f"Background memory sync failed in streaming: {bg_err}", exc_info=True)
+
+                try:
+                    from app.core.dependencies import get_conversation_intelligence_service
+                    intelligence_service = get_conversation_intelligence_service()
+                    await intelligence_service.auto_update_session_metadata(session_id)
+                except Exception as bg_err:
+                    logger.error(f"Background metadata update failed in streaming: {bg_err}", exc_info=True)
+
+            asyncio.create_task(run_bg_session_updates())
 
             # 7. Yield final metadata payload
             meta_chunk = ChatStreamChunk(

@@ -170,6 +170,70 @@ export const chatService = {
   getFollowupQuestions: async (messageId: string): Promise<ApiResponse<{ questions: string[] }>> => {
     const response = await apiClient.get<ApiResponse<{ questions: string[] }>>(`/chat/message/${messageId}/followups`)
     return response.data
+  },
+
+  evaluateMemory: async (sessionId: string): Promise<ApiResponse<ConversationEvaluationResponse>> => {
+    const response = await apiClient.post<ApiResponse<ConversationEvaluationResponse>>('/chat/memory/evaluate', {
+      session_id: sessionId
+    })
+    return response.data
+  },
+
+  forceMemorySync: async (sessionId: string): Promise<ApiResponse<MemoryUpdateResponse>> => {
+    const response = await apiClient.post<ApiResponse<MemoryUpdateResponse>>('/chat/memory/update', {
+      session_id: sessionId
+    })
+    return response.data
+  },
+
+  getMemoryStatistics: async (): Promise<ApiResponse<MemoryStatisticsResponse>> => {
+    const response = await apiClient.get<ApiResponse<MemoryStatisticsResponse>>('/chat/memory/statistics')
+    return response.data
+  },
+
+  getSessionMemory: async (sessionId: string): Promise<ApiResponse<SessionMemoryDetail[]>> => {
+    const response = await apiClient.get<ApiResponse<SessionMemoryDetail[]>>(`/chat/session/${sessionId}/memory`)
+    return response.data
+  },
+
+  searchConversations: async (params: {
+    query: string
+    session_id?: string
+    date_from?: string
+    date_to?: string
+    favorites?: boolean
+    archived?: boolean
+    agent?: string
+  }): Promise<ApiResponse<{ results: SearchHit[] }>> => {
+    const response = await apiClient.get<ApiResponse<{ results: SearchHit[] }>>('/chat/search', {
+      params
+    })
+    return response.data
+  },
+
+  exportConversation: async (sessionId: string, format: 'md' | 'pdf' | 'json'): Promise<Blob> => {
+    const response = await apiClient.get(`/chat/export/${sessionId}`, {
+      params: { format },
+      responseType: 'blob'
+    })
+    return response.data
+  },
+
+  bookmarkMessage: async (messageId: string): Promise<ApiResponse<Bookmark>> => {
+    const response = await apiClient.post<ApiResponse<Bookmark>>('/chat/bookmark', {
+      message_id: messageId
+    })
+    return response.data
+  },
+
+  removeBookmark: async (messageId: string): Promise<ApiResponse<{ deleted: boolean }>> => {
+    const response = await apiClient.delete<ApiResponse<{ deleted: boolean }>>(`/chat/bookmark/${messageId}`)
+    return response.data
+  },
+
+  getBookmarks: async (): Promise<ApiResponse<{ bookmarks: Bookmark[] }>> => {
+    const response = await apiClient.get<ApiResponse<{ bookmarks: Bookmark[] }>>('/chat/bookmarks')
+    return response.data
   }
 }
 
@@ -179,5 +243,64 @@ export interface CitationInfo {
   page?: number
   section?: string
   confidence?: number
+  report_title?: string
+  clickable_metadata?: Record<string, any>
 }
+
+export interface SearchHit {
+  session_id: string
+  session_title: string
+  message_id?: string
+  role?: 'USER' | 'ASSISTANT' | 'SYSTEM'
+  content: string
+  highlighted_snippet: string
+  timestamp: string
+}
+
+export interface Bookmark {
+  id: string
+  message_id: string
+  session_id: string
+  patient_id: string
+  bookmarked_at: string
+  message_content: string
+  message_role: string
+}
+
+export interface ConversationEvaluationResponse {
+  memory_score: number
+  semantic_score: number
+  clinical_score: number
+  should_store_chat_memory: boolean
+  should_update_patient_memory: boolean
+}
+
+export interface MemoryUpdateResponse {
+  success: boolean
+  status: string
+}
+
+export interface SessionMemoryDetail {
+  summary: string
+  keywords: string[]
+  entities: string[]
+  timestamp: string
+}
+
+export interface MemoryStatisticsResponse {
+  evaluations_count: number
+  stored_count: number
+  skipped_count: number
+  patient_memory_updates: number
+  qdrant_updates: number
+  average_evaluation_latency: number
+  average_summary_latency: number
+  memory_score_distribution: Record<string, number>
+  avg_scores: {
+    memory_score: number
+    semantic_score: number
+    clinical_score: number
+  }
+}
+
 

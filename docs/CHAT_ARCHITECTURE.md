@@ -261,3 +261,45 @@ Suggested prompts and automatic title generation are powered by a lightweight si
 * Returns 3 suggested follow-up prompts shown in the UI as clickable prompt badge buttons.
 
 
+---
+
+## 7. Memory & Conversation Intelligence Pipeline (Sprint 4)
+
+This layer introduces the conversation memory pipeline responsible for scoring, summarization, and synchronization.
+
+### 7.1 Memory Flow Sequence
+
+```mermaid
+graph TD
+    A[FastAPI / Message Execute] --> B[Assistant Message Stored]
+    B --> C[Asynchronous Task Triggered]
+    C --> D[Conversation Evaluator]
+    D --> E{Crosses Threshold?}
+    E -- No --> F[Skip Sync]
+    E -- Yes --> G[Conversation Summarizer Service]
+    G --> H{should_store_chat_memory?}
+    H -- Yes --> I[Vectorize Summary & Upsert to Qdrant chat_memory]
+    H -- No --> J[Skip Qdrant]
+    G --> K{should_update_patient_memory?}
+    K -- Yes --> L[Append structured fields to MongoDB patient_memory]
+    K -- No --> M[Skip MongoDB]
+```
+
+### 7.2 Scoring & Worthiness Evaluation
+Calculations are executed in the deterministic `memory_rules.py` engine based on clinical keywords (symptoms, medications, allergies, diagnoses, lifestyle commitments, follow-up recommendations):
+* **`semantic_score`**: Detailed exchanges, preferences, and long messages increase semantic score. Max value: 1.0.
+* **`clinical_score`**: Occurrence of clinical pattern indicator keywords increases clinical score. Max value: 1.0.
+* **`memory_score`**: Average of semantic, clinical, and quality score variables.
+* **`should_store_chat_memory`**: Set to `True` if `semantic_score >= 0.5`.
+* **`should_update_patient_memory`**: Set to `True` if `clinical_score >= 0.6`.
+
+### 7.3 Qdrant Vectors: `chat_memory`
+The RAG-optimized conversation summary text, extracted keywords, clinical entities, and session details are vectorized (L2 normalized dimension list) and indexed in the Qdrant `chat_memory` collection.
+
+### 7.4 MongoDB Documents: `patient_memory`
+When clinical threshold is crossed, structured medical parameters are appended to the longitudinal patient record.
+* **History Logs**: Chronological medication and diagnosis details are appended to medication/diagnosis histories without overwriting previous updates.
+* **Concatenation**: Lifestyle recommendations are appended to the patient's lifestyle notes.
+
+
+

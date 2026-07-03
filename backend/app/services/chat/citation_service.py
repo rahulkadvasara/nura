@@ -43,6 +43,8 @@ class CitationService:
             page_val = cit.get("page_number")
             section_val = cit.get("section")
             score_val = cit.get("score")
+            report_title_val = cit.get("report_title") or cit.get("title") or "Clinical Document"
+            clickable_metadata_val = cit.get("metadata") or cit.get("source_metadata") or {}
 
             formatted_citations.append(
                 CitationResponse(
@@ -50,7 +52,9 @@ class CitationService:
                     source=str(source_name),
                     page=page_val,
                     section=section_val,
-                    confidence=score_val
+                    confidence=score_val,
+                    report_title=str(report_title_val),
+                    clickable_metadata=clickable_metadata_val
                 )
             )
 

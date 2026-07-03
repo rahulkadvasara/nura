@@ -13,6 +13,14 @@ import {
   useSessionStatistics,
   useRegenerateMessage,
   useSubmitFeedback,
+  useEvaluateMemory,
+  useForceMemorySync,
+  useSessionMemory,
+  useSearchConversations,
+  useExportConversation,
+  useBookmarkMessage,
+  useRemoveBookmark,
+  useBookmarks,
 } from '@/hooks/use-chat'
 import {
   Plus,
@@ -39,6 +47,10 @@ import {
   ChevronDown,
   ChevronRight,
   BookOpen,
+  Brain,
+  Download,
+  Star,
+  ExternalLink,
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { useQueryClient } from '@tanstack/react-query'
@@ -84,6 +96,15 @@ export default function ChatPage() {
   // Expandable citations state
   const [expandedMessageCitationsId, setExpandedMessageCitationsId] = useState<string | null>(null)
 
+  // Sidebar Tab Switching
+  const [sidebarTab, setSidebarTab] = useState<'sessions' | 'bookmarks'>('sessions')
+
+  // Expanded Citation metadata modal
+  const [citationModalData, setCitationModalData] = useState<Record<string, any> | null>(null)
+
+  // Message scroll target
+  const [scrollTargetMsgId, setScrollTargetMsgId] = useState<string | null>(null)
+
   // Auto-scroll ref
   const bottomRef = useRef<HTMLDivElement | null>(null)
 
@@ -99,8 +120,19 @@ export default function ChatPage() {
   const createMessageMutation = useCreateMessage()
   const regenerateMutation = useRegenerateMessage()
   const feedbackMutation = useSubmitFeedback()
+  const evaluateMemoryMutation = useEvaluateMemory()
+  const forceMemorySyncMutation = useForceMemorySync()
+  const { data: sessionMemories = [], refetch: refetchSessionMemories } = useSessionMemory(selectedSessionId)
+  const [evaluationResult, setEvaluationResult] = useState<any>(null)
 
-  // Filter sessions by search query
+  // Sprint 5 Hooks
+  const { data: searchResults = [] } = useSearchConversations({ query: searchQuery }, !!searchQuery)
+  const { data: bookmarkedList = [] } = useBookmarks()
+  const bookmarkMutation = useBookmarkMessage()
+  const removeBookmarkMutation = useRemoveBookmark()
+  const exportMutation = useExportConversation()
+
+  // Filter sessions by search query (local fallback)
   const filteredSessions = sessions.filter(session =>
     session.title.toLowerCase().includes(searchQuery.toLowerCase())
   )
@@ -115,6 +147,23 @@ export default function ChatPage() {
     scrollToBottom()
   }, [history.messages, streamingText, isStreaming])
 
+  // Scroll to search or bookmark target message
+  useEffect(() => {
+    if (scrollTargetMsgId && history.messages.length > 0) {
+      setTimeout(() => {
+        const element = document.getElementById(`msg-${scrollTargetMsgId}`)
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          element.classList.add('ring-2', 'ring-teal-500', 'bg-teal-50/50', 'transition-all', 'duration-500')
+          setTimeout(() => {
+            element.classList.remove('ring-2', 'ring-teal-500', 'bg-teal-50/50')
+          }, 3000)
+          setScrollTargetMsgId(null)
+        }
+      }, 300)
+    }
+  }, [scrollTargetMsgId, history.messages])
+
   // Cleanup abortController on unmount
   useEffect(() => {
     return () => {
@@ -123,6 +172,45 @@ export default function ChatPage() {
       }
     }
   }, [])
+
+  // Export transcript file handler
+  const handleExport = async (format: 'md' | 'pdf' | 'json') => {
+    if (!selectedSessionId) return
+    try {
+      toast.loading(`Generating ${format.toUpperCase()} export...`, { id: 'export' })
+      const blob = await exportMutation.mutateAsync({ sessionId: selectedSessionId, format })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `nura_session_${selectedSessionId}.${format}`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+      toast.success(`Exported successfully as ${format.toUpperCase()}`, { id: 'export' })
+    } catch (err: any) {
+      toast.error(err.message || 'Export failed', { id: 'export' })
+    }
+  }
+
+  // Bookmark checker and toggle action
+  const isMessageBookmarked = (messageId: string) => {
+    return bookmarkedList.some((b) => b.message_id === messageId)
+  }
+
+  const handleBookmarkToggle = async (messageId: string) => {
+    try {
+      if (isMessageBookmarked(messageId)) {
+        await removeBookmarkMutation.mutateAsync(messageId)
+        toast.success('Bookmark removed')
+      } else {
+        await bookmarkMutation.mutateAsync(messageId)
+        toast.success('Message bookmarked')
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to toggle bookmark')
+    }
+  }
 
   // Handle session creation
   const handleCreateSession = async (e: React.FormEvent) => {
@@ -464,7 +552,7 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-[calc(100vh-8rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-      {/* 1. Left Sidebar: Chat Sessions list */}
+      {/* 1. Left Sidebar: Chat Sessions / Bookmarks list */}
       <div className="flex w-80 flex-col border-r border-slate-100 bg-slate-50/50">
         {/* Sidebar Header */}
         <div className="p-4 border-b border-slate-100 bg-white">
@@ -504,12 +592,36 @@ export default function ChatPage() {
             </form>
           )}
 
+          {/* Sidebar Tabs */}
+          <div className="flex border-b border-slate-200 mb-3">
+            <button
+              onClick={() => setSidebarTab('sessions')}
+              className={`flex-1 pb-2 text-xs font-bold text-center border-b-2 transition-all ${
+                sidebarTab === 'sessions'
+                  ? 'border-teal-500 text-teal-750'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              Chats
+            </button>
+            <button
+              onClick={() => setSidebarTab('bookmarks')}
+              className={`flex-1 pb-2 text-xs font-bold text-center border-b-2 transition-all ${
+                sidebarTab === 'bookmarks'
+                  ? 'border-teal-500 text-teal-750'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              Bookmarks ({bookmarkedList.length})
+            </button>
+          </div>
+
           {/* Search box */}
           <div className="relative">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Search conversations..."
+              placeholder={sidebarTab === 'sessions' ? "Search conversations..." : "Search bookmarks..."}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500 bg-slate-50"
@@ -517,122 +629,222 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Sessions list container */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-1">
-          {loadingSessions ? (
-            Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="animate-pulse bg-slate-200/50 h-16 rounded-xl w-full mb-2" />
-            ))
-          ) : filteredSessions.length === 0 ? (
-            <div className="text-center py-8 text-slate-400 text-xs">
-              No active conversations.
+        {/* List container */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          {/* Real-time search hits results */}
+          {searchQuery && searchResults.length > 0 && (
+            <div className="mb-3 p-2 bg-teal-50/20 border border-teal-100/40 rounded-xl space-y-1.5 shadow-sm">
+              <span className="text-[10px] font-extrabold text-teal-800 uppercase tracking-wide px-1.5 flex items-center gap-1.5">
+                <Search className="h-3 w-3 text-teal-650" /> Message Matches ({searchResults.length})
+              </span>
+              <div className="space-y-1">
+                {searchResults.map((hit, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => {
+                      setSelectedSessionId(hit.session_id)
+                      if (hit.message_id) {
+                        setScrollTargetMsgId(hit.message_id)
+                      }
+                    }}
+                    className="p-2 rounded-lg bg-white border border-slate-150 hover:border-teal-200 hover:bg-slate-50 cursor-pointer transition-all shadow-sm"
+                  >
+                    <div className="flex justify-between items-center mb-0.5">
+                      <span className="text-[10px] font-extrabold text-slate-700 truncate max-w-[125px]">{hit.session_title}</span>
+                      {hit.role && (
+                        <span className={`text-[8px] font-extrabold px-1 rounded uppercase ${
+                          hit.role === 'USER' ? 'bg-teal-50 text-teal-705' : 'bg-violet-50 text-violet-750'
+                        }`}>
+                          {hit.role === 'USER' ? 'patient' : 'ai'}
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      className="text-[9px] text-slate-400 line-clamp-1 leading-normal"
+                      dangerouslySetInnerHTML={{ __html: hit.highlighted_snippet }}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
-          ) : (
-            filteredSessions.map((session) => {
-              const isSelected = selectedSessionId === session.id
-              const isEditing = editingSessionId === session.id
+          )}
 
-              return (
+          {sidebarTab === 'bookmarks' ? (
+            bookmarkedList.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 text-xs font-medium">
+                No bookmarked messages.
+              </div>
+            ) : (
+              bookmarkedList.map((bm) => (
                 <div
-                  key={session.id}
-                  onClick={() => !isEditing && setSelectedSessionId(session.id)}
-                  className={`group relative flex flex-col p-3 rounded-xl cursor-pointer transition-all duration-200 border ${
-                    isSelected
-                      ? 'bg-white border-teal-200 shadow-md shadow-teal-50/30'
-                      : 'bg-transparent border-transparent hover:bg-slate-100 hover:border-slate-200'
-                  }`}
+                  key={bm.id}
+                  onClick={() => {
+                    setSelectedSessionId(bm.session_id)
+                    setScrollTargetMsgId(bm.message_id)
+                  }}
+                  className="group relative flex flex-col p-3 rounded-xl border border-slate-200 bg-white hover:border-teal-200 hover:shadow-sm cursor-pointer transition-all duration-200"
                 >
                   <div className="flex items-center justify-between mb-1.5">
-                    {isEditing ? (
-                      <div className="flex items-center gap-1.5 w-full pr-10" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="text"
-                          value={editTitleValue}
-                          onChange={(e) => setEditTitleValue(e.target.value)}
-                          className="flex-1 px-2 py-0.5 text-xs rounded border border-slate-300 focus:ring-1 focus:ring-teal-500"
-                        />
-                        <button
-                          onClick={() => handleRenameSession(session.id)}
-                          className="p-0.5 rounded text-green-600 hover:bg-green-50"
-                        >
-                          <Check className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={() => setEditingSessionId(null)}
-                          className="p-0.5 rounded text-red-600 hover:bg-red-50"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
+                    <span className={`text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase ${
+                      bm.message_role === 'USER' ? 'bg-teal-50 text-teal-750' : 'bg-violet-50 text-violet-755'
+                    }`}>
+                      {bm.message_role === 'USER' ? 'Patient' : 'AI Agent'}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleBookmarkToggle(bm.message_id)
+                      }}
+                      className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 animate-in fade-in"
+                      title="Remove Bookmark"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-650 line-clamp-2 leading-relaxed font-medium">
+                    {bm.message_content}
+                  </p>
+                  <span className="text-[8px] text-slate-400 mt-2 text-right font-semibold">
+                    {new Date(bm.bookmarked_at).toLocaleDateString()}
+                  </span>
+                </div>
+              ))
+            )
+          ) : (
+            /* Regular sessions tab list */
+            loadingSessions ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="animate-pulse bg-slate-200/50 h-16 rounded-xl w-full mb-2" />
+              ))
+            ) : filteredSessions.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 text-xs">
+                No active conversations.
+              </div>
+            ) : (
+              filteredSessions.map((session) => {
+                const isSelected = selectedSessionId === session.id
+                const isEditing = editingSessionId === session.id
+
+                return (
+                  <div
+                    key={session.id}
+                    onClick={() => !isEditing && setSelectedSessionId(session.id)}
+                    className={`group relative flex flex-col p-3 rounded-xl cursor-pointer transition-all duration-200 border ${
+                      isSelected
+                        ? 'bg-white border-teal-200 shadow-md shadow-teal-50/30'
+                        : 'bg-transparent border-transparent hover:bg-slate-100 hover:border-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      {isEditing ? (
+                        <div className="flex items-center gap-1.5 w-full pr-10" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="text"
+                            value={editTitleValue}
+                            onChange={(e) => setEditTitleValue(e.target.value)}
+                            className="flex-1 px-2 py-0.5 text-xs rounded border border-slate-300 focus:ring-1 focus:ring-teal-500"
+                          />
+                          <button
+                            onClick={() => handleRenameSession(session.id)}
+                            className="p-0.5 rounded text-green-600 hover:bg-green-50"
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setEditingSessionId(null)}
+                            className="p-0.5 rounded text-red-600 hover:bg-red-50"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="font-bold text-xs text-slate-800 truncate pr-6 group-hover:text-teal-700 transition-colors flex items-center gap-1.5">
+                          {session.title}
+                          {session.pinned && <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />}
+                        </span>
+                      )}
+
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {session.metadata?.category && (
+                          <span className="text-[8px] bg-slate-100 text-slate-500 px-1 py-0.5 rounded uppercase font-semibold">
+                            {session.metadata.category}
+                          </span>
+                        )}
+                        {session.archived && <Archive className="h-3 w-3 text-slate-400" />}
                       </div>
-                    ) : (
-                      <span className="font-semibold text-xs text-slate-700 truncate pr-6 group-hover:text-teal-700 transition-colors">
-                        {session.title}
-                      </span>
+                    </div>
+
+                    {session.metadata?.summary && (
+                      <p className="text-[10px] text-slate-400 line-clamp-1 leading-normal mb-1.5">
+                        {session.metadata.summary}
+                      </p>
                     )}
 
-                    <div className="flex items-center gap-1">
-                      {session.pinned && <Pin className="h-3 w-3 text-amber-500 fill-amber-500" />}
-                      {session.archived && <Archive className="h-3 w-3 text-slate-400" />}
+                    <div className="flex justify-between items-center text-[9px] text-slate-400 mt-auto pt-1 border-t border-slate-100/50">
+                      <span className="flex items-center gap-1">
+                        <span>{session.message_count} msg</span>
+                        {session.last_agent_used && (
+                          <span className="bg-teal-50 text-teal-700 px-1 rounded-sm text-[8px] font-semibold border border-teal-100/30">
+                            {session.last_agent_used}
+                          </span>
+                        )}
+                      </span>
+                      <span>
+                        {new Date(session.last_message_at).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </span>
                     </div>
-                  </div>
 
-                  <div className="flex justify-between items-center text-[10px] text-slate-400">
-                    <span>{session.message_count} message{session.message_count !== 1 ? 's' : ''}</span>
-                    <span>
-                      {new Date(session.last_message_at).toLocaleDateString(undefined, {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </span>
+                    {/* Actions overlay menu */}
+                    {!isEditing && (
+                      <div className="absolute right-2 top-2 hidden group-hover:flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-100 shadow-md">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleTogglePin(session)
+                          }}
+                          className={`p-1 rounded hover:bg-slate-100 ${session.pinned ? 'text-amber-500' : 'text-slate-400'}`}
+                        >
+                          <Pin className="h-3 w-3" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleToggleArchive(session)
+                          }}
+                          className={`p-1 rounded hover:bg-slate-100 ${session.archived ? 'text-indigo-500' : 'text-slate-400'}`}
+                        >
+                          <Archive className="h-3 w-3" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setEditingSessionId(session.id)
+                            setEditTitleValue(session.title)
+                          }}
+                          className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600"
+                        >
+                          <Edit2 className="h-3 w-3" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDeleteSession(session.id)
+                          }}
+                          className="p-1 rounded hover:bg-red-50 text-slate-400 hover:text-red-600"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    )}
                   </div>
-
-                  {/* Actions overlay menu */}
-                  {!isEditing && (
-                    <div className="absolute right-2 top-2 hidden group-hover:flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-100 shadow-md">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleTogglePin(session)
-                        }}
-                        className={`p-1 rounded hover:bg-slate-100 ${session.pinned ? 'text-amber-500' : 'text-slate-400'}`}
-                      >
-                        <Pin className="h-3 w-3" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleToggleArchive(session)
-                        }}
-                        className={`p-1 rounded hover:bg-slate-100 ${session.archived ? 'text-indigo-500' : 'text-slate-400'}`}
-                      >
-                        <Archive className="h-3 w-3" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setEditingSessionId(session.id)
-                          setEditTitleValue(session.title)
-                        }}
-                        className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600"
-                      >
-                        <Edit2 className="h-3 w-3" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleDeleteSession(session.id)
-                        }}
-                        className="p-1 rounded hover:bg-red-50 text-slate-400 hover:text-red-600"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )
-            })
+                )
+              })
+            )
           )}
         </div>
       </div>
@@ -703,6 +915,55 @@ export default function ChatPage() {
                   >
                     <Archive className="h-3.5 w-3.5" />
                   </button>
+
+                  {/* Copy Conversation */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const transcript = history.messages
+                        .filter((m: any) => !m.deleted)
+                        .map((m: any) => `### ${m.role === 'USER' ? 'Patient' : 'Nura'}\n${m.content}`)
+                        .join('\n\n')
+                      navigator.clipboard.writeText(transcript)
+                      toast.success('Conversation copied!')
+                    }}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all"
+                    title="Copy full conversation transcript"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    <span>Copy Chats</span>
+                  </button>
+
+                  {/* Export Menu Dropdown */}
+                  <div className="relative group/export">
+                    <button
+                      type="button"
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-teal-600 bg-teal-600 text-white hover:bg-teal-700 transition-all shadow-md shadow-teal-600/10"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      <span>Export</span>
+                    </button>
+                    <div className="absolute right-0 mt-1 w-32 bg-white border border-slate-200 rounded-lg shadow-xl hidden group-hover/export:block z-50 overflow-hidden divide-y divide-slate-100">
+                      <button
+                        onClick={() => handleExport('md')}
+                        className="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-700 hover:bg-slate-50 hover:text-teal-700 transition-all"
+                      >
+                        Markdown (.md)
+                      </button>
+                      <button
+                        onClick={() => handleExport('pdf')}
+                        className="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-700 hover:bg-slate-50 hover:text-teal-700 transition-all"
+                      >
+                        PDF Document (.pdf)
+                      </button>
+                      <button
+                        onClick={() => handleExport('json')}
+                        className="w-full px-3 py-1.5 text-left text-[10px] font-bold text-slate-700 hover:bg-slate-50 hover:text-teal-700 transition-all"
+                      >
+                        JSON Raw (.json)
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -734,21 +995,47 @@ export default function ChatPage() {
               )}
             </div>
 
-            {/* Conversation Messages area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/30">
+            <div className="flex flex-1 overflow-hidden">
+              {/* Main chat column */}
+              <div className="flex flex-col flex-1 overflow-hidden">
+                {/* Conversation Messages area */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/30">
               {loadingMessages ? (
                 <div className="flex items-center justify-center h-full">
                   <span className="text-xs text-slate-400 animate-pulse">Loading conversation...</span>
                 </div>
               ) : history.messages.length === 0 && !isStreaming ? (
-                <div className="flex flex-col items-center justify-center h-full text-center max-w-sm mx-auto">
-                  <div className="h-10 w-10 rounded-full bg-teal-50 flex items-center justify-center mb-3">
-                    <Sparkles className="h-5 w-5 text-teal-600" />
+                <div className="flex flex-col items-center justify-center h-full text-center max-w-sm mx-auto p-4 space-y-4">
+                  <div className="h-10 w-10 rounded-full bg-teal-50 flex items-center justify-center">
+                    <Sparkles className="h-5 w-5 text-teal-600 animate-pulse" />
                   </div>
-                  <h3 className="text-sm font-bold text-slate-800 mb-1">Nura Consultation Start</h3>
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    Start streaming queries now. Nura dynamically evaluates diagnostics, prescriptions safety, and medical records.
-                  </p>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800 mb-1">Nura Consultation Start</h3>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      Start streaming queries now. Nura dynamically evaluates diagnostics, prescriptions safety, and medical records.
+                    </p>
+                  </div>
+                  {/* Suggested Start Prompts */}
+                  <div className="flex flex-col items-center gap-2 pt-2 border-t border-slate-100 w-full">
+                    <span className="text-[10px] text-slate-450 font-bold uppercase tracking-wider">Suggested Queries:</span>
+                    <div className="flex flex-wrap justify-center gap-1.5 w-full">
+                      {[
+                        "Explain my lab report details",
+                        "Check medication safety constraints",
+                        "Summarize my overall health profile",
+                        "What key questions should I ask my doctor?"
+                      ].map((promptText, pIdx) => (
+                        <button
+                          key={pIdx}
+                          type="button"
+                          onClick={() => handleSendMessage(null as any, promptText)}
+                          className="px-3 py-1.5 text-[10px] font-bold text-teal-700 bg-white border border-teal-200 rounded-full hover:bg-teal-50 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-sm"
+                        >
+                          {promptText}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <>
@@ -774,7 +1061,7 @@ export default function ChatPage() {
                     const isFeedbackSub = submittedFeedbacks[message.id] || false
 
                     return (
-                      <div key={message.id} className={`flex gap-3 max-w-[78%] ${isUser ? 'ml-auto flex-row-reverse' : ''}`}>
+                      <div key={message.id} id={`msg-${message.id}`} className={`flex gap-3 max-w-[78%] ${isUser ? 'ml-auto flex-row-reverse' : ''}`}>
                         {/* Avatar */}
                         <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 border shadow-sm ${
                           isUser ? 'bg-slate-100 border-slate-200' : 'bg-teal-50 border-teal-200'
@@ -786,7 +1073,7 @@ export default function ChatPage() {
                         <div className="flex flex-col max-w-full">
                           <div className={`px-4 py-2.5 rounded-2xl text-xs leading-relaxed shadow-sm relative group border ${
                             isUser
-                              ? 'bg-teal-600 text-white rounded-tr-none border-teal-600'
+                              ? 'bg-teal-600 text-white rounded-tr-none border-teal-655'
                               : 'bg-white border-slate-150 text-slate-700 rounded-tl-none'
                           }`}>
                             {isUser ? (
@@ -804,23 +1091,35 @@ export default function ChatPage() {
                                   className="flex items-center gap-1 text-[10px] font-bold text-slate-500 hover:text-teal-600 transition-all focus:outline-none"
                                 >
                                   {hasCitationsExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                                  <BookOpen className="h-3.5 w-3.5 text-teal-600" />
+                                  <BookOpen className="h-3.5 w-3.5 text-teal-650" />
                                   <span>Sources & Citations ({citationsList.length})</span>
                                 </button>
                                 
                                 {hasCitationsExpanded && (
                                   <div className="mt-2 space-y-1.5 animate-in fade-in duration-200">
                                     {citationsList.map((cit: any, cidx: number) => (
-                                      <div key={cidx} className="bg-slate-50 border border-slate-100 rounded-lg p-2 font-mono text-[9px] text-slate-600">
+                                      <div key={cidx} className="bg-slate-50 border border-slate-100 rounded-lg p-2.5 font-mono text-[9px] text-slate-600 space-y-0.5">
                                         <div className="flex justify-between items-center mb-0.5">
                                           <span className="font-semibold text-teal-700">[{cidx + 1}] Source: {cit.source || cit.collection || 'Document'}</span>
-                                          {cit.score !== undefined && (
-                                            <span className="bg-teal-50 text-teal-800 px-1 rounded font-bold">Confidence: {(cit.score * 100).toFixed(0)}%</span>
+                                          {(cit.confidence !== undefined || cit.score !== undefined) && (
+                                            <span className="bg-teal-50 text-teal-800 px-1 rounded font-bold">
+                                              Confidence: {((cit.confidence ?? cit.score) * 100).toFixed(0)}%
+                                            </span>
                                           )}
                                         </div>
-                                        {cit.document_id && <div className="truncate">Doc ID: {cit.document_id}</div>}
-                                        {cit.page_number !== undefined && <div>Page: {cit.page_number}</div>}
+                                        {cit.report_title && <div className="font-bold text-slate-700">Report: {cit.report_title}</div>}
+                                        {cit.document && <div className="truncate">Doc ID: {cit.document}</div>}
+                                        {cit.page !== undefined && <div>Page: {cit.page}</div>}
                                         {cit.section && <div>Section: {cit.section}</div>}
+                                        
+                                        <button
+                                          type="button"
+                                          onClick={() => setCitationModalData(cit)}
+                                          className="mt-1 flex items-center gap-0.5 text-[8px] font-bold text-teal-650 hover:text-teal-750 underline self-start"
+                                        >
+                                          <ExternalLink className="h-2.5 w-2.5" />
+                                          <span>View Source Details</span>
+                                        </button>
                                       </div>
                                     ))}
                                   </div>
@@ -828,47 +1127,55 @@ export default function ChatPage() {
                               </div>
                             )}
 
-                            {/* Action links inside assistant message bubbles (Copy / Feedback / Rating) */}
-                            {!isUser && (
-                              <div className="absolute right-2 bottom-2 hidden group-hover:flex items-center gap-1.5 bg-white border border-slate-150 p-1.5 rounded-lg shadow-md animate-in fade-in duration-150">
-                                <button
-                                  type="button"
-                                  onClick={() => handleCopyMessage(message.content)}
-                                  className="p-1 rounded hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-all"
-                                  title="Copy response text"
-                                >
-                                  <Copy className="h-3 w-3" />
-                                </button>
+                            {/* Action links inside bubbles (Copy / Bookmark / Feedback / Rating) */}
+                            <div className="absolute right-2 bottom-2 hidden group-hover:flex items-center gap-1.5 bg-white border border-slate-150 p-1 rounded-lg shadow-md animate-in fade-in duration-150 z-10">
+                              <button
+                                type="button"
+                                onClick={() => handleCopyMessage(message.content)}
+                                className="p-1 rounded hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-all"
+                                title="Copy message text"
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                              </button>
 
-                                {/* Rating Feedback Controls */}
-                                {!isFeedbackSub && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setActiveFeedbackMessageId(message.id)
-                                        setFeedbackRating('helpful')
-                                      }}
-                                      className="p-1 rounded hover:bg-green-50 text-slate-400 hover:text-green-600 transition-all"
-                                      title="Helpful"
-                                    >
-                                      <ThumbsUp className="h-3 w-3" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setActiveFeedbackMessageId(message.id)
-                                        setFeedbackRating('unhelpful')
-                                      }}
-                                      className="p-1 rounded hover:bg-red-50 text-slate-400 hover:text-red-600 transition-all"
-                                      title="Not Helpful"
-                                    >
-                                      <ThumbsDown className="h-3 w-3" />
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            )}
+                              <button
+                                type="button"
+                                onClick={() => handleBookmarkToggle(message.id)}
+                                className={`p-1 rounded hover:bg-slate-50 transition-all ${
+                                  isMessageBookmarked(message.id) ? 'text-amber-500 hover:text-amber-600' : 'text-slate-400 hover:text-slate-600'
+                                }`}
+                                title={isMessageBookmarked(message.id) ? 'Remove Bookmark' : 'Bookmark Message'}
+                              >
+                                <Star className={`h-3.5 w-3.5 ${isMessageBookmarked(message.id) ? 'fill-amber-500' : ''}`} />
+                              </button>
+
+                              {!isUser && !isFeedbackSub && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveFeedbackMessageId(message.id)
+                                      setFeedbackRating('helpful')
+                                    }}
+                                    className="p-1 rounded hover:bg-green-50 text-slate-400 hover:text-green-600 transition-all"
+                                    title="Helpful"
+                                  >
+                                    <ThumbsUp className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveFeedbackMessageId(message.id)
+                                      setFeedbackRating('unhelpful')
+                                    }}
+                                    className="p-1 rounded hover:bg-red-50 text-slate-400 hover:text-red-600 transition-all"
+                                    title="Not Helpful"
+                                  >
+                                    <ThumbsDown className="h-3.5 w-3.5" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </div>
 
                           {/* Metadata row under assistant bubble */}
@@ -1061,7 +1368,169 @@ export default function ChatPage() {
                 </div>
               </form>
             </div>
-          </>
+          </div>
+
+          {/* Collapsible right-hand side panel */}
+          {developerMode && (
+            <div className="w-80 border-l border-slate-100 bg-slate-50/40 p-4 overflow-y-auto flex flex-col space-y-4 shadow-sm animate-in slide-in-from-right duration-250">
+              {/* Title block */}
+              <div className="flex items-center gap-2 pb-3 border-b border-slate-200/60">
+                <div className="h-7 w-7 rounded-lg bg-teal-50 flex items-center justify-center">
+                  <Brain className="h-4 w-4 text-teal-600" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-slate-800">Conversation Memory</h3>
+                  <p className="text-[9px] text-slate-400 font-semibold">Intelligence sandbox & status debug</p>
+                </div>
+              </div>
+
+              {/* Manual Sandbox Triggers */}
+              <div className="p-3 bg-white border border-slate-200/60 rounded-xl space-y-2.5 shadow-sm">
+                <h4 className="text-[10px] font-extrabold text-slate-700 uppercase tracking-wide">Sync Controls</h4>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={evaluateMemoryMutation.isPending}
+                    onClick={() => {
+                      evaluateMemoryMutation.mutate(
+                        { sessionId: selectedSessionId! },
+                        {
+                          onSuccess: (res) => {
+                            setEvaluationResult(res)
+                            toast.success('Worthiness evaluated!')
+                          },
+                          onError: (err) => {
+                            toast.error(err.message)
+                          }
+                        }
+                      )
+                    }}
+                    className="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200/80 rounded-lg text-[10px] font-bold text-slate-700 transition-all border border-slate-200/50"
+                  >
+                    {evaluateMemoryMutation.isPending ? 'Evaluating...' : 'Evaluate'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={forceMemorySyncMutation.isPending}
+                    onClick={() => {
+                      forceMemorySyncMutation.mutate(
+                        { sessionId: selectedSessionId! },
+                        {
+                          onSuccess: (res) => {
+                            toast.success(res.status)
+                            refetchSessionMemories()
+                          },
+                          onError: (err) => {
+                            toast.error(err.message)
+                          }
+                        }
+                      )
+                    }}
+                    className="flex-1 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-[10px] font-bold transition-all shadow-sm shadow-teal-600/5"
+                  >
+                    {forceMemorySyncMutation.isPending ? 'Syncing...' : 'Force Sync'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Memory Worthiness Scores */}
+              <div className="p-3 bg-white border border-slate-200/60 rounded-xl space-y-3 shadow-sm">
+                <h4 className="text-[10px] font-extrabold text-slate-700 uppercase tracking-wide">Worthiness Scores</h4>
+                
+                {evaluationResult ? (
+                  <div className="space-y-2.5">
+                     <div className="space-y-1">
+                       <div className="flex justify-between text-[10px] font-bold text-slate-600">
+                         <span>Memory Score</span>
+                         <span className="font-mono text-indigo-600">{evaluationResult.memory_score.toFixed(2)}</span>
+                       </div>
+                       <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                         <div className="bg-indigo-500 h-full rounded-full" style={{ width: `${evaluationResult.memory_score * 100}%` }}></div>
+                       </div>
+                     </div>
+
+                     <div className="space-y-1">
+                       <div className="flex justify-between text-[10px] font-bold text-slate-600">
+                         <span>Clinical Score</span>
+                         <span className="font-mono text-emerald-600">{evaluationResult.clinical_score.toFixed(2)}</span>
+                       </div>
+                       <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                         <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${evaluationResult.clinical_score * 100}%` }}></div>
+                       </div>
+                     </div>
+
+                     <div className="space-y-1">
+                       <div className="flex justify-between text-[10px] font-bold text-slate-600">
+                         <span>Semantic Score</span>
+                         <span className="font-mono text-amber-600">{evaluationResult.semantic_score.toFixed(2)}</span>
+                       </div>
+                       <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                         <div className="bg-amber-500 h-full rounded-full" style={{ width: `${evaluationResult.semantic_score * 100}%` }}></div>
+                       </div>
+                     </div>
+
+                     <div className="pt-2 border-t border-slate-100 flex flex-col gap-1.5 text-[9px] font-semibold text-slate-500">
+                       <div className="flex items-center justify-between">
+                         <span>Qdrant (chat_memory):</span>
+                         <span className={`px-1.5 py-0.5 rounded font-bold ${evaluationResult.should_store_chat_memory ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                           {evaluationResult.should_store_chat_memory ? 'Stored' : 'Skipped'}
+                         </span>
+                       </div>
+                       <div className="flex items-center justify-between">
+                         <span>MongoDB (patient_memory):</span>
+                         <span className={`px-1.5 py-0.5 rounded font-bold ${evaluationResult.should_update_patient_memory ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                           {evaluationResult.should_update_patient_memory ? 'Stored' : 'Skipped'}
+                         </span>
+                       </div>
+                     </div>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-slate-400 font-semibold text-center py-2">
+                    Click "Evaluate" above to compute live score indicators.
+                  </p>
+                )}
+              </div>
+
+              {/* Persisted RAG Summaries */}
+              <div className="p-3 bg-white border border-slate-200/60 rounded-xl space-y-3 shadow-sm flex-1 flex flex-col">
+                <h4 className="text-[10px] font-extrabold text-slate-700 uppercase tracking-wide">Persisted Memories</h4>
+                
+                {sessionMemories.length > 0 ? (
+                  <div className="space-y-3 overflow-y-auto pr-1">
+                    {sessionMemories.map((mem, idx) => (
+                      <div key={idx} className="p-2.5 bg-slate-50 rounded-lg border border-slate-150 space-y-2">
+                        <div className="text-[10px] font-bold text-slate-700 leading-normal">
+                          {mem.summary}
+                        </div>
+                        {mem.keywords.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {mem.keywords.map((kw, i) => (
+                              <span key={i} className="text-[8px] font-extrabold bg-slate-200/60 px-1 py-0.5 rounded text-slate-600">
+                                {kw}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {mem.entities.length > 0 && (
+                          <div className="text-[8px] text-slate-500 font-semibold leading-normal">
+                            Entities: <strong className="text-slate-600">{mem.entities.join(', ')}</strong>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
+                    <span className="text-[10px] text-slate-400 font-semibold">
+                      No vectors indexed in Qdrant for this session yet.
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </>
         ) : (
           /* Empty/Welcome state */
           <div className="flex flex-col items-center justify-center h-full p-8 text-center max-w-md mx-auto">
@@ -1082,6 +1551,47 @@ export default function ChatPage() {
           </div>
         )}
       </div>
+      {/* Citation Metadata Modal overlay */}
+      {citationModalData && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl p-5 max-w-md w-full mx-4 space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+              <h3 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <BookOpen className="h-4 w-4 text-teal-605" />
+                <span>Citation Metadata Details</span>
+              </h3>
+              <button
+                onClick={() => setCitationModalData(null)}
+                className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            
+            <div className="space-y-2.5 text-xs text-slate-650">
+              <div><strong>Report Title:</strong> {citationModalData.report_title || citationModalData.source || 'Clinical Record'}</div>
+              <div><strong>Source Type:</strong> {citationModalData.source || 'N/A'}</div>
+              <div><strong>Doc reference:</strong> {citationModalData.document || 'N/A'}</div>
+              {citationModalData.page !== undefined && <div><strong>Page Number:</strong> {citationModalData.page}</div>}
+              {citationModalData.section && <div><strong>Section Reference:</strong> {citationModalData.section}</div>}
+              {(citationModalData.confidence !== undefined || citationModalData.score !== undefined) && (
+                <div>
+                  <strong>Confidence Level:</strong> {((citationModalData.confidence ?? citationModalData.score) * 100).toFixed(1)}%
+                </div>
+              )}
+              
+              {citationModalData.clickable_metadata && Object.keys(citationModalData.clickable_metadata).length > 0 && (
+                <div className="mt-3 pt-3 border-t border-slate-100">
+                  <span className="font-bold text-slate-700 block mb-1">Source Metadata Attributes:</span>
+                  <pre className="p-2.5 bg-slate-50 border border-slate-150 rounded-xl text-[9px] font-mono text-slate-500 overflow-x-auto max-h-40">
+                    {JSON.stringify(citationModalData.clickable_metadata, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

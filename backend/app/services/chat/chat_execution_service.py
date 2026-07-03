@@ -142,6 +142,29 @@ class ChatExecutionService:
         )
         await self.chat_session_repository.update(session_id, sess_update)
 
+        # Trigger background updates asynchronously
+        import asyncio
+        async def run_bg_session_updates():
+            try:
+                from app.core.dependencies import get_memory_update_service
+                memory_update_service = get_memory_update_service()
+                await memory_update_service.evaluate_and_sync_session(
+                    session_id=session_id,
+                    patient_id=patient_id,
+                    message_ids=[user_msg.id, assistant_msg.id]
+                )
+            except Exception as bg_err:
+                logger.error(f"Background memory sync failed in chat execution: {bg_err}", exc_info=True)
+
+            try:
+                from app.core.dependencies import get_conversation_intelligence_service
+                intelligence_service = get_conversation_intelligence_service()
+                await intelligence_service.auto_update_session_metadata(session_id)
+            except Exception as bg_err:
+                logger.error(f"Background metadata update failed in chat execution: {bg_err}", exc_info=True)
+
+        asyncio.create_task(run_bg_session_updates())
+
         # 7. Return Response
         return ChatExecutionResponse(
             assistant_message=assistant_content,
@@ -151,3 +174,4 @@ class ChatExecutionService:
             latency_ms=latency_ms,
             cost=contract.cost,
         )
+
