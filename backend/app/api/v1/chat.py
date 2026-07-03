@@ -6,6 +6,7 @@ API endpoints for managing chat sessions, messages, and telemetry
 import logging
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import StreamingResponse
 
 from app.models.user import UserInDB, UserRole
 from app.schemas.auth import SuccessResponse
@@ -20,6 +21,13 @@ from app.schemas.chat import (
     ChatExecutionRequest,
     ChatExecutionResponse,
     ChatSessionStatisticsResponse,
+    ChatStreamChunk,
+    RegenerateRequest,
+    RegenerateResponse,
+    FeedbackRequest,
+    FeedbackResponse,
+    CitationResponse,
+    SuggestedQuestionsResponse,
 )
 from app.models.chat import MessageRole
 from app.core.dependencies import (
@@ -30,11 +38,21 @@ from app.core.dependencies import (
     get_chat_message_service,
     get_chat_execution_service,
     get_chat_message_repository,
+    get_chat_streaming_service,
+    get_regeneration_service,
+    get_feedback_service,
+    get_citation_service,
+    get_conversation_intelligence_service,
 )
 from app.repositories.chat_message_repository import ChatMessageRepository
-from app.services.chat.chat_execution_service import ChatExecutionService
 from app.services.chat_session_service import ChatSessionService
 from app.services.chat_message_service import ChatMessageService
+from app.services.chat.chat_execution_service import ChatExecutionService
+from app.services.chat.chat_streaming_service import ChatStreamingService
+from app.services.chat.regeneration_service import RegenerationService
+from app.services.chat.feedback_service import FeedbackService
+from app.services.chat.citation_service import CitationService
+from app.services.chat.conversation_intelligence import ConversationIntelligenceService
 from app.services.chat.telemetry import get_chat_statistics
 from app.db import get_database
 
@@ -382,6 +400,169 @@ async def get_session_statistics(
     except Exception as e:
         logger.exception("Failed to retrieve chat session statistics")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve session statistics")
+
+
+@router.post(
+    "/message/stream",
+    summary="Stream Message response via SSE",
+    description="Invokes the orchestrator and streams chunks via Server-Sent Events (SSE)."
+)
+async def stream_message(
+    schema: ChatExecutionRequest,
+    current_user: UserInDB = Depends(require_exact_patient),
+    streaming_service: ChatStreamingService = Depends(get_chat_streaming_service),
+) -> StreamingResponse:
+    generator = streaming_service.stream_chat_message(
+        session_id=schema.session_id,
+        patient_id=current_user.id,
+        message=schema.message
+    )
+    return StreamingResponse(
+        generator,
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/event-stream",
+        }
+    )
+
+
+@router.post(
+    "/message/regenerate",
+    response_model=SuccessResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Regenerate Last Response",
+    description="Regenerates the latest assistant message response in the session."
+)
+async def regenerate_message(
+    schema: RegenerateRequest,
+    current_user: UserInDB = Depends(require_exact_patient),
+    regen_service: RegenerationService = Depends(get_regeneration_service),
+) -> SuccessResponse:
+    try:
+        response = await regen_service.regenerate_latest_response(
+            session_id=schema.session_id,
+            patient_id=current_user.id
+        )
+        return SuccessResponse(
+            success=True,
+            message="Response regenerated successfully",
+            data=response.model_dump()
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("AI Response regeneration crashed")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post(
+    "/message/feedback",
+    response_model=SuccessResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Submit User Feedback",
+    description="Submits helpful / unhelpful rating feedback for a message."
+)
+async def submit_feedback(
+    schema: FeedbackRequest,
+    current_user: UserInDB = Depends(require_exact_patient),
+    feedback_service: FeedbackService = Depends(get_feedback_service),
+) -> SuccessResponse:
+    try:
+        success = await feedback_service.submit_feedback(
+            message_id=schema.message_id,
+            patient_id=current_user.id,
+            rating=schema.rating,
+            comment=schema.comment
+        )
+        if not success:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to save feedback")
+        return SuccessResponse(
+            success=True,
+            message="Feedback saved successfully"
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("Failed to submit message feedback")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get(
+    "/message/{message_id}/citations",
+    response_model=SuccessResponse,
+    summary="Get Message Citations",
+    description="Retrieves clean UI-friendly citation metadata matches for an assistant response."
+)
+async def get_message_citations(
+    message_id: str,
+    current_user: UserInDB = Depends(require_exact_patient),
+    citation_service: CitationService = Depends(get_citation_service),
+) -> SuccessResponse:
+    try:
+        citations = await citation_service.get_message_citations(
+            message_id=message_id,
+            patient_id=current_user.id
+        )
+        return SuccessResponse(
+            success=True,
+            message="Citations retrieved successfully",
+            data=[c.model_dump() for c in citations]
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.exception("Failed to fetch message citations")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get(
+    "/message/{message_id}/followups",
+    response_model=SuccessResponse,
+    summary="Get Message Followup Questions",
+    description="Generates automatic suggested follow-up questions and auto-names untitled conversations."
+)
+async def get_followup_questions(
+    message_id: str,
+    current_user: UserInDB = Depends(require_exact_patient),
+    message_repo: ChatMessageRepository = Depends(get_chat_message_repository),
+    intelligence_service: ConversationIntelligenceService = Depends(get_conversation_intelligence_service),
+) -> SuccessResponse:
+    msg = await message_repo.get(message_id)
+    if not msg or msg.patient_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+    
+    # Fetch the previous user query if possible to build context
+    user_query = "review medical file"
+    try:
+        session_msgs = await message_repo.get_by_session_id(msg.session_id, limit=20, skip=0, include_deleted=False)
+        for idx, m in enumerate(session_msgs):
+            if m.id == msg.id and idx > 0:
+                user_query = session_msgs[idx - 1].content
+                break
+    except Exception:
+        pass
+
+    try:
+        intel = await intelligence_service.generate_intelligence(user_query, msg.content)
+        # Automatically rename the session if currently untitled
+        await intelligence_service.update_session_title_if_untitled(msg.session_id, intel["title"])
+        
+        return SuccessResponse(
+            success=True,
+            message="Follow-up questions retrieved successfully",
+            data={"questions": intel["suggested_questions"]}
+        )
+    except Exception as e:
+        logger.exception("Failed to compile follow-up questions")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 # ---------------------------------------------------------------------------

@@ -145,6 +145,56 @@ def get_chat_execution_service() -> Any:
     )
 
 
+def get_chat_streaming_service() -> Any:
+    """Get ChatStreamingService instance"""
+    from app.services.chat.chat_streaming_service import ChatStreamingService
+    return ChatStreamingService(
+        chat_session_repository=get_chat_session_repository(),
+        chat_message_repository=get_chat_message_repository(),
+        chat_message_service=get_chat_message_service(),
+        chat_session_service=get_chat_session_service(),
+        orchestrator=get_multi_agent_orchestrator(),
+    )
+
+
+def get_conversation_intelligence_service() -> Any:
+    """Get ConversationIntelligenceService instance"""
+    from app.services.chat.conversation_intelligence import ConversationIntelligenceService
+    from app.services.groq_service import get_groq_service
+    return ConversationIntelligenceService(
+        groq_service=get_groq_service(),
+        chat_session_repository=get_chat_session_repository(),
+    )
+
+
+def get_regeneration_service() -> Any:
+    """Get RegenerationService instance"""
+    from app.services.chat.regeneration_service import RegenerationService
+    return RegenerationService(
+        chat_session_repository=get_chat_session_repository(),
+        chat_message_repository=get_chat_message_repository(),
+        chat_message_service=get_chat_message_service(),
+        orchestrator=get_multi_agent_orchestrator(),
+    )
+
+
+def get_feedback_service() -> Any:
+    """Get FeedbackService instance"""
+    from app.services.chat.feedback_service import FeedbackService
+    return FeedbackService(
+        db=get_database(),
+        chat_message_repository=get_chat_message_repository(),
+    )
+
+
+def get_citation_service() -> Any:
+    """Get CitationService instance"""
+    from app.services.chat.citation_service import CitationService
+    return CitationService(
+        chat_message_repository=get_chat_message_repository(),
+    )
+
+
 def get_user_service() -> UserService:
     """Get UserService instance"""
     user_repository = get_user_repository()

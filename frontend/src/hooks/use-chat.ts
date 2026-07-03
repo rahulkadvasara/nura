@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { chatService, ChatSession, ChatMessage, ChatHistory, ChatStatistics, ChatExecutionResponse, ChatSessionStatisticsResponse } from '@/services/chat.service'
+import { chatService, ChatSession, ChatMessage, ChatHistory, ChatStatistics, ChatExecutionResponse, ChatSessionStatisticsResponse, CitationInfo } from '@/services/chat.service'
 
 export function useSessions(limit = 50, skip = 0, includeArchived = true) {
   return useQuery<ChatSession[], Error>({
@@ -179,3 +179,75 @@ export function useSessionStatistics(sessionId: string | null) {
     staleTime: 5000,
   })
 }
+
+export function useRegenerateMessage() {
+  const queryClient = useQueryClient()
+  return useMutation<
+    ChatExecutionResponse,
+    Error,
+    { sessionId: string }
+  >({
+    mutationFn: async ({ sessionId }) => {
+      const response = await chatService.regenerateMessage(sessionId)
+      if (response.success && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Regeneration failed')
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['chat', 'messages', variables.sessionId] })
+      queryClient.invalidateQueries({ queryKey: ['chat', 'session', variables.sessionId] })
+      queryClient.invalidateQueries({ queryKey: ['chat', 'sessions'] })
+      queryClient.invalidateQueries({ queryKey: ['chat', 'session-statistics', variables.sessionId] })
+    }
+  })
+}
+
+export function useSubmitFeedback() {
+  return useMutation<
+    { success: boolean; message: string },
+    Error,
+    { messageId: string; rating: 'helpful' | 'unhelpful'; comment?: string }
+  >({
+    mutationFn: async ({ messageId, rating, comment }) => {
+      const response = await chatService.submitFeedback(messageId, rating, comment)
+      if (response.success && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Feedback submission failed')
+    }
+  })
+}
+
+export function useMessageCitations(messageId: string | null) {
+  return useQuery<CitationInfo[], Error>({
+    queryKey: ['chat', 'citations', messageId],
+    queryFn: async () => {
+      if (!messageId) return []
+      const response = await chatService.getMessageCitations(messageId)
+      if (response.success && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to fetch citations')
+    },
+    enabled: !!messageId,
+    staleTime: 60000,
+  })
+}
+
+export function useFollowupQuestions(messageId: string | null) {
+  return useQuery<string[], Error>({
+    queryKey: ['chat', 'followups', messageId],
+    queryFn: async () => {
+      if (!messageId) return []
+      const response = await chatService.getFollowupQuestions(messageId)
+      if (response.success && response.data) {
+        return response.data.questions
+      }
+      throw new Error(response.message || 'Failed to fetch follow-ups')
+    },
+    enabled: !!messageId,
+    staleTime: 60000,
+  })
+}
+

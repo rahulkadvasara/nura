@@ -196,3 +196,62 @@ class ChatSessionStatisticsResponse(BaseModel):
     average_latency: float = Field(..., description="Average response latency in milliseconds")
     last_agent_used: Optional[str] = Field(None, description="Last AI agent triggered for this session")
 
+
+# ---------------------------------------------------------------------------
+# Sprint 3 Streaming & Intelligence Schemas
+# ---------------------------------------------------------------------------
+
+class ChatStreamChunk(BaseModel):
+    """Schema representing a single Server-Sent Event (SSE) chunk payload"""
+    type: str = Field(..., description="Chunk type: 'token', 'metadata', or 'error'")
+    content: Optional[str] = Field(None, description="Partial text content chunk")
+    agent_used: Optional[str] = Field(None, description="AI agent executed")
+    citations: Optional[List[Dict[str, Any]]] = Field(None, description="Citations list if type=metadata")
+    usage: Optional[Dict[str, int]] = Field(None, description="Token usage details")
+    latency_ms: Optional[float] = Field(None, description="Latency details")
+    cost: Optional[float] = Field(None, description="Cost details")
+    error: Optional[str] = Field(None, description="Error message details if type=error")
+
+
+class RegenerateRequest(BaseModel):
+    """Request schema to regenerate the latest assistant response in a session"""
+    session_id: str = Field(..., description="Reference to the chat session ID")
+
+
+class RegenerateResponse(BaseModel):
+    """Response schema returned after regenerating assistant message response"""
+    assistant_message: str = Field(..., description="Newly generated response")
+    agent_used: Optional[str] = Field(None, description="Agent executed")
+    citations: List[Dict[str, Any]] = Field(default_factory=list, description="Citations")
+    usage: Dict[str, int] = Field(default_factory=dict, description="Usage")
+    latency_ms: float = Field(..., description="Latency")
+    cost: float = Field(..., description="Estimated cost")
+
+
+class FeedbackRequest(BaseModel):
+    """Request schema for submitting message feedback"""
+    message_id: str = Field(..., description="Reference to the chat message ID")
+    rating: str = Field(..., description="Rating rating: 'helpful' or 'unhelpful'")
+    comment: Optional[str] = Field(None, description="Optional text comment")
+
+
+class FeedbackResponse(BaseModel):
+    """Response schema for feedback acknowledgement"""
+    success: bool = Field(..., description="Success check")
+    message: str = Field(..., description="Status message")
+
+
+class CitationResponse(BaseModel):
+    """Response schema for formatted UI-friendly citations"""
+    document: str = Field(..., description="Document type or clinical record ID")
+    source: str = Field(..., description="File source or collection origin")
+    page: Optional[int] = Field(None, description="Page number details if applicable")
+    section: Optional[str] = Field(None, description="Clinical section matched")
+    confidence: Optional[float] = Field(None, description="Matching confidence score (0.0 - 1.0)")
+
+
+class SuggestedQuestionsResponse(BaseModel):
+    """Response schema listing suggested follow-up prompts"""
+    questions: List[str] = Field(..., description="List of generated question prompts")
+
+

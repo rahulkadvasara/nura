@@ -209,3 +209,55 @@ Admin statistics are aggregated on-the-fly directly from MongoDB collections:
 * **Token Usage & Costs**: Summarized using MongoDB `$sum` operators on the nested tokens and cost properties.
 * **Agent Distribution**: Formed using MongoDB `$group` on `metadata.agent`.
 
+---
+
+## 6. Streaming, Feedback & Intelligence Architecture (Sprint 3)
+
+### 6.1 Server-Sent Events (SSE) Streaming Lifecycle
+The streaming execution uses FastAPI's `StreamingResponse` over HTTP. 
+
+1. **Client Request**: Patient triggers message stream via `POST /message/stream`.
+2. **Persistence**: The user message is immediately saved to MongoDB.
+3. **Execution**: Context is compiled, and the Multi-Agent Orchestrator is executed.
+4. **SSE Event Stream**:
+   - Yields `type: "token"` events containing partial text chunks.
+   - If aborted or disconnected, the stream generator catches `asyncio.CancelledError`, logs it, and cleans up.
+   - Once completed, the final assistant response is persisted in `chat_messages` (preventing partial or corrupt message records).
+   - Yields a final `type: "metadata"` event containing accumulated token counts, final cost, and retrieved citations.
+
+### 6.2 Response Regeneration Pipeline
+Allows patients to regenerate assistant responses without duplicating queries:
+1. Locate the latest assistant message and its matching user prompt.
+2. Soft-delete the previous assistant message.
+3. Offset session aggregates (deducting the soft-deleted message's tokens and cost).
+4. Run the orchestrator pipeline on the original user prompt.
+5. Save the new assistant message with `replaced_message_id` and an incremented `regeneration_count` inside its metadata.
+
+### 6.3 Decoupled Feedback Storage
+To protect message history audits from mutating, ratings and reviews are stored in a standalone collection:
+
+#### Collection: `chat_feedbacks`
+```json
+{
+  "_id": "ObjectId",
+  "message_id": "string (Reference to chat_messages)",
+  "patient_id": "string",
+  "rating": "helpful | unhelpful",
+  "comment": "string (optional)",
+  "timestamp": "ISODate"
+}
+```
+
+### 6.4 Citation Formatting
+Retrieval Agent matches are normalized into UI-friendly citation responses:
+* Maps database `document_id` and `source` parameters.
+* Resolves `page` and `section` attributes if present in patient record vectors.
+* Forwards vector lookup scores as `confidence` metrics (0.0 to 1.0).
+
+### 6.5 Conversation Intelligence
+Suggested prompts and automatic title generation are powered by a lightweight sidecar Groq JSON model:
+* Evaluates the first interaction pair.
+* Formulates a short (3-5 words) session title, replacing default session titles in MongoDB automatically.
+* Returns 3 suggested follow-up prompts shown in the UI as clickable prompt badge buttons.
+
+

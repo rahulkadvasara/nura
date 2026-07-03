@@ -144,5 +144,40 @@ export const chatService = {
   getSessionStatistics: async (sessionId: string): Promise<ApiResponse<ChatSessionStatisticsResponse>> => {
     const response = await apiClient.get<ApiResponse<ChatSessionStatisticsResponse>>(`/chat/session/${sessionId}/statistics`)
     return response.data
+  },
+
+  regenerateMessage: async (sessionId: string): Promise<ApiResponse<ChatExecutionResponse>> => {
+    const response = await apiClient.post<ApiResponse<ChatExecutionResponse>>('/chat/message/regenerate', {
+      session_id: sessionId
+    })
+    return response.data
+  },
+
+  submitFeedback: async (messageId: string, rating: 'helpful' | 'unhelpful', comment?: string): Promise<ApiResponse<{ success: boolean; message: string }>> => {
+    const response = await apiClient.post<ApiResponse<{ success: boolean; message: string }>>('/chat/message/feedback', {
+      message_id: messageId,
+      rating,
+      comment
+    })
+    return response.data
+  },
+
+  getMessageCitations: async (messageId: string): Promise<ApiResponse<CitationInfo[]>> => {
+    const response = await apiClient.get<ApiResponse<CitationInfo[]>>(`/chat/message/${messageId}/citations`)
+    return response.data
+  },
+
+  getFollowupQuestions: async (messageId: string): Promise<ApiResponse<{ questions: string[] }>> => {
+    const response = await apiClient.get<ApiResponse<{ questions: string[] }>>(`/chat/message/${messageId}/followups`)
+    return response.data
   }
 }
+
+export interface CitationInfo {
+  document: string
+  source: string
+  page?: number
+  section?: string
+  confidence?: number
+}
+

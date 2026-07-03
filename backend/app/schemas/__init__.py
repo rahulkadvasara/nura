@@ -90,6 +90,13 @@ from app.schemas.chat import (
     ChatExecutionRequest,
     ChatExecutionResponse,
     ChatSessionStatisticsResponse,
+    ChatStreamChunk,
+    RegenerateRequest,
+    RegenerateResponse,
+    FeedbackRequest,
+    FeedbackResponse,
+    CitationResponse,
+    SuggestedQuestionsResponse,
 )
 
 from app.schemas.payment import (
@@ -307,6 +314,13 @@ __all__ = [
     "ChatExecutionRequest",
     "ChatExecutionResponse",
     "ChatSessionStatisticsResponse",
+    "ChatStreamChunk",
+    "RegenerateRequest",
+    "RegenerateResponse",
+    "FeedbackRequest",
+    "FeedbackResponse",
+    "CitationResponse",
+    "SuggestedQuestionsResponse",
 
     # Payment and doctor wallet schemas
     "PaymentCreateSchema",
