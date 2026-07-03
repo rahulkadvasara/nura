@@ -343,5 +343,60 @@ Interactive buttons on cards resolve to standardized relative dashboard URLs usi
 * **Practitioner Details**: `/dashboard/doctors/{doctor_id}`
 * **Longitudinal Memory & Safety**: `/dashboard/patient`
 
+---
 
+## 9. Production Optimization & Telemetry Architecture (Sprint 7)
 
+Sprint 7 hardens the Conversational AI Platform for production scaling. It implements caching layers, non-blocking asynchronous task execution, parallelized vector context assembly, history-saving conversation compression, sliding-window rate limiters, operational checks, and an admin monitoring interface.
+
+```mermaid
+graph TD
+    A[User Message] --> B[Sliding-Window Rate Limiter]
+    B --> C[Cache Service Lookup]
+    C -- Hit --> D[Return Cached Response]
+    C -- Miss --> E[Parallel RAG Pre-Retrieval]
+    E --> F[Context Compression Service]
+    F --> G[Multi-Agent Orchestrator Node]
+    G --> H[Write response & Invalidate cache]
+    H --> I[Deferred Asynchronous Task Manager]
+    I --> J[Background Memory Sync]
+    I --> K[System Telemetry Log]
+```
+
+### 9.1 Caching Layer (`ChatCacheService`)
+To minimize LLM token overhead and API latencies, responses to recurring identical user prompts are cached:
+* **Storage**: In-memory thread-safe dictionary wrapping entries with specific Time-to-Live (TTL) timestamps (default: 300 seconds).
+* **Invalidation**: Any message insertion (`create_message`), session edit, or database configuration update invalidates the cached items of that session immediately to guarantee response coherence.
+
+### 9.2 Asynchronous Background Tasks (`BackgroundTaskManager`)
+Non-blocking operations are deferred to a non-blocking asyncio manager:
+* **Background Tasks**: Long-term patient memory updates, automatic title and follow-up question generation, metadata syncs, and telemetry aggregations run as fire-and-forget background operations.
+* **Resilience**: Task failures are intercepted, logging exceptions without stalling or corrupting patient-facing API responses.
+
+### 9.3 Parallel Retrievals
+RAG context assemblies execute in parallel:
+* **Concurrency**: Instead of sequential vector collections querying, the `RetrievalAgent` issues asynchronous `asyncio.gather` checks targeting Qdrant intents (`conversation_recall`, `report_analysis`, `general_health`, `drug_question`) in parallel.
+* **Performance**: Prefetching warms up vector index caches, eliminating retrieval latency bottlenecks before agent execution begins.
+
+### 9.4 Context Compression (`ConversationCompressionService`)
+Prevents token context window overflow:
+* **Triggers**: When the conversation context exceeds `8000` estimated characters/tokens, compression is triggered.
+* **Preservation**: Crucial details like bookmarked messages, cited responses, recent queries (last 6 messages), and clinical safety keywords (medication names, allergy warnings, acute symptoms) are preserved in their original form.
+* **Fallback**: Older, non-critical conversations are compressed into a single summarized system message block.
+
+### 9.5 Rate Limiter (`RateLimiter`)
+Protects backend systems from API abuse:
+* **Mechanism**: Implements sliding-window request throttling tracking patient ID and client IP addresses (limit: 10 requests / 60 seconds).
+* **Abuse Flagging**: Requests exceeding twice the normal rate limit trigger operational alerts, marking the profile for potential API abuse.
+
+### 9.6 Health Diagnostics (`HealthMonitor`)
+Provides a single unified system status checker:
+* **Integrations**: Automatically pings MongoDB connection, collects active collections on Qdrant, verifies Groq key configurations, and checks active background tasks.
+* **Status Outputs**: Returns `HEALTHY` (all operational), `DEGRADED` (secondary systems like Qdrant/Groq unreachable), or `UNHEALTHY` (primary database offline).
+
+### 9.7 Conversational AI Monitor Dashboard
+A Next.js dashboard console displaying:
+* **Subsystem Indicators**: Connection states of DBs, vector indexes, APIs, cache registries, and background executors.
+* **Cache Metrics**: Real-time hit ratios, cache misses, and total key counts.
+* **Streaming Stats**: Volumetric logs of started, completed, cancelled, and failed SSE message loops.
+* **Agent Allocations**: Distribution breakdown of intent execution across the agent nodes.

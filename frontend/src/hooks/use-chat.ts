@@ -413,4 +413,74 @@ export function useBookmarks() {
   })
 }
 
+export function useChatHealth() {
+  return useQuery({
+    queryKey: ['chat', 'health'],
+    queryFn: async () => {
+      const response = await chatService.getHealth()
+      if (response.success && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to fetch health status')
+    },
+    refetchInterval: 10000
+  })
+}
+
+export function useChatAdminStatistics() {
+  return useQuery({
+    queryKey: ['chat', 'admin-statistics'],
+    queryFn: async () => {
+      const response = await chatService.getStatistics()
+      if (response.success && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to fetch statistics')
+    },
+    refetchInterval: 10000
+  })
+}
+
+export function useChatCacheStats() {
+  return useQuery({
+    queryKey: ['chat', 'cache-stats'],
+    queryFn: async () => {
+      const response = await chatService.getCacheStats()
+      if (response.success && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to fetch cache stats')
+    },
+    refetchInterval: 10000
+  })
+}
+
+export function useChatPerformance() {
+  return useQuery({
+    queryKey: ['chat', 'performance'],
+    queryFn: async () => {
+      const response = await chatService.getPerformance()
+      if (response.success && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to fetch performance metrics')
+    },
+    refetchInterval: 10000
+  })
+}
+
+export function useChatStreamingStats() {
+  return useQuery({
+    queryKey: ['chat', 'streaming-stats'],
+    queryFn: async () => {
+      const response = await chatService.getStreamingStats()
+      if (response.success && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to fetch streaming stats')
+    },
+    refetchInterval: 10000
+  })
+}
+
 

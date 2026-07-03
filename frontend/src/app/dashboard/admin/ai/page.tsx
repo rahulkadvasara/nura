@@ -60,6 +60,7 @@ import {
 } from '@/hooks/use-ai'
 import { HealthcareAgentsView } from './healthcare_agents_view'
 import { OperationsAgentsView } from './operations_agents_view'
+import { ConversationalAIMonitorView } from './conversational_ai_monitor'
 import { 
   Sparkles, 
   Cpu, 
@@ -7277,7 +7278,7 @@ function ConversationMemoryDashboardView() {
 
 
 function AIPlaygroundContent() {
-  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent' | 'workflow-engine' | 'router-agent' | 'core-agents' | 'healthcare-agents' | 'operations-agents' | 'drug-lookup' | 'drug-interactions' | 'drug-validation' | 'drug-explain' | 'chat-memory'>('llm')
+  const [activeTab, setActiveTab] = useState<'llm' | 'embeddings' | 'vector' | 'patient-context' | 'integration' | 'indexing' | 'retrieval' | 'context-builder' | 'retrieval-agent' | 'workflow-engine' | 'router-agent' | 'core-agents' | 'healthcare-agents' | 'operations-agents' | 'drug-lookup' | 'drug-interactions' | 'drug-validation' | 'drug-explain' | 'chat-memory' | 'conversational-monitor'>('llm')
 
   return (
     <div className="space-y-6">
@@ -7314,6 +7315,8 @@ function AIPlaygroundContent() {
           <GraphHealthSummaryBadge />
         ) : activeTab === 'router-agent' ? (
           <GraphHealthSummaryBadge />
+        ) : activeTab === 'conversational-monitor' ? (
+          <IntegrationHealthSummaryBadge />
         ) : (
           <IntegrationHealthSummaryBadge />
         )}
@@ -7530,6 +7533,17 @@ function AIPlaygroundContent() {
           <Settings className="h-4 w-4" />
           Integration Orchestrator
         </button>
+        <button
+          onClick={() => setActiveTab('conversational-monitor')}
+          className={`pb-3 font-semibold text-sm transition-all border-b-2 flex-shrink-0 flex items-center gap-2 relative ${
+            activeTab === 'conversational-monitor'
+              ? 'border-teal-600 text-teal-600 font-bold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Activity className="h-4 w-4" />
+          Conversational AI Monitor
+        </button>
       </div>
 
       {activeTab === 'llm' ? (
@@ -7568,6 +7582,8 @@ function AIPlaygroundContent() {
         <DrugAIExplanationPlaygroundView />
       ) : activeTab === 'chat-memory' ? (
         <ConversationMemoryDashboardView />
+      ) : activeTab === 'conversational-monitor' ? (
+        <ConversationalAIMonitorView />
       ) : (
         <IntegrationPlaygroundView />
       )}

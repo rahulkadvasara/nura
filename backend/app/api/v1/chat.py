@@ -908,3 +908,120 @@ async def list_bookmarks(
     except Exception as e:
         logger.exception("Failed to list bookmarked messages")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Sprint 7: Operational & Telemetry Dashboards (Admin Only)
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/health",
+    response_model=SuccessResponse,
+    summary="Get Subsystem Health",
+    description="Returns connection health and configurations (Admin only)."
+)
+async def get_health(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN))
+) -> SuccessResponse:
+    try:
+        from app.services.chat.health_monitor import get_health_monitor
+        monitor = get_health_monitor()
+        health = await monitor.check_health()
+        return SuccessResponse(
+            success=True,
+            message="Subsystems health checked",
+            data=health
+        )
+    except Exception as e:
+        logger.exception("Failed to check subsystems health")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/statistics",
+    response_model=SuccessResponse,
+    summary="Get Analytics & Metrics",
+    description="Returns aggregate chat operational intelligence reports (Admin only)."
+)
+async def get_statistics(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN))
+) -> SuccessResponse:
+    try:
+        from app.services.chat.analytics_service import get_analytics_service
+        service = get_analytics_service()
+        stats = await service.get_analytics()
+        return SuccessResponse(
+            success=True,
+            message="Operational analytics retrieved",
+            data=stats
+        )
+    except Exception as e:
+        logger.exception("Failed to retrieve statistics")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/cache",
+    response_model=SuccessResponse,
+    summary="Get Cache Operational Stats",
+    description="Returns size, hits, misses, and hit ratio of internal TTL caches (Admin only)."
+)
+async def get_cache_statistics(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN))
+) -> SuccessResponse:
+    try:
+        from app.services.chat.cache_service import get_chat_cache_service
+        cache_svc = get_chat_cache_service()
+        stats = cache_svc.get_statistics()
+        return SuccessResponse(
+            success=True,
+            message="Cache statistics retrieved",
+            data=stats
+        )
+    except Exception as e:
+        logger.exception("Failed to retrieve cache statistics")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/performance",
+    response_model=SuccessResponse,
+    summary="Get Latency & Performance Performance",
+    description="Returns average request execution, streaming, and RAG latencies (Admin only)."
+)
+async def get_performance_statistics(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN))
+) -> SuccessResponse:
+    try:
+        from app.services.chat.telemetry_service import get_extended_telemetry
+        stats = get_extended_telemetry().get_stats()
+        return SuccessResponse(
+            success=True,
+            message="Performance metrics retrieved",
+            data=stats.get("performance", {})
+        )
+    except Exception as e:
+        logger.exception("Failed to retrieve performance metrics")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/streaming/statistics",
+    response_model=SuccessResponse,
+    summary="Get Streaming Lifecycle Analytics",
+    description="Returns started, completed, cancelled, and failed streams counts (Admin only)."
+)
+async def get_streaming_statistics(
+    current_user: UserInDB = Depends(require_role(UserRole.ADMIN))
+) -> SuccessResponse:
+    try:
+        from app.services.chat.telemetry_service import get_extended_telemetry
+        stats = get_extended_telemetry().get_stats()
+        return SuccessResponse(
+            success=True,
+            message="Streaming metrics retrieved",
+            data=stats.get("streaming", {})
+        )
+    except Exception as e:
+        logger.exception("Failed to retrieve streaming metrics")
+        raise HTTPException(status_code=500, detail=str(e))

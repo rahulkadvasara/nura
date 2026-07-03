@@ -257,6 +257,31 @@ export const chatService = {
   getBookmarks: async (): Promise<ApiResponse<{ bookmarks: Bookmark[] }>> => {
     const response = await apiClient.get<ApiResponse<{ bookmarks: Bookmark[] }>>('/chat/bookmarks')
     return response.data
+  },
+
+  getHealth: async (): Promise<ApiResponse<{ status: string; details: Record<string, string> }>> => {
+    const response = await apiClient.get<ApiResponse<{ status: string; details: Record<string, string> }>>('/chat/health')
+    return response.data
+  },
+
+  getStatistics: async (): Promise<ApiResponse<any>> => {
+    const response = await apiClient.get<ApiResponse<any>>('/chat/statistics')
+    return response.data
+  },
+
+  getCacheStats: async (): Promise<ApiResponse<{ size: number; hits: number; misses: number; hit_ratio: number }>> => {
+    const response = await apiClient.get<ApiResponse<{ size: number; hits: number; misses: number; hit_ratio: number }>>('/chat/cache')
+    return response.data
+  },
+
+  getPerformance: async (): Promise<ApiResponse<any>> => {
+    const response = await apiClient.get<ApiResponse<any>>('/chat/performance')
+    return response.data
+  },
+
+  getStreamingStats: async (): Promise<ApiResponse<any>> => {
+    const response = await apiClient.get<ApiResponse<any>>('/chat/streaming/statistics')
+    return response.data
   }
 }
 
