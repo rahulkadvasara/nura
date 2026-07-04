@@ -241,6 +241,12 @@ def create_application() -> FastAPI:
         tags=["chat"]
     )
 
+    # Mount static files directory for local uploads
+    from fastapi.staticfiles import StaticFiles
+    import os
+    os.makedirs("uploads/avatars", exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
     return app
 
 

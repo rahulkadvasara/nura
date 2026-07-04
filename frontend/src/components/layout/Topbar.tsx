@@ -45,9 +45,17 @@ export function Topbar() {
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             className="flex items-center gap-2 focus:outline-none"
           >
-            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold border border-primary/20">
-              {user?.full_name?.charAt(0).toUpperCase() || 'U'}
-            </div>
+            {user?.profile_picture ? (
+              <img 
+                src={user.profile_picture} 
+                alt={user.full_name || 'User'} 
+                className="h-8 w-8 rounded-full object-cover border border-primary/20" 
+              />
+            ) : (
+              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold border border-primary/20">
+                {user?.full_name?.charAt(0).toUpperCase() || 'U'}
+              </div>
+            )}
             <div className="hidden md:flex flex-col items-start text-sm">
               <span className="font-medium text-slate-700 leading-none">{user?.full_name}</span>
               <span className="text-xs text-slate-500 mt-1 capitalize">{user?.role || 'Patient'}</span>
@@ -61,8 +69,22 @@ export function Topbar() {
                 onClick={() => setIsDropdownOpen(false)}
               ></div>
               <div className="absolute right-0 mt-2 w-48 rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 z-20">
-                <div className="px-4 py-2 border-b">
-                  <p className="text-sm font-medium text-slate-900 truncate">{user?.email}</p>
+                <div className="px-4 py-2.5 border-b flex items-center gap-2">
+                  {user?.profile_picture ? (
+                    <img 
+                      src={user.profile_picture} 
+                      alt={user.full_name || 'User'} 
+                      className="h-8 w-8 rounded-full object-cover flex-shrink-0" 
+                    />
+                  ) : (
+                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs flex-shrink-0">
+                      {user?.full_name?.charAt(0).toUpperCase() || 'U'}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-slate-800 truncate leading-tight">{user?.full_name}</p>
+                    <p className="text-[10px] text-slate-500 truncate leading-normal mt-0.5">{user?.email}</p>
+                  </div>
                 </div>
                 <Link 
                   href="/dashboard/settings/profile"

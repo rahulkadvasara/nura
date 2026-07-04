@@ -788,6 +788,9 @@ def get_ai_service(
     groq_service = Depends(get_groq_service)
 ) -> AIService:
     """Get AIService instance"""
+    from fastapi.params import Depends as DependsType
+    if isinstance(groq_service, DependsType):
+        groq_service = None
     from app.services.ai_service import get_ai_service as get_ai_service_impl
     return get_ai_service_impl(groq_service)
 

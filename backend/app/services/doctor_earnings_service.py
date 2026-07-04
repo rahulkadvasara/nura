@@ -65,8 +65,15 @@ class DoctorEarningsService:
         # 2. Build payment base query for statistics
         query = {
             "doctor_id": doctor_user_id,
-            "payment_status": {"$in": [PaymentStatus.APPROVED.value, PaymentStatus.COMPLETED.value]}
+            "payment_status": {"$in": [
+                PaymentStatus.SUCCESS.value,
+                PaymentStatus.APPROVED.value,
+                PaymentStatus.COMPLETED.value,
+                PaymentStatus.HELD.value,
+                "paid"
+            ]}
         }
+
 
         if start_date or end_date:
             date_query = {}
@@ -249,9 +256,10 @@ class DoctorEarningsService:
 
             consultation_id = None
             if p.appointment_id:
-                consultation_doc = await self.payment_repository.db["consultations"].find_one({"appointment_id": p.appointment_id})
+                consultation_doc = await self.payment_repository.collection.database["consultations"].find_one({"appointment_id": p.appointment_id})
                 if consultation_doc:
                     consultation_id = str(consultation_doc["_id"])
+
 
             payment_date = p.verified_at if p.verified_at else p.created_at
 

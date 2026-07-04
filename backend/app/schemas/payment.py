@@ -254,5 +254,10 @@ class AdminRevenueSummaryResponse(BaseModel):
     total_transactions: int = Field(..., description="Count of total transaction orders")
     monthly_revenue: List[MonthlyRevenueItem] = Field(default_factory=list, description="Aggregated monthly totals")
     daily_revenue: List[DailyRevenueItem] = Field(default_factory=list, description="Aggregated daily totals")
+    pending_payouts: float = Field(default=0.0, description="Sum of doctor share pending clearance")
+    refunded_payments: int = Field(default=0, description="Count of refunded transactions")
+    refunded_revenue: float = Field(default=0.0, description="Sum of refunded payment amounts")
+    failed_revenue: float = Field(default=0.0, description="Sum of failed payment amounts")
+
 
 

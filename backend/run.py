@@ -8,11 +8,24 @@ import os
 import sys
 import subprocess
 import logging
+import warnings
 from pathlib import Path
+
+# Suppress deprecation and third-party warnings to keep startup log output clean
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # Add the backend directory to Python path
 backend_dir = Path(__file__).parent
 sys.path.insert(0, str(backend_dir))
+
+# Reconfigure stdout/stderr to UTF-8 on Windows to avoid UnicodeEncodeError crashes when printing emojis
+if sys.platform == 'win32':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except (AttributeError, Exception):
+        pass
 
 # Configure basic logging
 logging.basicConfig(

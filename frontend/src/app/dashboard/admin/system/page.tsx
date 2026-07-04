@@ -110,29 +110,29 @@ function AdminSystemContent() {
       case 'healthy':
       case 'active':
         return (
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
-            <CheckCircle className="h-3.5 w-3.5" />
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 flex-shrink-0">
+            <CheckCircle className="h-3 w-3 flex-shrink-0" />
             Healthy
           </span>
         )
       case 'degraded':
         return (
-          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
-            <AlertTriangle className="h-3.5 w-3.5" />
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 flex-shrink-0">
+            <AlertTriangle className="h-3 w-3 flex-shrink-0" />
             Degraded
           </span>
         )
       case 'offline':
         return (
-          <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-950/30 dark:text-rose-400">
-            <AlertCircle className="h-3.5 w-3.5" />
+          <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-950/30 dark:text-rose-400 flex-shrink-0">
+            <AlertCircle className="h-3 w-3 flex-shrink-0" />
             Offline
           </span>
         )
       default:
         return (
-          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-400">
-            <Clock className="h-3.5 w-3.5" />
+          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-400 flex-shrink-0">
+            <Clock className="h-3 w-3 flex-shrink-0" />
             {status}
           </span>
         )
@@ -357,9 +357,9 @@ function AdminSystemContent() {
                 className="border border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-shadow"
               >
                 <CardContent className="pt-6 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-slate-900 dark:text-white text-sm">{svc.name}</span>
-                    {getStatusBadge(svc.status)}
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 min-w-0">
+                    <span className="font-semibold text-slate-900 dark:text-white text-sm truncate min-w-0 flex-1">{svc.name}</span>
+                    <div className="flex-shrink-0">{getStatusBadge(svc.status)}</div>
                   </div>
                   <div className="space-y-1">
                     <div className="text-xs text-slate-500">Latency</div>

@@ -87,7 +87,12 @@ export interface AdminRevenueSummaryResponse {
   total_transactions: number
   monthly_revenue: MonthlyRevenueItem[]
   daily_revenue: DailyRevenueItem[]
+  pending_payouts: number
+  refunded_payments: number
+  refunded_revenue: number
+  failed_revenue: number
 }
+
 
 export interface AdminPaymentDetail {
   payment_id: string

@@ -227,6 +227,9 @@ async def login(
             "user": {
                 "id": token_response.user.id,
                 "role": token_response.user.role.value,
+                "email": token_response.user.email,
+                "full_name": token_response.user.full_name,
+                "email_verified": token_response.user.email_verified,
             }
         }
     )
@@ -616,6 +619,9 @@ async def google_login(
             "user": {
                 "id": token_response.user.id,
                 "role": token_response.user.role.value,
+                "email": token_response.user.email,
+                "full_name": token_response.user.full_name,
+                "email_verified": token_response.user.email_verified,
             }
         }
     )

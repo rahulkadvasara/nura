@@ -31,9 +31,9 @@ class MongoDBConnection:
                 "maxPoolSize": 50,
                 "minPoolSize": 10,
                 "maxIdleTimeMS": 30000,
-                "serverSelectionTimeoutMS": 8000,
-                "connectTimeoutMS": 8000,
-                "socketTimeoutMS": 8000,
+                "serverSelectionTimeoutMS": 20000,
+                "connectTimeoutMS": 20000,
+                "socketTimeoutMS": 20000,
             }
             
             # Try different connection strategies for MongoDB Atlas

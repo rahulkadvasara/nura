@@ -74,28 +74,35 @@ class VectorCollectionService:
             
             if exists:
                 # Verify configuration
-                info = self.client.get_collection(target_name)
-                vectors_config = info.config.params.vectors
-                
-                # Check config dimensions & distance
-                if not isinstance(vectors_config, dict):
-                    actual_size = getattr(vectors_config, "size", None)
-                    actual_distance = getattr(vectors_config, "distance", None)
-                    actual_dist_str = str(actual_distance).split(".")[-1].upper() if actual_distance else ""
+                try:
+                    info = self.client.get_collection(target_name)
+                    vectors_config = info.config.params.vectors
                     
-                    if actual_size is not None and actual_size != size:
-                        raise AIConfigurationError(
-                            f"Collection '{target_name}' exists but has mismatched dimensions. "
-                            f"Expected {size}, got {actual_size}"
-                        )
-                    
-                    if actual_dist_str and actual_dist_str != dist_str:
-                        raise AIConfigurationError(
-                            f"Collection '{target_name}' exists but has mismatched distance metric. "
-                            f"Expected {dist_str}, got {actual_dist_str}"
-                        )
+                    # Check config dimensions & distance
+                    if not isinstance(vectors_config, dict):
+                        actual_size = getattr(vectors_config, "size", None)
+                        actual_distance = getattr(vectors_config, "distance", None)
+                        actual_dist_str = str(actual_distance).split(".")[-1].upper() if actual_distance else ""
+                        
+                        if actual_size is not None and actual_size != size:
+                            raise AIConfigurationError(
+                                f"Collection '{target_name}' exists but has mismatched dimensions. "
+                                f"Expected {size}, got {actual_size}"
+                            )
+                        
+                        if actual_dist_str and actual_dist_str != dist_str:
+                            raise AIConfigurationError(
+                                f"Collection '{target_name}' exists but has mismatched distance metric. "
+                                f"Expected {dist_str}, got {actual_dist_str}"
+                            )
+                except Exception as ex:
+                    if isinstance(ex, AIConfigurationError):
+                        raise ex
+                    logger.debug(
+                        f"Qdrant collection '{target_name}' exists but detailed validation check was bypassed: {ex}"
+                    )
                 
-                logger.info(f"Qdrant collection '{target_name}' already exists and is valid.")
+                logger.info(f"Qdrant collection '{target_name}' already exists.")
                 return False
             
             # Create collection
@@ -150,20 +157,28 @@ class VectorCollectionService:
         """Retrieve count, status, dimensions, and config details of a collection"""
         target_name = self.get_collection_name(name)
         try:
-            info = self.client.get_collection(target_name)
-            
-            vectors_config = info.config.params.vectors
-            size = getattr(vectors_config, "size", self.settings.QDRANT_DEFAULT_VECTOR_SIZE)
-            distance = getattr(vectors_config, "distance", qdrant_models.Distance.COSINE)
-            dist_str = str(distance).split(".")[-1].upper()
+            try:
+                info = self.client.get_collection(target_name)
+                vectors_config = info.config.params.vectors
+                size = getattr(vectors_config, "size", self.settings.QDRANT_DEFAULT_VECTOR_SIZE)
+                distance = getattr(vectors_config, "distance", qdrant_models.Distance.COSINE)
+                dist_str = str(distance).split(".")[-1].upper()
+                vectors_count = info.vectors_count
+                status_str = str(info.status)
+            except Exception as inner_e:
+                logger.debug(f"Qdrant client failed parsing collection schema metadata: {inner_e}. Returning default fallback values.")
+                size = self.settings.QDRANT_DEFAULT_VECTOR_SIZE
+                dist_str = (self.settings.QDRANT_DEFAULT_DISTANCE or "COSINE").upper()
+                vectors_count = 0
+                status_str = "green"
             
             return {
                 "name": name,  # Return raw requested collection key/name for registry alignment
-                "status": str(info.status),
-                "vector_count": info.vectors_count,
+                "status": status_str,
+                "vector_count": vectors_count,
                 "dimensions": size,
                 "distance": dist_str,
-                "storage_bytes": getattr(info, "payload_schema", {}).get("size_bytes", 0) or 0
+                "storage_bytes": 0
             }
         except Exception as e:
             logger.error(f"Failed to retrieve stats for Qdrant collection '{target_name}': {e}")

@@ -266,7 +266,7 @@ class PaymentService(BaseService[PaymentInDB, PaymentCreate, PaymentUpdate]):
                 doctor_data["full_name"] = doctor_user.full_name
                 doctor_data["email"] = doctor_user.email
                 
-                profile_doc = await self.payment_repository.db["doctor_profiles"].find_one({"user_id": p.doctor_id})
+                profile_doc = await self.payment_repository.collection.database["doctor_profiles"].find_one({"user_id": p.doctor_id})
                 if profile_doc:
                     doctor_data["specialization"] = profile_doc.get("specialization", "Specialist")
 
@@ -367,7 +367,7 @@ class PaymentService(BaseService[PaymentInDB, PaymentCreate, PaymentUpdate]):
             if doctor_user:
                 doctor_data["full_name"] = doctor_user.full_name
                 doctor_data["email"] = doctor_user.email
-                profile_doc = await self.payment_repository.db["doctor_profiles"].find_one({"user_id": p.doctor_id})
+                profile_doc = await self.payment_repository.collection.database["doctor_profiles"].find_one({"user_id": p.doctor_id})
                 if profile_doc:
                     doctor_data["specialization"] = profile_doc.get("specialization", "Specialist")
 
@@ -391,7 +391,7 @@ class PaymentService(BaseService[PaymentInDB, PaymentCreate, PaymentUpdate]):
 
     async def get_admin_payments_summary(self) -> Any:
         """Calculate global dashboard transaction numbers and daily/monthly aggregates"""
-        success_statuses = ["success", "paid", "completed", "approved"]
+        success_statuses = ["success", "paid", "completed", "approved", "held"]
         success_query = {"payment_status": {"$in": success_statuses}}
         
         cursor = self.payment_repository.collection.find(success_query)
@@ -404,9 +404,28 @@ class PaymentService(BaseService[PaymentInDB, PaymentCreate, PaymentUpdate]):
 
         failed_count = await self.payment_repository.collection.count_documents({"payment_status": "failed"})
         pending_count = await self.payment_repository.collection.count_documents({
-            "payment_status": {"$in": ["created", "pending", "held"]}
+            "payment_status": {"$in": ["created", "pending"]}
         })
         total_transactions = await self.payment_repository.collection.count_documents({})
+
+        # Compute refunded payments/revenue
+        refunded_query = {"payment_status": "refunded"}
+        refunded_payments_cursor = self.payment_repository.collection.find(refunded_query)
+        refunded_payments_list = [PaymentInDB.from_mongo(doc) for doc in await refunded_payments_cursor.to_list(length=100000)]
+        refunded_count = len(refunded_payments_list)
+        refunded_revenue = sum(p.amount for p in refunded_payments_list)
+
+        # Compute failed revenue
+        failed_query = {"payment_status": "failed"}
+        failed_payments_cursor = self.payment_repository.collection.find(failed_query)
+        failed_payments_list = [PaymentInDB.from_mongo(doc) for doc in await failed_payments_cursor.to_list(length=100000)]
+        failed_revenue = sum(p.amount for p in failed_payments_list)
+
+        # Compute pending payouts (created, pending, held payments)
+        pending_query = {"payment_status": {"$in": ["created", "pending", "held"]}}
+        pending_payments_cursor = self.payment_repository.collection.find(pending_query)
+        pending_payments_list = [PaymentInDB.from_mongo(doc) for doc in await pending_payments_cursor.to_list(length=100000)]
+        pending_payouts = sum(p.doctor_amount for p in pending_payments_list)
 
         average_fee = total_revenue / success_count if success_count > 0 else 0.0
 
@@ -462,7 +481,12 @@ class PaymentService(BaseService[PaymentInDB, PaymentCreate, PaymentUpdate]):
             total_transactions=total_transactions,
             monthly_revenue=monthly_revenue,
             daily_revenue=daily_revenue,
+            pending_payouts=round(pending_payouts, 2),
+            refunded_payments=refunded_count,
+            refunded_revenue=round(refunded_revenue, 2),
+            failed_revenue=round(failed_revenue, 2),
         )
+
 
     async def get_payment_detail_for_admin(self, payment_id: str, admin_user_id: str) -> Optional[Dict[str, Any]]:
         """Fetch details of a single payment for administrator view, and audit-log the access"""
@@ -481,7 +505,7 @@ class PaymentService(BaseService[PaymentInDB, PaymentCreate, PaymentUpdate]):
         if doctor_user:
             doctor_data["full_name"] = doctor_user.full_name
             doctor_data["email"] = doctor_user.email
-            profile_doc = await self.payment_repository.db["doctor_profiles"].find_one({"user_id": payment.doctor_id})
+            profile_doc = await self.payment_repository.collection.database["doctor_profiles"].find_one({"user_id": payment.doctor_id})
             if profile_doc:
                 doctor_data["specialization"] = profile_doc.get("specialization", "Specialist")
 

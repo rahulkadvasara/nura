@@ -271,6 +271,9 @@ class DrugAIExplanationResponse(BaseModel):
 
 class DrugAITelemetryResponse(BaseModel):
     """Response schema for Drug AI explanation telemetry metrics"""
+    model_config = {
+        "protected_namespaces": ()
+    }
     explanation_requests: int = Field(..., description="Total generation requests triggered")
     successful_generations: int = Field(..., description="Successful AI generations completed")
     fallback_executions: int = Field(..., description="Fallback generations completed due to exceptions")

@@ -49,24 +49,25 @@ export function ConversationalAIMonitorView() {
 
   // Health Status Helpers
   const renderStatusBadge = (statusVal?: string) => {
-    const status = statusVal?.toUpperCase() || 'UNKNOWN'
-    if (status === 'HEALTHY') {
+    const status = statusVal?.toUpperCase() || 'HEALTHY'
+    if (status === 'HEALTHY' || status === 'ACTIVE') {
       return (
-        <span className="flex items-center gap-1 text-[10px] font-bold bg-green-50 text-green-700 border border-green-150 px-2 py-0.5 rounded-full">
-          <CheckCircle className="h-3 w-3 fill-green-100" /> HEALTHY
+        <span className="flex items-center gap-1 text-[9px] font-bold bg-green-50 text-green-700 border border-green-150 px-1.5 py-0.5 rounded-full flex-shrink-0">
+          <CheckCircle className="h-2.5 w-2.5 fill-green-100 flex-shrink-0" /> HEALTHY
         </span>
       )
     }
     if (status === 'DEGRADED') {
       return (
-        <span className="flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-750 border border-amber-150 px-2 py-0.5 rounded-full">
-          <AlertTriangle className="h-3 w-3 fill-amber-100" /> DEGRADED
+        <span className="flex items-center gap-1 text-[9px] font-bold bg-amber-50 text-amber-750 border border-amber-150 px-1.5 py-0.5 rounded-full flex-shrink-0">
+          <AlertTriangle className="h-2.5 w-2.5 fill-amber-100 flex-shrink-0" /> DEGRADED
         </span>
       )
     }
+    const label = status === 'OFFLINE' ? 'OFFLINE' : 'UNHEALTHY'
     return (
-      <span className="flex items-center gap-1 text-[10px] font-bold bg-red-50 text-red-700 border border-red-155 px-2 py-0.5 rounded-full">
-        <XCircle className="h-3 w-3 fill-red-100" /> UNHEALTHY
+      <span className="flex items-center gap-1 text-[9px] font-bold bg-red-50 text-red-700 border border-red-155 px-1.5 py-0.5 rounded-full flex-shrink-0">
+        <XCircle className="h-2.5 w-2.5 fill-red-100 flex-shrink-0" /> {label}
       </span>
     )
   }
@@ -110,12 +111,14 @@ export function ConversationalAIMonitorView() {
                 { name: 'Retrieval Agent', status: healthDetails.retrieval_agent, icon: Layers },
                 { name: 'Multi-Agent Orchestrator', status: healthDetails.multi_agent_orchestrator, icon: Sparkles }
               ].map((item, idx) => (
-                <div key={idx} className="flex justify-between items-center bg-slate-50/50 p-2 rounded-lg border border-slate-100/50 hover:bg-slate-50 transition-all">
-                  <div className="flex items-center gap-2">
-                    <item.icon className="h-3.5 w-3.5 text-slate-500" />
-                    <span className="text-[11px] font-bold text-slate-700">{item.name}</span>
+                <div key={idx} className="flex flex-wrap items-center justify-between gap-1.5 bg-slate-50/50 p-2 rounded-lg border border-slate-100/50 hover:bg-slate-50 transition-all min-w-0">
+                  <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-1">
+                    <item.icon className="h-3.5 w-3.5 text-slate-500 flex-shrink-0" />
+                    <span className="text-[11px] font-bold text-slate-700 truncate min-w-0">{item.name}</span>
                   </div>
-                  {renderStatusBadge(item.status || 'HEALTHY')}
+                  <div className="flex-shrink-0">
+                    {renderStatusBadge(item.status || 'HEALTHY')}
+                  </div>
                 </div>
               ))}
             </div>

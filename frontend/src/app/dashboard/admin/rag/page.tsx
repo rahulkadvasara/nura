@@ -712,20 +712,22 @@ function AdminRagDashboardContent() {
             {/* Groq Health Card */}
             <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-sm overflow-hidden">
               <CardHeader className="bg-slate-50/50 dark:bg-slate-900/25 border-b border-slate-100 dark:border-slate-900 pb-4">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <Zap className="h-5 w-5 text-amber-500" />
-                    <CardTitle className="text-base font-bold text-slate-900 dark:text-white">Groq API Server</CardTitle>
+                <div className="flex flex-wrap items-center justify-between gap-1.5 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <Zap className="h-5 w-5 text-amber-500 flex-shrink-0" />
+                    <CardTitle className="text-base font-bold text-slate-900 dark:text-white truncate min-w-0">Groq API Server</CardTitle>
                   </div>
-                  {loadingHealth ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
-                  ) : health?.groq?.status === 'healthy' || health?.groq?.reachable ? (
-                    <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-250 dark:border-emerald-900">
-                      Healthy
-                    </Badge>
-                  ) : (
-                    <Badge variant="destructive">Degraded / Open Breaker</Badge>
-                  )}
+                  <div className="flex-shrink-0">
+                    {loadingHealth ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                    ) : health?.groq?.status === 'healthy' || health?.groq?.reachable ? (
+                      <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-250 dark:border-emerald-900 text-[10px] px-1.5 py-0.5">
+                        Healthy
+                      </Badge>
+                    ) : (
+                      <Badge variant="destructive" className="text-[10px] px-1.5 py-0.5">Degraded / Open Breaker</Badge>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="pt-4 space-y-2 text-sm text-slate-650 dark:text-slate-350">
@@ -749,20 +751,22 @@ function AdminRagDashboardContent() {
             {/* Embedding Health Card */}
             <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-sm overflow-hidden">
               <CardHeader className="bg-slate-50/50 dark:bg-slate-900/25 border-b border-slate-100 dark:border-slate-900 pb-4">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <Sliders className="h-5 w-5 text-teal-500" />
-                    <CardTitle className="text-base font-bold text-slate-900 dark:text-white">Embedding Service</CardTitle>
+                <div className="flex flex-wrap items-center justify-between gap-1.5 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <Sliders className="h-5 w-5 text-teal-500 flex-shrink-0" />
+                    <CardTitle className="text-base font-bold text-slate-900 dark:text-white truncate min-w-0">Embedding Service</CardTitle>
                   </div>
-                  {loadingHealth ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
-                  ) : health?.embedding?.status === 'healthy' ? (
-                    <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-250 dark:border-emerald-900">
-                      Healthy
-                    </Badge>
-                  ) : (
-                    <Badge variant="destructive">Degraded / Open Breaker</Badge>
-                  )}
+                  <div className="flex-shrink-0">
+                    {loadingHealth ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                    ) : health?.embedding?.status === 'healthy' ? (
+                      <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-250 dark:border-emerald-900 text-[10px] px-1.5 py-0.5">
+                        Healthy
+                      </Badge>
+                    ) : (
+                      <Badge variant="destructive" className="text-[10px] px-1.5 py-0.5">Degraded / Open Breaker</Badge>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="pt-4 space-y-2 text-sm text-slate-655 dark:text-slate-350">
@@ -788,20 +792,22 @@ function AdminRagDashboardContent() {
             {/* Qdrant Health Card */}
             <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-sm overflow-hidden">
               <CardHeader className="bg-slate-50/50 dark:bg-slate-900/25 border-b border-slate-100 dark:border-slate-900 pb-4">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <Database className="h-5 w-5 text-teal-600" />
-                    <CardTitle className="text-base font-bold text-slate-900 dark:text-white">Qdrant Vector DB</CardTitle>
+                <div className="flex flex-wrap items-center justify-between gap-1.5 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <Database className="h-5 w-5 text-teal-650 flex-shrink-0" />
+                    <CardTitle className="text-base font-bold text-slate-900 dark:text-white truncate min-w-0">Qdrant Vector DB</CardTitle>
                   </div>
-                  {loadingHealth ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
-                  ) : health?.qdrant?.status === 'healthy' ? (
-                    <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-250 dark:border-emerald-900">
-                      Healthy
-                    </Badge>
-                  ) : (
-                    <Badge variant="destructive">Degraded / Open Breaker</Badge>
-                  )}
+                  <div className="flex-shrink-0">
+                    {loadingHealth ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                    ) : health?.qdrant?.status === 'healthy' ? (
+                      <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-250 dark:border-emerald-900 text-[10px] px-1.5 py-0.5">
+                        Healthy
+                      </Badge>
+                    ) : (
+                      <Badge variant="destructive" className="text-[10px] px-1.5 py-0.5">Degraded / Open Breaker</Badge>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="pt-4 space-y-2 text-sm text-slate-655 dark:text-slate-350">

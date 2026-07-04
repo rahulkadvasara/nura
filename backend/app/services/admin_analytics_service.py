@@ -98,7 +98,7 @@ class AdminAnalyticsService:
         appointments_last_30_days = self._fill_missing_dates(daily_appts_30, start_30_days, 30)
 
         # 4. Revenue Metrics (payments with completed, approved, or held status)
-        payment_filter = {"payment_status": {"$in": ["completed", "approved", "held"]}}
+        payment_filter = {"payment_status": {"$in": ["success", "paid", "completed", "approved", "held"]}}
         pipeline_rev = [
             {"$match": payment_filter},
             {"$group": {
@@ -203,7 +203,7 @@ class AdminAnalyticsService:
         start_date: datetime,
         date_field: str = "created_at"
     ) -> Dict[str, float]:
-        payment_filter = {"payment_status": {"$in": ["completed", "approved", "held"]}}
+        payment_filter = {"payment_status": {"$in": ["success", "paid", "completed", "approved", "held"]}}
         pipeline = [
             {"$match": {
                 date_field: {"$gte": start_date},

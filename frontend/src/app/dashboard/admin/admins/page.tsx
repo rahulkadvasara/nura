@@ -296,9 +296,17 @@ function AdminManagementContent() {
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-full bg-teal-50 text-teal-600 font-bold flex items-center justify-center text-sm shadow-inner">
-                            {admin.full_name.charAt(0).toUpperCase()}
-                          </div>
+                          {admin.profile_picture ? (
+                            <img 
+                              src={admin.profile_picture} 
+                              alt={admin.full_name} 
+                              className="h-10 w-10 rounded-full object-cover shadow-inner border border-slate-100" 
+                            />
+                          ) : (
+                            <div className="h-10 w-10 rounded-full bg-teal-50 text-teal-600 font-bold flex items-center justify-center text-sm shadow-inner">
+                              {admin.full_name.charAt(0).toUpperCase()}
+                            </div>
+                          )}
                           <div>
                             <div className="text-sm font-semibold text-slate-800 group-hover:text-teal-600 transition-colors">
                               {admin.full_name}
@@ -401,69 +409,82 @@ function AdminManagementContent() {
             </div>
           ) : (
             <div className="space-y-6 py-4">
-              {/* Profile details grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-slate-50 p-5 rounded-xl border border-slate-100 shadow-inner">
-                <div className="space-y-3">
-                  <div>
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Full Name</span>
-                    <span className="text-base font-bold text-slate-800 flex items-center gap-1.5 mt-0.5">
-                      <User className="h-4 w-4 text-slate-400" />
-                      {adminDetail.profile.full_name}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Email Address</span>
-                    <span className="text-base font-semibold text-slate-800 flex items-center gap-1.5 mt-0.5">
-                      <Mail className="h-4 w-4 text-slate-400" />
-                      {adminDetail.profile.email}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Authorization Provider</span>
-                    <span className="text-sm font-semibold text-slate-700 capitalize mt-0.5 inline-block">
-                      {adminDetail.profile.auth_provider}
-                    </span>
-                  </div>
+              {/* Profile details layout */}
+              <div className="flex flex-col sm:flex-row gap-6 bg-slate-50 p-5 rounded-xl border border-slate-100 shadow-inner items-center sm:items-start">
+                <div className="h-20 w-20 rounded-full overflow-hidden bg-teal-50 border-2 border-white text-teal-650 font-bold flex items-center justify-center text-2xl shadow-md flex-shrink-0">
+                  {adminDetail.profile.profile_picture ? (
+                    <img 
+                      src={adminDetail.profile.profile_picture} 
+                      alt={adminDetail.profile.full_name} 
+                      className="h-full w-full object-cover" 
+                    />
+                  ) : (
+                    adminDetail.profile.full_name.charAt(0).toUpperCase()
+                  )}
                 </div>
-                <div className="space-y-3">
-                  <div>
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Account Status</span>
-                    <div className="mt-1 flex items-center gap-2">
-                      {adminDetail.profile.is_active ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          Active
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200">
-                          Disabled
-                        </span>
-                      )}
-                      {adminDetail.profile.email_verified ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                          Verified
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-yellow-50 text-yellow-700 border border-yellow-200">
-                          Unverified
-                        </span>
-                      )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 flex-1 w-full">
+                  <div className="space-y-3">
+                    <div>
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Full Name</span>
+                      <span className="text-base font-bold text-slate-800 flex items-center gap-1.5 mt-0.5">
+                        <User className="h-4 w-4 text-slate-400" />
+                        {adminDetail.profile.full_name}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Email Address</span>
+                      <span className="text-base font-semibold text-slate-800 flex items-center gap-1.5 mt-0.5">
+                        <Mail className="h-4 w-4 text-slate-400" />
+                        {adminDetail.profile.email}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Authorization Provider</span>
+                      <span className="text-sm font-semibold text-slate-700 capitalize mt-0.5 inline-block">
+                        {adminDetail.profile.auth_provider}
+                      </span>
                     </div>
                   </div>
-                  <div>
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Date Registered</span>
-                    <span className="text-sm font-semibold text-slate-700 flex items-center gap-1.5 mt-0.5">
-                      <Calendar className="h-4 w-4 text-slate-400" />
-                      {new Date(adminDetail.profile.created_at).toLocaleString()}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Last Active</span>
-                    <span className="text-sm font-semibold text-slate-700 flex items-center gap-1.5 mt-0.5">
-                      <Clock className="h-4 w-4 text-slate-400" />
-                      {adminDetail.profile.last_login_at
-                        ? new Date(adminDetail.profile.last_login_at).toLocaleString()
-                        : 'Never'}
-                    </span>
+                  <div className="space-y-3">
+                    <div>
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Account Status</span>
+                      <div className="mt-1 flex items-center gap-2">
+                        {adminDetail.profile.is_active ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Active
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200">
+                            Disabled
+                          </span>
+                        )}
+                        {adminDetail.profile.email_verified ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                            Verified
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-yellow-50 text-yellow-700 border border-yellow-200">
+                            Unverified
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Date Registered</span>
+                      <span className="text-sm font-semibold text-slate-700 flex items-center gap-1.5 mt-0.5">
+                        <Calendar className="h-4 w-4 text-slate-400" />
+                        {new Date(adminDetail.profile.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Last Active</span>
+                      <span className="text-sm font-semibold text-slate-700 flex items-center gap-1.5 mt-0.5">
+                        <Clock className="h-4 w-4 text-slate-400" />
+                        {adminDetail.profile.last_login_at
+                          ? new Date(adminDetail.profile.last_login_at).toLocaleString()
+                          : 'Never'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>

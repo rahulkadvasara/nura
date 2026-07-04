@@ -37,7 +37,7 @@ function AdminAnalyticsContent() {
   const [loading, setLoading] = useState(true)
   const [userPeriod, setUserPeriod] = useState<'7d' | '30d'>('7d')
   const [appointmentPeriod, setAppointmentPeriod] = useState<'7d' | '30d'>('7d')
-  const [revenuePeriod, setRevenuePeriod] = useState<'7d' | '30d'>('7d')
+
 
   const fetchAnalytics = async () => {
     try {
@@ -287,107 +287,58 @@ function AdminAnalyticsContent() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 gap-8">
         {/* Doctor Analytics */}
         <Card className="border-slate-200 shadow-sm">
           <CardHeader className="border-b pb-4">
             <CardTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <Award className="h-5 w-5 text-blue-600" />
-              Doctor Analytics
+              Doctor Onboarding & Verification Analytics
             </CardTitle>
-            <CardDescription className="text-xs">Professional metrics & onboarding</CardDescription>
+            <CardDescription className="text-xs">Professional profile registration and credential vetting status</CardDescription>
           </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <div className="space-y-3">
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-slate-500 font-medium">Verified Profile</span>
-                <span className="font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+          <CardContent className="p-6 space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <span className="text-slate-505 font-medium text-xs uppercase tracking-wider text-slate-400">Verified Profile</span>
+                <span className="font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded border border-emerald-100">
                   {data.doctors.verified_doctors}
                 </span>
               </div>
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-slate-500 font-medium">Pending Review</span>
-                <span className="font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-100">
+              <div className="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <span className="text-slate-505 font-medium text-xs uppercase tracking-wider text-slate-400">Pending Review</span>
+                <span className="font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded border border-amber-100">
                   {data.doctors.pending_doctors}
                 </span>
               </div>
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-slate-500 font-medium">Rejected Application</span>
-                <span className="font-semibold text-slate-600 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
+              <div className="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <span className="text-slate-505 font-medium text-xs uppercase tracking-wider text-slate-400">Rejected Application</span>
+                <span className="font-bold text-slate-600 bg-slate-50 px-3 py-1 rounded border border-slate-200">
                   {data.doctors.rejected_doctors}
                 </span>
               </div>
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-slate-500 font-medium">Suspended Practitioner</span>
-                <span className="font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-100 animate-pulse">
+              <div className="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <span className="text-slate-550 font-medium text-xs uppercase tracking-wider text-slate-400">Suspended</span>
+                <span className="font-bold text-rose-600 bg-rose-50 px-3 py-1 rounded border border-rose-100 animate-pulse">
                   {data.doctors.suspended_doctors}
                 </span>
               </div>
             </div>
 
-            <div className="border-t pt-4 space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Doctors with Availability:</span>
+            <div className="border-t pt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div className="flex justify-between items-center p-3 rounded-lg border border-slate-100 bg-slate-50/50">
+                <span className="text-slate-500 font-medium">Doctors with Availability:</span>
                 <span className="font-bold text-slate-800">{data.doctors.doctors_with_availability}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Active Doctor Accounts:</span>
+              <div className="flex justify-between items-center p-3 rounded-lg border border-slate-100 bg-slate-50/50">
+                <span className="text-slate-500 font-medium">Active Doctor Accounts:</span>
                 <span className="font-bold text-slate-800">{data.doctors.active_doctors}</span>
               </div>
             </div>
           </CardContent>
         </Card>
-
-        {/* Revenue splits */}
-        <Card className="border-slate-200 shadow-sm lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between border-b pb-4 flex-wrap gap-2">
-            <div>
-              <CardTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <IndianRupee className="h-5 w-5 text-emerald-600" />
-                Revenue Analytics
-              </CardTitle>
-              <CardDescription className="text-xs">Cleansed platform and provider share trends</CardDescription>
-            </div>
-            <div className="flex gap-1 bg-slate-100 p-0.5 rounded-md">
-              <button
-                onClick={() => setRevenuePeriod('7d')}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                  revenuePeriod === '7d' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                7 Days
-              </button>
-              <button
-                onClick={() => setRevenuePeriod('30d')}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                  revenuePeriod === '30d' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                30 Days
-              </button>
-            </div>
-          </CardHeader>
-          <CardContent className="p-6 space-y-6">
-            {/* SVG Line Chart */}
-            <div className="h-60 w-full bg-slate-50/50 rounded-xl p-2 border border-slate-100">
-              <RevenueTrendsChart
-                dataList={revenuePeriod === '7d' ? data.revenue.revenue_last_7_days : data.revenue.revenue_last_30_days}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                <p className="text-xs font-bold text-slate-400 uppercase">Doctor Earnings (85%)</p>
-                <p className="text-2xl font-black text-slate-850 mt-1">{formatINR(data.revenue.doctor_earnings)}</p>
-              </div>
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                <p className="text-xs font-bold text-slate-400 uppercase">Platform Revenue (15%)</p>
-                <p className="text-2xl font-black text-teal-700 mt-1">{formatINR(data.revenue.platform_revenue)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
+
 
       {/* Healthcare Activity */}
       <Card className="border-slate-200 shadow-sm">
@@ -618,86 +569,7 @@ function AppointmentTrendsChart({ dataList }: { dataList: DailyGrowthItem[] }) {
   )
 }
 
-/* ---------------------------------------------------------------------------
- * SVG Line Chart Component - Revenue Trends
- * ------------------------------------------------------------------------- */
-function RevenueTrendsChart({ dataList }: { dataList: DailyRevenueItem[] }) {
-  if (!dataList || dataList.length === 0) return <EmptyChart />
 
-  const values = dataList.map((d) => d.amount)
-  const maxVal = Math.max(...values, 1000)
-  const minVal = 0
-  const range = maxVal - minVal
-
-  const width = 500
-  const height = 200
-  const padLeft = 45
-  const padRight = 10
-  const padTop = 15
-  const padBottom = 25
-
-  const getX = (idx: number) => padLeft + (idx / (dataList.length - 1)) * (width - padLeft - padRight)
-  const getY = (val: number) => padTop + (1 - (val - minVal) / range) * (height - padTop - padBottom)
-
-  // Construct Paths
-  const linePoints = dataList.map((d, idx) => `${getX(idx)},${getY(d.amount)}`).join(' L ')
-  const linePath = `M ${linePoints}`
-  const areaPath = `${linePath} L ${getX(dataList.length - 1)},${getY(minVal)} L ${getX(0)},${getY(minVal)} Z`
-
-  return (
-    <svg className="w-full h-full" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-      <defs>
-        <linearGradient id="revLineGrad" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#10b981" />
-          <stop offset="100%" stopColor="#059669" />
-        </linearGradient>
-        <linearGradient id="revAreaGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#10b981" stopOpacity="0.2" />
-          <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
-        </linearGradient>
-      </defs>
-
-      {/* Grid lines */}
-      <line x1={padLeft} y1={height - padBottom} x2={width - padRight} y2={height - padBottom} stroke="#e2e8f0" strokeWidth="1" />
-      <line x1={padLeft} y1={padTop} x2={width - padRight} y2={padTop} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="4" />
-
-      {/* Area & Line */}
-      <path d={areaPath} fill="url(#revAreaGrad)" />
-      <path d={linePath} fill="none" stroke="url(#revLineGrad)" strokeWidth="3" strokeLinecap="round" />
-
-      {/* Nodes */}
-      {dataList.map((d, idx) => (
-        <g key={idx} className="group cursor-pointer">
-          <circle
-            cx={getX(idx)}
-            cy={getY(d.amount)}
-            r="3.5"
-            fill="#ffffff"
-            stroke="#10b981"
-            strokeWidth="2"
-          />
-          <title>{`${d.date}: ₹${d.amount}`}</title>
-        </g>
-      ))}
-
-      {/* Y Axis text */}
-      <text x={padLeft - 8} y={padTop + 4} textAnchor="end" className="text-[9px] font-bold fill-slate-400">
-        {Math.round(maxVal)}
-      </text>
-      <text x={padLeft - 8} y={height - padBottom} textAnchor="end" className="text-[9px] font-bold fill-slate-400">
-        0
-      </text>
-
-      {/* X Axis Date labels */}
-      <text x={getX(0)} y={height - 6} textAnchor="start" className="text-[9px] font-medium fill-slate-400">
-        {dataList[0]?.date.split('-').slice(1).join('/')}
-      </text>
-      <text x={getX(dataList.length - 1)} y={height - 6} textAnchor="end" className="text-[9px] font-medium fill-slate-400">
-        {dataList[dataList.length - 1]?.date.split('-').slice(1).join('/')}
-      </text>
-    </svg>
-  )
-}
 
 /* ---------------------------------------------------------------------------
  * Empty Fallback Chart Component

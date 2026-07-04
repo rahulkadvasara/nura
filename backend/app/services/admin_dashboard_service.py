@@ -61,24 +61,28 @@ class AdminDashboardService:
         # 5. Total appointments
         total_appointments_count = await self.appointment_repository.collection.count_documents({})
 
-        # 6. Total revenue (sum of all payment amounts using aggregation pipeline)
+        # 6. Total revenue (sum of successful payment amounts using aggregation pipeline)
+        success_query = {"payment_status": {"$in": ["success", "paid", "completed", "approved", "held"]}}
         pipeline = [
+            {"$match": success_query},
             {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
         ]
         cursor = self.payment_repository.collection.aggregate(pipeline)
         results = await cursor.to_list(length=1)
         total_revenue = float(results[0]["total"]) if results else 0.0
-
+ 
         # 7. Active consultations (total consultation records)
         active_consultations_count = await self.consultation_repository.collection.count_documents({})
-
-        # 8. Platform earnings (sum of platform fee splits)
+ 
+        # 8. Platform earnings (sum of platform fee splits for successful payments)
         pipeline_earnings = [
+            {"$match": success_query},
             {"$group": {"_id": None, "total": {"$sum": "$platform_fee"}}}
         ]
         cursor_earnings = self.payment_repository.collection.aggregate(pipeline_earnings)
         results_earnings = await cursor_earnings.to_list(length=1)
         platform_earnings = float(results_earnings[0]["total"]) if results_earnings else 0.0
+
 
         # 9. Reports count
         reports_count = await self.report_repository.collection.count_documents({})
