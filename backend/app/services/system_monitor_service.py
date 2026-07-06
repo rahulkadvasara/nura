@@ -170,82 +170,58 @@ class SystemMonitorService:
                     )
                 )
 
-        # 5. Supabase Storage Status
-        supabase_start = time.time()
-        if not settings.SUPABASE_URL:
+        # 5. Storage Subsystem Status
+        storage_start = time.time()
+        provider_type = settings.STORAGE_PROVIDER.lower().strip()
+        
+        try:
+            from app.services.storage.storage_factory import get_storage_provider
+            storage_service = get_storage_provider()
+            
+            import io
+            test_data = b"health_check_ping"
+            
+            if storage_service is None:
+                raise ValueError("Storage provider not initialized")
+            
+            # Verify bucket exists/permissions by attempting upload, exists, and delete
+            test_res = await storage_service.upload_file(
+                file=io.BytesIO(test_data),
+                filename="health_ping_test.txt",
+                bucket="avatars",
+                content_type="text/plain"
+            )
+            
+            exists = await storage_service.exists(bucket="avatars", object_key="health_ping_test.txt")
+            if not exists:
+                raise ValueError("Uploaded test file not detected in storage")
+                
+            deleted = await storage_service.delete_file(bucket="avatars", object_key="health_ping_test.txt")
+            if not deleted:
+                raise ValueError("Uploaded test file could not be deleted from storage")
+                
+            storage_latency = int((time.time() - storage_start) * 1000)
             results.append(
                 ServiceHealth(
-                    name="Supabase Storage",
-                    status="offline",
-                    latency_ms=0,
-                    message="Supabase URL not configured",
+                    name="Storage",
+                    status="healthy",
+                    latency_ms=storage_latency,
+                    message=f"Provider: {provider_type.upper()} | Connection/Permissions verified",
                     last_checked=now,
                 )
             )
-        else:
-            try:
-                # Sanitize URL by removing rest subpath and trailing slashes
-                base_url = settings.SUPABASE_URL
-                if "/rest/v1" in base_url:
-                    base_url = base_url.split("/rest/v1")[0]
-                base_url = base_url.rstrip("/")
-
-                async with httpx.AsyncClient() as client:
-                    # Attempt health endpoint ping first
-                    health_url = f"{base_url}/storage/v1/health"
-                    try:
-                        response = await client.get(health_url, timeout=2.0)
-                        supabase_latency = int((time.time() - supabase_start) * 1000)
-                        if response.status_code == 200:
-                            results.append(
-                                ServiceHealth(
-                                    name="Supabase Storage",
-                                    status="healthy",
-                                    latency_ms=supabase_latency,
-                                    message="Connected successfully",
-                                    last_checked=now,
-                                )
-                            )
-                            return results
-                    except Exception:
-                        pass
-
-                    # Fallback check targeting buckets API endpoint
-                    bucket_url = f"{base_url}/storage/v1/bucket"
-                    headers = {"Authorization": f"Bearer {settings.SUPABASE_ANON_KEY or settings.SUPABASE_SERVICE_ROLE_KEY}"}
-                    response = await client.get(bucket_url, headers=headers, timeout=2.0)
-                    supabase_latency = int((time.time() - supabase_start) * 1000)
-                    if response.status_code in (200, 401, 403):
-                        results.append(
-                            ServiceHealth(
-                                name="Supabase Storage",
-                                status="healthy",
-                                latency_ms=supabase_latency,
-                                message="Connected successfully",
-                                last_checked=now,
-                            )
-                        )
-                    else:
-                        results.append(
-                            ServiceHealth(
-                                name="Supabase Storage",
-                                status="degraded",
-                                latency_ms=supabase_latency,
-                                message=f"Service returned status {response.status_code}",
-                                last_checked=now,
-                            )
-                        )
-            except Exception as e:
-                supabase_latency = int((time.time() - supabase_start) * 1000)
-                results.append(
-                    ServiceHealth(
-                        name="Supabase Storage",
-                        status="offline",
-                        latency_ms=supabase_latency,
-                        message=str(e),
-                        last_checked=now,
-                    )
+        except Exception as e:
+            storage_latency = int((time.time() - storage_start) * 1000)
+            status = "offline" if provider_type == "supabase" else "degraded"
+            results.append(
+                ServiceHealth(
+                    name="Storage",
+                    status=status,
+                    latency_ms=storage_latency,
+                    message=f"Provider: {provider_type.upper()} | Diagnostics failed: {str(e)}",
+                    last_checked=now,
                 )
+            )
 
         return results
 

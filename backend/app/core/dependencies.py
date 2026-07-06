@@ -291,6 +291,12 @@ def get_user_service() -> UserService:
     return UserService(user_repository)
 
 
+def get_storage_service():
+    """Get StorageProvider instance"""
+    from app.services.storage.storage_factory import get_storage_provider
+    return get_storage_provider()
+
+
 def get_auth_service() -> AuthService:
     """Get AuthService instance"""
     user_service = get_user_service()

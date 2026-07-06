@@ -26,6 +26,7 @@ class ReportCreateSchema(BaseModel):
     uploaded_by: str = Field(..., description="Reference to the user ID who uploaded the report")
     report_type: ReportType = Field(default=ReportType.OTHER, description="Type of medical report")
     file_url: str = Field(..., description="URL of the uploaded report file")
+    file_metadata: Optional[Dict[str, Any]] = Field(None, description="Metadata of uploaded report file")
     raw_text: Optional[str] = Field(None, description="Extracted raw text from OCR")
     structured_data: Optional[Dict[str, Any]] = Field(None, description="Extracted structured metrics")
     entities: Optional[List[Dict[str, Any]]] = Field(None, description="Extracted medical entities")
@@ -84,6 +85,7 @@ class ReportUpdateSchema(BaseModel):
     uploaded_by: Optional[str] = None
     report_type: Optional[ReportType] = None
     file_url: Optional[str] = None
+    file_metadata: Optional[Dict[str, Any]] = None
     raw_text: Optional[str] = None
     structured_data: Optional[Dict[str, Any]] = None
     entities: Optional[List[Dict[str, Any]]] = None
@@ -145,6 +147,7 @@ class ReportResponse(BaseModel):
     uploaded_by: str = Field(..., description="Uploading user ID")
     report_type: ReportType = Field(..., description="Type of medical report")
     file_url: str = Field(..., description="URL of the report file")
+    file_metadata: Optional[Dict[str, Any]] = Field(None, description="Metadata of uploaded report file")
     raw_text: Optional[str] = Field(None, description="Extracted raw text from OCR")
     structured_data: Optional[Dict[str, Any]] = Field(None, description="Extracted structured metrics")
     entities: Optional[List[Dict[str, Any]]] = Field(None, description="Extracted medical entities")

@@ -69,6 +69,10 @@ class Settings:
         self.SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
         self.SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "medical-files")
         
+        # Storage Configuration
+        self.STORAGE_PROVIDER = os.getenv("STORAGE_PROVIDER", "local")
+        self.BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+        
         # Razorpay Payment Gateway
         self.RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "")
         self.RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")

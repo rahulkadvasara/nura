@@ -34,7 +34,9 @@ from app.core.dependencies import (
     get_report_cache_service,
     get_job_dispatcher,
     get_worker_scheduler,
+    get_storage_service,
 )
+from app.services.storage.storage_provider import StorageProvider
 from app.services.report_service import ReportService
 from app.services.report_processing.document_parser import DocumentParser
 
@@ -81,6 +83,7 @@ async def upload_report(
     current_user: UserInDB = Depends(get_current_user),
     report_service: ReportService = Depends(get_report_service),
     pipeline_service = Depends(get_pipeline_service),
+    storage_service: StorageProvider = Depends(get_storage_service),
 ) -> SuccessResponse:
     try:
         # Enforce patient restriction (Patients can only upload reports for themselves)
@@ -90,19 +93,22 @@ async def upload_report(
                 detail="Patients are only authorized to upload reports for themselves"
             )
 
-        # 1. Save uploaded file locally
-        os.makedirs(UPLOAD_DIR, exist_ok=True)
-        file_path = os.path.join(UPLOAD_DIR, f"{time.time()}_{file.filename}")
-        
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        # Clean/Upload file through storage abstraction layer
+        filename = f"{patient_id}_{int(time.time())}_{file.filename}"
+        upload_res = await storage_service.upload_file(
+            file=file.file,
+            filename=filename,
+            bucket="reports",
+            content_type=file.content_type
+        )
 
         # 2. Ingest report record in MongoDB
         schema = ReportCreateSchema(
             patient_id=patient_id,
             uploaded_by=str(current_user.id),
             report_type=report_type,
-            file_url=file_path,
+            file_url=upload_res["public_url"],
+            file_metadata=upload_res,
             raw_text=None,
             structured_data=None,
             entities=None,
@@ -184,6 +190,7 @@ async def delete_report(
     report_id: str,
     current_user: UserInDB = Depends(get_current_user),
     report_service: ReportService = Depends(get_report_service),
+    storage_service: StorageProvider = Depends(get_storage_service),
 ) -> SuccessResponse:
     report = await report_service.get_report_by_id(report_id)
     if not report:
@@ -201,12 +208,32 @@ async def delete_report(
 
     success = await report_service.delete_report(report_id)
     
-    # Try deleting local file
-    if success and report.file_url and os.path.exists(report.file_url):
-        try:
-            os.remove(report.file_url)
-        except Exception:
-            pass
+    # Clean up file in storage provider
+    if success:
+        if report.file_metadata:
+            try:
+                meta = report.file_metadata
+                await storage_service.delete_file(
+                    bucket=meta.get("bucket", "reports"),
+                    object_key=meta.get("object_key")
+                )
+            except Exception as e:
+                logger.error(f"Failed to delete report file using metadata: {e}")
+        elif report.file_url:
+            if not report.file_url.startswith("http"):
+                # Clean up local file path
+                if os.path.exists(report.file_url):
+                    try:
+                        os.remove(report.file_url)
+                    except Exception:
+                        pass
+            else:
+                # Attempt standard deletion by parsing basename
+                try:
+                    old_filename = os.path.basename(report.file_url)
+                    await storage_service.delete_file(bucket="reports", object_key=old_filename)
+                except Exception:
+                    pass
 
     return SuccessResponse(
         success=success,
@@ -997,6 +1024,7 @@ async def batch_upload_reports(
     current_user: UserInDB = Depends(get_current_user),
     report_service: ReportService = Depends(get_report_service),
     job_dispatcher=Depends(get_job_dispatcher),
+    storage_service: StorageProvider = Depends(get_storage_service),
 ) -> SuccessResponse:
     if current_user.role == UserRole.PATIENT and str(current_user.id) != patient_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Patients can only upload for themselves")
@@ -1004,20 +1032,24 @@ async def batch_upload_reports(
     if len(files) > 10:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Maximum 10 files per batch upload")
 
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
     results = []
 
     for file in files:
         try:
-            file_path = os.path.join(UPLOAD_DIR, f"{time.time()}_{file.filename}")
-            with open(file_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
+            filename = f"{patient_id}_{int(time.time())}_{file.filename}"
+            upload_res = await storage_service.upload_file(
+                file=file.file,
+                filename=filename,
+                bucket="reports",
+                content_type=file.content_type
+            )
 
             schema = ReportCreateSchema(
                 patient_id=patient_id,
                 uploaded_by=str(current_user.id),
                 report_type=report_type,
-                file_url=file_path,
+                file_url=upload_res["public_url"],
+                file_metadata=upload_res,
                 raw_text=None,
                 structured_data=None,
                 entities=None,

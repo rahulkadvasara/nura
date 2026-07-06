@@ -412,6 +412,34 @@ SUPABASE_BUCKET=medical-files
 
 ---
 
+## STORAGE_PROVIDER
+
+Determines the active file storage provider.
+
+Allowed Values:
+- `local` (uses local uploads directory)
+- `supabase` (uses Supabase Storage)
+
+Example:
+
+```env
+STORAGE_PROVIDER=local
+```
+
+---
+
+## BACKEND_URL
+
+Public backend base URL. Used by local storage to map public asset URLs.
+
+Example:
+
+```env
+BACKEND_URL=http://localhost:8000
+```
+
+---
+
 # 13. Razorpay
 
 ## RAZORPAY_KEY_ID
