@@ -69,3 +69,17 @@ class StorageProvider(ABC):
             bool: True if file exists, False otherwise.
         """
         pass
+
+    @abstractmethod
+    def generate_signed_url(self, bucket: str, object_key: str, expires_in: int = 3600) -> str:
+        """Generates a temporary signed URL for viewing/downloading private files.
+        
+        Args:
+            bucket: Name of the bucket.
+            object_key: Key or path of the object.
+            expires_in: Expiry duration in seconds.
+
+        Returns:
+            str: Temporary signed URL.
+        """
+        pass

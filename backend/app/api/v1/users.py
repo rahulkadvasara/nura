@@ -69,24 +69,18 @@ async def upload_avatar(
     user_service: UserService = Depends(get_user_service),
     storage_service: StorageProvider = Depends(get_storage_service)
 ):
-    """Upload/update user profile picture avatar with format and size limit validation."""
-    # Enforce standard security limits: jpg, jpeg, png, webp.
-    ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid image format. Allowed formats: jpg, jpeg, png, webp."
-        )
+    """Upload/update user profile picture avatar with automatic format verification, optimization, and conversion to WebP."""
+    import io
+    from app.utils.storage_helpers import optimize_avatar
 
-    # Max file size: 5MB
-    max_size = 5 * 1024 * 1024
     content = await file.read()
-    if len(content) > max_size:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File size exceeds the 5MB limit."
-        )
-    await file.seek(0)
+    
+    # Run the image optimization pipeline
+    optimized_bytes, new_filename, content_type = optimize_avatar(
+        content=content,
+        filename=file.filename,
+        content_type=file.content_type
+    )
 
     # Clean up previous avatar from storage if exists
     if current_user.profile_picture_metadata:
@@ -106,14 +100,19 @@ async def upload_avatar(
             except Exception as e:
                 logger.error(f"Failed to delete legacy old avatar file: {e}")
 
-    filename = f"{current_user.id}_{int(time.time())}{ext}"
+    # Enforce standardized bucket prefix path avatars/users/{user_id}/avatar.webp
+    object_key = f"users/{current_user.id}/avatar.webp"
+    
+    # Wrap optimized bytes in a BytesIO buffer
+    file_buf = io.BytesIO(optimized_bytes)
     
     # Upload file through the abstraction layer
     upload_res = await storage_service.upload_file(
-        file=file.file,
-        filename=filename,
+        file=file_buf,
+        filename=object_key,
         bucket="avatars",
-        content_type=file.content_type
+        content_type=content_type,
+        original_filename=file.filename
     )
 
     profile_url = upload_res["public_url"]

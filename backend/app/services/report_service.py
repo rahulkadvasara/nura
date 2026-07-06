@@ -29,12 +29,29 @@ def utc_now() -> datetime:
 
 
 def _report_to_response(report: ReportInDB) -> ReportResponse:
+    file_url = report.file_url
+    if report.file_metadata:
+        try:
+            from app.services.storage.storage_factory import get_storage_provider
+            storage_service = get_storage_provider()
+            meta = report.file_metadata
+            if hasattr(meta, "bucket"):
+                bucket = meta.bucket
+                object_key = meta.object_key
+            else:
+                bucket = meta.get("bucket", "reports")
+                object_key = meta.get("object_key")
+            file_url = storage_service.generate_signed_url(bucket, object_key, expires_in=900)
+        except Exception:
+            pass
+
     return ReportResponse(
         id=report.id,
         patient_id=report.patient_id,
         uploaded_by=report.uploaded_by,
         report_type=report.report_type,
-        file_url=report.file_url,
+        file_url=file_url,
+        file_metadata=report.file_metadata,
         raw_text=report.raw_text,
         structured_data=report.structured_data,
         entities=report.entities,
@@ -72,6 +89,7 @@ class ReportService(BaseService[ReportInDB, ReportCreate, ReportUpdate]):
     async def create_report(
         self,
         schema: ReportCreateSchema,
+        report_id: Optional[str] = None
     ) -> ReportInDB:
         """Create a new report record after validating patient and uploader user existence"""
         # Validate patient exists
@@ -90,6 +108,7 @@ class ReportService(BaseService[ReportInDB, ReportCreate, ReportUpdate]):
             uploaded_by=schema.uploaded_by,
             report_type=schema.report_type,
             file_url=schema.file_url,
+            file_metadata=schema.file_metadata,
             raw_text=schema.raw_text,
             structured_data=schema.structured_data,
             entities=schema.entities,
@@ -101,6 +120,10 @@ class ReportService(BaseService[ReportInDB, ReportCreate, ReportUpdate]):
         doc_dict = report_create.model_dump()
         doc_dict["created_at"] = now
         doc_dict["updated_at"] = now
+
+        if report_id:
+            from bson import ObjectId
+            doc_dict["_id"] = ObjectId(report_id)
 
         result = await self.report_repository.collection.insert_one(doc_dict)
         created = await self.report_repository.collection.find_one({"_id": result.inserted_id})

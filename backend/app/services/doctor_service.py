@@ -70,12 +70,29 @@ def _profile_to_response(profile: DoctorProfileInDB) -> DoctorProfileResponse:
 
 
 def _document_to_response(doc: DoctorDocumentInDB) -> DoctorDocumentResponse:
-    """Convert a DoctorDocumentInDB to a DoctorDocumentResponse."""
+    """Convert a DoctorDocumentInDB to a DoctorDocumentResponse, dynamically resolving signed URLs for private files."""
+    document_url = doc.document_url
+    if doc.document_metadata:
+        try:
+            from app.services.storage.storage_factory import get_storage_provider
+            storage_service = get_storage_provider()
+            meta = doc.document_metadata
+            if hasattr(meta, "bucket"):
+                bucket = meta.bucket
+                object_key = meta.object_key
+            else:
+                bucket = meta.get("bucket", "doctor-documents")
+                object_key = meta.get("object_key")
+            document_url = storage_service.generate_signed_url(bucket, object_key, expires_in=900)
+        except Exception:
+            pass
+
     return DoctorDocumentResponse(
         id=doc.id,
         doctor_id=doc.doctor_id,
         document_type=doc.document_type,
-        document_url=doc.document_url,
+        document_url=document_url,
+        document_metadata=doc.document_metadata,
         verification_status=doc.verification_status,
         uploaded_at=doc.uploaded_at,
         verified_at=doc.verified_at,
@@ -364,6 +381,7 @@ class DoctorDocumentService(BaseService[DoctorDocumentInDB, DoctorDocumentCreate
             doctor_id=doctor_id,
             document_type=schema.document_type,
             document_url=schema.document_url,
+            document_metadata=schema.document_metadata,
             verification_status=DocumentVerificationStatus.PENDING,
             uploaded_at=now,
         )

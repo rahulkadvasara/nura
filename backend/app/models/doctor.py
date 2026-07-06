@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import List, Optional
 from pydantic import BaseModel, Field, ConfigDict, model_validator
+from app.models.storage import FileMetadata
 
 
 def utc_now() -> datetime:
@@ -141,6 +142,7 @@ class DoctorDocumentBase(BaseModel):
 
     document_type: DocumentType = Field(..., description="Type of verification document")
     document_url: str = Field(..., description="Publicly accessible URL of the uploaded document")
+    document_metadata: Optional[FileMetadata] = Field(None, description="Detailed file metadata")
 
 
 class DoctorDocumentCreate(DoctorDocumentBase):
@@ -159,6 +161,7 @@ class DoctorDocumentUpdate(BaseModel):
     """Schema used to update an existing doctor document (all fields optional)"""
     document_type: Optional[DocumentType] = None
     document_url: Optional[str] = None
+    document_metadata: Optional[FileMetadata] = None
     verification_status: Optional[DocumentVerificationStatus] = None
     verified_at: Optional[datetime] = None
     verified_by: Optional[str] = None

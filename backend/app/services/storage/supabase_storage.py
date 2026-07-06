@@ -29,7 +29,7 @@ class SupabaseStorage(StorageProvider):
         self.client: Client = create_client(url, key)
 
     def _ensure_bucket(self, bucket_name: str) -> None:
-        """Helper to ensure target bucket exists and is publicly accessible."""
+        """Helper to ensure target bucket exists and has correct visibility."""
         try:
             buckets = self.client.storage.list_buckets()
             bucket_names = []
@@ -41,7 +41,8 @@ class SupabaseStorage(StorageProvider):
             
             if bucket_name not in bucket_names:
                 logger.info(f"Creating missing Supabase bucket: {bucket_name}")
-                self.client.storage.create_bucket(bucket_name, options={"public": True})
+                is_public = (bucket_name == "avatars")
+                self.client.storage.create_bucket(bucket_name, options={"public": is_public})
         except Exception as e:
             logger.warning(f"Failed to verify/create bucket {bucket_name}: {e}")
 
@@ -50,8 +51,12 @@ class SupabaseStorage(StorageProvider):
         file: BinaryIO,
         filename: str,
         bucket: str,
-        content_type: Optional[str] = None
+        content_type: Optional[str] = None,
+        original_filename: Optional[str] = None
     ) -> Dict[str, Any]:
+        import hashlib
+        from datetime import datetime, timezone
+
         # Clean bucket name (ensure standard formatting)
         bucket = bucket.lower().replace("_", "-")
         self._ensure_bucket(bucket)
@@ -62,7 +67,7 @@ class SupabaseStorage(StorageProvider):
             pass
 
         file_bytes = file.read()
-        size = len(file_bytes)
+        size_bytes = len(file_bytes)
 
         # Upload options
         file_options = {}
@@ -70,30 +75,40 @@ class SupabaseStorage(StorageProvider):
             file_options["content-type"] = content_type
 
         # Perform upload using postgrest/storage SDK
-        # We target filename as the path key on Supabase bucket
         res = self.client.storage.from_(bucket).upload(
             path=filename,
             file=file_bytes,
             file_options=file_options
         )
 
-        public_url = self.get_public_url(bucket, filename)
+        # Calculate SHA-256 checksum
+        sha = hashlib.sha256()
+        sha.update(file_bytes)
+        checksum_sha256 = sha.hexdigest()
+
+        # Build public url only for avatars bucket, private files use signed urls
+        is_public = (bucket == "avatars")
+        public_url = self.get_public_url(bucket, filename) if is_public else None
+        
+        orig_name = original_filename or os.path.basename(filename)
 
         return {
             "provider": "supabase",
             "bucket": bucket,
             "object_key": filename,
             "public_url": public_url,
+            "original_filename": orig_name,
             "content_type": content_type or "application/octet-stream",
-            "size": size
+            "size_bytes": size_bytes,
+            "checksum_sha256": checksum_sha256,
+            "uploaded_at": datetime.now(timezone.utc).isoformat(),
+            "storage_version": "1.0.0"
         }
 
     async def delete_file(self, bucket: str, object_key: str) -> bool:
         bucket = bucket.lower().replace("_", "-")
         try:
-            # remove takes a list of paths
             res = self.client.storage.from_(bucket).remove([object_key])
-            # If the response contains list and it is not empty, it was deleted
             if res and isinstance(res, list) and len(res) > 0:
                 return True
             return False
@@ -108,7 +123,6 @@ class SupabaseStorage(StorageProvider):
     async def exists(self, bucket: str, object_key: str) -> bool:
         bucket = bucket.lower().replace("_", "-")
         try:
-            # Search by directory/basename
             dir_name = os.path.dirname(object_key) or ""
             base_name = os.path.basename(object_key)
             
@@ -119,3 +133,14 @@ class SupabaseStorage(StorageProvider):
             return False
         except Exception:
             return False
+
+    def generate_signed_url(self, bucket: str, object_key: str, expires_in: int = 3600) -> str:
+        bucket = bucket.lower().replace("_", "-")
+        try:
+            res = self.client.storage.from_(bucket).create_signed_url(path=object_key, expires_in=expires_in)
+            if isinstance(res, dict):
+                return res.get("signedURL") or res.get("signedUrl") or ""
+            return str(res)
+        except Exception as e:
+            logger.error(f"Failed to generate signed URL for {object_key} in {bucket}: {e}")
+            return self.get_public_url(bucket, object_key)

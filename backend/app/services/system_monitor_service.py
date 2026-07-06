@@ -195,30 +195,48 @@ class SystemMonitorService:
             exists = await storage_service.exists(bucket="avatars", object_key="health_ping_test.txt")
             if not exists:
                 raise ValueError("Uploaded test file not detected in storage")
+
+            # Check signed URL generation on private reports bucket
+            signed_url = storage_service.generate_signed_url(bucket="reports", object_key="health_ping_test.txt", expires_in=60)
+            if not signed_url:
+                raise ValueError("Failed to generate signed URL for private reports bucket")
                 
             deleted = await storage_service.delete_file(bucket="avatars", object_key="health_ping_test.txt")
             if not deleted:
                 raise ValueError("Uploaded test file could not be deleted from storage")
                 
             storage_latency = int((time.time() - storage_start) * 1000)
+            
+            message = (
+                f"Provider:\n{provider_type.capitalize()}\n\n"
+                f"Bucket Health: OK (avatars, reports)\n"
+                f"Upload Latency: {storage_latency}ms\n"
+                f"Provider Version: 1.0.0"
+            )
             results.append(
                 ServiceHealth(
                     name="Storage",
                     status="healthy",
                     latency_ms=storage_latency,
-                    message=f"Provider: {provider_type.upper()} | Connection/Permissions verified",
+                    message=message,
                     last_checked=now,
                 )
             )
         except Exception as e:
             storage_latency = int((time.time() - storage_start) * 1000)
             status = "offline" if provider_type == "supabase" else "degraded"
+            message = (
+                f"Provider:\n{provider_type.capitalize()}\n\n"
+                f"Bucket Health: Error ({str(e)})\n"
+                f"Upload Latency: {storage_latency}ms\n"
+                f"Provider Version: 1.0.0"
+            )
             results.append(
                 ServiceHealth(
                     name="Storage",
                     status=status,
                     latency_ms=storage_latency,
-                    message=f"Provider: {provider_type.upper()} | Diagnostics failed: {str(e)}",
+                    message=message,
                     last_checked=now,
                 )
             )

@@ -8,6 +8,7 @@ from enum import Enum
 from typing import Optional
 from bson import ObjectId
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_serializer, ConfigDict
+from app.models.storage import FileMetadata
 
 
 def utc_now() -> datetime:
@@ -37,7 +38,7 @@ class UserBase(BaseModel):
     full_name: str = Field(..., min_length=1, max_length=100, description="Full name")
     phone: Optional[str] = Field(None, max_length=20, description="Phone number")
     profile_picture: Optional[str] = Field(None, description="Profile picture URL")
-    profile_picture_metadata: Optional[dict] = Field(None, description="Avatar storage metadata")
+    profile_picture_metadata: Optional[FileMetadata] = Field(None, description="Avatar storage metadata")
     auth_provider: AuthProvider = Field(default=AuthProvider.LOCAL, description="Authentication provider")
     email_verified: bool = Field(default=False, description="Email verification status")
     is_active: bool = Field(default=True, description="Account active status")
@@ -74,7 +75,7 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = Field(None, min_length=1, max_length=100, description="Full name")
     phone: Optional[str] = Field(None, max_length=20, description="Phone number")
     profile_picture: Optional[str] = Field(None, description="Profile picture URL")
-    profile_picture_metadata: Optional[dict] = Field(None, description="Avatar storage metadata")
+    profile_picture_metadata: Optional[FileMetadata] = Field(None, description="Avatar storage metadata")
     is_active: Optional[bool] = Field(None, description="Account active status")
     password_hash: Optional[str] = Field(None, description="Hashed password (internal use only)")
     last_login_at: Optional[datetime] = Field(None, description="Last login timestamp")
@@ -108,7 +109,7 @@ class UserResponse(BaseModel):
     full_name: str = Field(..., description="Full name")
     phone: Optional[str] = Field(None, description="Phone number")
     profile_picture: Optional[str] = Field(None, description="Profile picture URL")
-    profile_picture_metadata: Optional[dict] = Field(None, description="Avatar storage metadata")
+    profile_picture_metadata: Optional[FileMetadata] = Field(None, description="Avatar storage metadata")
     auth_provider: AuthProvider = Field(..., description="Authentication provider")
     email_verified: bool = Field(..., description="Email verification status")
     is_active: bool = Field(..., description="Account active status")

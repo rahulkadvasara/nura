@@ -6,7 +6,10 @@ Authenticated patient-only endpoints for applying to become a doctor
 import logging
 from typing import List, Optional
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from app.services.storage.storage_provider import StorageProvider
+from app.core.dependencies import get_storage_service
+import os
 from bson import ObjectId
 
 from app.models.user import UserInDB, UserRole
@@ -145,10 +148,19 @@ async def apply_doctor(
             (DocumentType.ID_PROOF, schema.identity_proof_url)
         ]
 
+        db = doctor_document_service.document_repository.collection.database
         for doc_type, url in documents_to_upload:
+            metadata = None
+            if url:
+                async for item in db["storage_metadata"].find({"bucket": "doctor-documents"}):
+                    if item.get("object_key") in url:
+                        metadata = item
+                        break
+
             doc_create = DoctorDocumentCreateSchema(
                 document_type=doc_type,
-                document_url=url
+                document_url=url,
+                document_metadata=metadata
             )
             await doctor_document_service.upload_document(profile.id, doc_create)
 
@@ -179,6 +191,76 @@ async def apply_doctor(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to submit doctor application"
         ) from exc
+
+
+@router.post(
+    "/documents/upload",
+    response_model=SuccessResponse,
+    summary="Upload a verification document file",
+)
+async def upload_doctor_document(
+    file: UploadFile = File(..., description="Verification document file (PDF, JPG, PNG)"),
+    document_type: DocumentType = Form(..., description="Document category type"),
+    current_user: UserInDB = Depends(require_active_user),
+    doctor_profile_service: DoctorProfileService = Depends(get_doctor_profile_service),
+    doctor_document_service: DoctorDocumentService = Depends(get_doctor_document_service),
+    storage_service: StorageProvider = Depends(get_storage_service)
+) -> SuccessResponse:
+    """Upload verification document file to private storage bucket and return details/metadata."""
+    # 1. Size Check: Max 5MB
+    content = await file.read()
+    max_size = 5 * 1024 * 1024
+    if len(content) > max_size:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File size exceeds the 5MB limit."
+        )
+
+    # 2. Extension Check
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in {".pdf", ".jpg", ".jpeg", ".png"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported format. Allowed formats: PDF, JPG, JPEG, PNG."
+        )
+
+    profile = await doctor_profile_service.get_profile_by_user_id(current_user.id)
+    doctor_id = profile.id if profile else current_user.id
+
+    # Enforce standardized path doctors/{doctor_id}/{document_name}
+    filename = f"{document_type}{ext}"
+    object_key = f"doctors/{doctor_id}/{filename}"
+
+    import io
+    file_buf = io.BytesIO(content)
+
+    upload_res = await storage_service.upload_file(
+        file=file_buf,
+        filename=object_key,
+        bucket="doctor-documents",
+        content_type=file.content_type,
+        original_filename=file.filename
+    )
+
+    db = doctor_document_service.document_repository.collection.database
+    await db["storage_metadata"].update_one(
+        {"bucket": "doctor-documents", "object_key": object_key},
+        {"$set": upload_res},
+        upsert=True
+    )
+
+    resolved_url = upload_res["public_url"]
+    if not resolved_url:
+        resolved_url = storage_service.generate_signed_url("doctor-documents", object_key, expires_in=900)
+
+    return SuccessResponse(
+        success=True,
+        message="Doctor document uploaded successfully",
+        data={
+            "url": resolved_url,
+            "metadata": upload_res
+        }
+    )
 
 
 @router.get(
@@ -286,13 +368,21 @@ async def update_application(
             (DocumentType.ID_PROOF, schema.identity_proof_url)
         ]
 
+        db = doctor_document_service.document_repository.collection.database
         for doc_type, url in document_updates:
             if url is not None:
+                metadata = None
+                async for item in db["storage_metadata"].find({"bucket": "doctor-documents"}):
+                    if item.get("object_key") in url:
+                        metadata = item
+                        break
+
                 existing_docs = [d for d in docs if d.document_type == doc_type]
                 if existing_docs:
-                    # Update existing document url and reset status to pending
+                    # Update existing document url, metadata and reset status to pending
                     doc_update = DoctorDocumentUpdate(
                         document_url=url,
+                        document_metadata=metadata,
                         verification_status=DocumentVerificationStatus.PENDING
                     )
                     await doctor_document_service.document_repository.update(existing_docs[0].id, doc_update)
@@ -300,7 +390,8 @@ async def update_application(
                     # Upload/Create new document url
                     doc_create = DoctorDocumentCreateSchema(
                         document_type=doc_type,
-                        document_url=url
+                        document_url=url,
+                        document_metadata=metadata
                     )
                     await doctor_document_service.upload_document(profile.id, doc_create)
 

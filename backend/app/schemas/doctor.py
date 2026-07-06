@@ -6,6 +6,7 @@ Pydantic v2 schemas for doctor API requests and responses
 from datetime import datetime
 from typing import List, Optional, Any
 from pydantic import BaseModel, Field, ConfigDict, model_validator
+from app.models.storage import FileMetadata
 
 from app.models.doctor import (
     DoctorProfileStatus,
@@ -77,12 +78,14 @@ class DoctorDocumentCreateSchema(BaseModel):
     """Request schema for uploading a new verification document"""
     document_type: DocumentType = Field(..., description="Type of the document")
     document_url: str = Field(..., description="Publicly accessible URL of the document")
+    document_metadata: Optional[FileMetadata] = Field(None, description="Detailed file metadata")
 
 
 class DoctorDocumentUpdateSchema(BaseModel):
     """Request schema for updating a verification document"""
     document_type: Optional[DocumentType] = None
     document_url: Optional[str] = None
+    document_metadata: Optional[FileMetadata] = None
     verification_status: Optional[DocumentVerificationStatus] = None
 
 
@@ -94,6 +97,7 @@ class DoctorDocumentResponse(BaseModel):
     doctor_id: str = Field(..., description="Associated doctor profile ID")
     document_type: DocumentType = Field(..., description="Type of the document")
     document_url: str = Field(..., description="Document URL")
+    document_metadata: Optional[FileMetadata] = Field(None, description="Detailed file metadata")
     verification_status: DocumentVerificationStatus = Field(..., description="Verification status")
     uploaded_at: datetime = Field(..., description="Upload timestamp")
     verified_at: Optional[datetime] = Field(None, description="Verification timestamp")

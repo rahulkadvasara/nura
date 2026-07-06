@@ -93,13 +93,19 @@ async def upload_report(
                 detail="Patients are only authorized to upload reports for themselves"
             )
 
+        from bson import ObjectId
+        # Pre-allocate report ID to build deterministic bucket path: patients/{patient_id}/{report_id}.pdf
+        report_id = str(ObjectId())
+        ext = os.path.splitext(file.filename)[1].lower() or ".pdf"
+        object_key = f"patients/{patient_id}/{report_id}{ext}"
+
         # Clean/Upload file through storage abstraction layer
-        filename = f"{patient_id}_{int(time.time())}_{file.filename}"
         upload_res = await storage_service.upload_file(
             file=file.file,
-            filename=filename,
+            filename=object_key,
             bucket="reports",
-            content_type=file.content_type
+            content_type=file.content_type,
+            original_filename=file.filename
         )
 
         # 2. Ingest report record in MongoDB
@@ -107,7 +113,7 @@ async def upload_report(
             patient_id=patient_id,
             uploaded_by=str(current_user.id),
             report_type=report_type,
-            file_url=upload_res["public_url"],
+            file_url=upload_res["public_url"] or f"reports/{object_key}", # Fallback for private Supabase URLs
             file_metadata=upload_res,
             raw_text=None,
             structured_data=None,
@@ -118,7 +124,7 @@ async def upload_report(
             ocr_status="pending",
             ocr_pages=[]
         )
-        report_record = await report_service.create_report(schema)
+        report_record = await report_service.create_report(schema, report_id=report_id)
 
         # 3. Auto-trigger end-to-end medical orchestrator pipeline in the background
         background_tasks.add_task(pipeline_service.execute_pipeline, report_record.id)
@@ -1034,21 +1040,26 @@ async def batch_upload_reports(
 
     results = []
 
+    from bson import ObjectId
     for file in files:
         try:
-            filename = f"{patient_id}_{int(time.time())}_{file.filename}"
+            report_id = str(ObjectId())
+            ext = os.path.splitext(file.filename)[1].lower() or ".pdf"
+            object_key = f"patients/{patient_id}/{report_id}{ext}"
+
             upload_res = await storage_service.upload_file(
                 file=file.file,
-                filename=filename,
+                filename=object_key,
                 bucket="reports",
-                content_type=file.content_type
+                content_type=file.content_type,
+                original_filename=file.filename
             )
 
             schema = ReportCreateSchema(
                 patient_id=patient_id,
                 uploaded_by=str(current_user.id),
                 report_type=report_type,
-                file_url=upload_res["public_url"],
+                file_url=upload_res["public_url"] or f"reports/{object_key}",
                 file_metadata=upload_res,
                 raw_text=None,
                 structured_data=None,
@@ -1059,7 +1070,7 @@ async def batch_upload_reports(
                 ocr_status="pending",
                 ocr_pages=[],
             )
-            report_record = await report_service.create_report(schema)
+            report_record = await report_service.create_report(schema, report_id=report_id)
             job_id = await job_dispatcher.dispatch(
                 report_id=report_record.id,
                 patient_id=patient_id,
