@@ -184,9 +184,15 @@ class SystemMonitorService:
             )
         else:
             try:
+                # Sanitize URL by removing rest subpath and trailing slashes
+                base_url = settings.SUPABASE_URL
+                if "/rest/v1" in base_url:
+                    base_url = base_url.split("/rest/v1")[0]
+                base_url = base_url.rstrip("/")
+
                 async with httpx.AsyncClient() as client:
                     # Attempt health endpoint ping first
-                    health_url = f"{settings.SUPABASE_URL}/storage/v1/health"
+                    health_url = f"{base_url}/storage/v1/health"
                     try:
                         response = await client.get(health_url, timeout=2.0)
                         supabase_latency = int((time.time() - supabase_start) * 1000)
@@ -205,7 +211,7 @@ class SystemMonitorService:
                         pass
 
                     # Fallback check targeting buckets API endpoint
-                    bucket_url = f"{settings.SUPABASE_URL}/storage/v1/bucket"
+                    bucket_url = f"{base_url}/storage/v1/bucket"
                     headers = {"Authorization": f"Bearer {settings.SUPABASE_ANON_KEY or settings.SUPABASE_SERVICE_ROLE_KEY}"}
                     response = await client.get(bucket_url, headers=headers, timeout=2.0)
                     supabase_latency = int((time.time() - supabase_start) * 1000)
