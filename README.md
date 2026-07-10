@@ -261,4 +261,4 @@ For support and questions:
 
 ---
 
-**Nura - Your Intelligent Healthcare Companion**
+**Nura - Your Intelligent Healthcare Companion** 
