@@ -146,10 +146,12 @@ async def test_list_patient_payment_history_service(sample_payment, sample_appoi
     user_repo.get = AsyncMock(return_value=doctor_user)
     
     # Profile find return
-    pay_repo.db = MagicMock()
     doctor_profiles_col = MagicMock()
     doctor_profiles_col.find_one = AsyncMock(return_value={"user_id": doctor_user.id, "specialization": "Cardiology"})
-    pay_repo.db.__getitem__ = MagicMock(return_value=doctor_profiles_col)
+    mock_db = MagicMock()
+    mock_db.__getitem__ = MagicMock(return_value=doctor_profiles_col)
+    pay_repo.collection.database = mock_db
+    pay_repo.db = mock_db
 
 
     service = PaymentService(

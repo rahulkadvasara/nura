@@ -19,6 +19,7 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  RotateCw,
 } from 'lucide-react'
 import {
   useDoctorEarnings,
@@ -43,6 +44,8 @@ export default function DoctorEarningsPage() {
     data: walletData,
     isLoading: isWalletLoading,
     isError: isWalletError,
+    refetch: refetchWallet,
+    isFetching: isWalletFetching,
   } = useDoctorWallet()
 
   const {
@@ -50,6 +53,7 @@ export default function DoctorEarningsPage() {
     isLoading: isEarningsLoading,
     isError: isEarningsError,
     refetch: refetchEarnings,
+    isFetching: isEarningsFetching,
   } = useDoctorEarnings({
     start_date: startDate || undefined,
     end_date: endDate || undefined,
@@ -60,6 +64,8 @@ export default function DoctorEarningsPage() {
   const {
     data: transactionsData,
     isLoading: isTransactionsLoading,
+    refetch: refetchTransactions,
+    isFetching: isTransactionsFetching,
   } = useDoctorTransactions({
     start_date: startDate || undefined,
     end_date: endDate || undefined,
@@ -67,6 +73,14 @@ export default function DoctorEarningsPage() {
     limit,
     skip,
   })
+
+  const isRefreshing = isWalletFetching || isEarningsFetching || isTransactionsFetching
+
+  const handleRefresh = () => {
+    refetchWallet()
+    refetchEarnings()
+    refetchTransactions()
+  }
 
   // Format Helper: Indian Rupees (INR)
   const formatCurrency = (val: number) => {
@@ -308,16 +322,12 @@ export default function DoctorEarningsPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button
-            onClick={() => refetchEarnings()}
+            onClick={handleRefresh}
             variant="outline"
-            className="border-slate-200 text-slate-700 font-semibold shadow-sm hover:bg-slate-50"
-            disabled={isLoading}
+            className="border-slate-200 text-slate-700 font-semibold shadow-sm hover:bg-slate-50 cursor-pointer active:scale-95 transition-transform"
+            disabled={isRefreshing}
           >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin text-slate-400" />
-            ) : (
-              <Calendar className="h-4 w-4 mr-2 text-teal-600" />
-            )}
+            <RotateCw className={`h-4 w-4 mr-2 text-teal-600 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh Metrics
           </Button>
         </div>
@@ -334,7 +344,7 @@ export default function DoctorEarningsPage() {
           <p className="text-sm text-slate-500 mt-1 max-w-md">
             The server encountered an error while calculating transaction distributions. Please try again.
           </p>
-          <Button onClick={() => refetchEarnings()} variant="outline" className="mt-5 border-slate-200">
+          <Button onClick={handleRefresh} variant="outline" className="mt-5 border-slate-200 cursor-pointer">
             Retry Connection
           </Button>
         </div>
