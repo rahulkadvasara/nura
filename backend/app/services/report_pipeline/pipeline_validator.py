@@ -69,19 +69,9 @@ class PipelineValidator:
         qdrant_count = 0
         if self.vector_service:
             try:
-                # Query vector store points matching this report ID
-                from qdrant_client.http import models as rest_models
-                query_filter = rest_models.Filter(
-                    must=[
-                        rest_models.FieldCondition(
-                            key="report_id",
-                            match=rest_models.MatchValue(value=report_id)
-                        )
-                    ]
-                )
                 points, _ = await self.vector_service.scroll(
                     collection_name="patient_reports",
-                    scroll_filter=query_filter,
+                    filter_dict={"report_id": report_id},
                     limit=100
                 )
                 qdrant_count = len(points)

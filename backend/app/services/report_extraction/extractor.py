@@ -6,6 +6,7 @@ import time
 import logging
 from typing import Optional, Dict, Any
 
+from bson import ObjectId
 from app.models.report import ReportInDB, ReportUpdate
 from app.repositories.report_repository import ReportRepository
 from app.services.report_extraction.document_classifier import DocumentClassifier
@@ -40,6 +41,11 @@ class ReportExtractionService:
         self.normalizer = normalizer
         self.validator = validator
 
+    def _get_report_id_filter(self, report_id: str) -> dict:
+        if ObjectId.is_valid(report_id):
+            return {"_id": ObjectId(report_id)}
+        return {"_id": report_id}
+
     async def extract_medical_information(self, report_id: str) -> Optional[ReportInDB]:
         """Runs the extraction pipeline for a report record by ID, saving outputs back to MongoDB"""
         start_time = time.time()
@@ -58,7 +64,7 @@ class ReportExtractionService:
 
         # Update extraction status to processing
         await self.report_repository.collection.update_one(
-            {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id},
+            self._get_report_id_filter(report_id),
             {"$set": {"extraction_status": "processing"}}
         )
 
@@ -149,7 +155,7 @@ class ReportExtractionService:
             }
 
             await self.report_repository.collection.update_one(
-                {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id},
+                self._get_report_id_filter(report_id),
                 {"$set": update_payload}
             )
 
@@ -166,7 +172,7 @@ class ReportExtractionService:
             duration_ms = (time.time() - start_time) * 1000.0
             
             await self.report_repository.collection.update_one(
-                {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id},
+                self._get_report_id_filter(report_id),
                 {
                     "$set": {
                         "extraction_status": "failed",
