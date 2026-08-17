@@ -351,6 +351,11 @@ def get_notification_service(
     user_repository: UserRepository = Depends(get_user_repository),
 ) -> NotificationService:
     """Get NotificationService instance"""
+    from fastapi.params import Depends as DependsType
+    if isinstance(notification_repository, DependsType):
+        notification_repository = get_notification_repository()
+    if isinstance(user_repository, DependsType):
+        user_repository = get_user_repository()
     return NotificationService(notification_repository, user_repository)
 
 
@@ -364,6 +369,9 @@ def get_doctor_availability_service(
     availability_repository: DoctorAvailabilityRepository = Depends(get_doctor_availability_repository)
 ) -> DoctorAvailabilityService:
     """Get DoctorAvailabilityService instance"""
+    from fastapi.params import Depends as DependsType
+    if isinstance(availability_repository, DependsType):
+        availability_repository = get_doctor_availability_repository()
     database: AsyncIOMotorDatabase = get_database()
     from app.repositories.appointment_repository import AppointmentRepository
     appointment_repository = AppointmentRepository(database.appointments)
@@ -383,6 +391,15 @@ def get_appointment_service(
     doctor_availability_repository: DoctorAvailabilityRepository = Depends(get_doctor_availability_repository),
 ) -> AppointmentService:
     """Get AppointmentService instance"""
+    from fastapi.params import Depends as DependsType
+    if isinstance(appointment_repository, DependsType):
+        appointment_repository = get_appointment_repository()
+    if isinstance(doctor_profile_repository, DependsType):
+        doctor_profile_repository = get_doctor_profile_repository()
+    if isinstance(user_repository, DependsType):
+        user_repository = get_user_repository()
+    if isinstance(doctor_availability_repository, DependsType):
+        doctor_availability_repository = get_doctor_availability_repository()
     return AppointmentService(
         appointment_repository=appointment_repository,
         doctor_profile_repository=doctor_profile_repository,
@@ -402,6 +419,11 @@ def get_consultation_service(
     appointment_repository: AppointmentRepository = Depends(get_appointment_repository),
 ) -> ConsultationService:
     """Get ConsultationService instance"""
+    from fastapi.params import Depends as DependsType
+    if isinstance(consultation_repository, DependsType):
+        consultation_repository = get_consultation_repository()
+    if isinstance(appointment_repository, DependsType):
+        appointment_repository = get_appointment_repository()
     return ConsultationService(consultation_repository, appointment_repository)
 
 
@@ -416,6 +438,11 @@ def get_prescription_service(
     consultation_repository: ConsultationRepository = Depends(get_consultation_repository),
 ) -> PrescriptionService:
     """Get PrescriptionService instance"""
+    from fastapi.params import Depends as DependsType
+    if isinstance(prescription_repository, DependsType):
+        prescription_repository = get_prescription_repository()
+    if isinstance(consultation_repository, DependsType):
+        consultation_repository = get_consultation_repository()
     return PrescriptionService(prescription_repository, consultation_repository)
 
 
@@ -454,6 +481,17 @@ def get_payment_service(
     audit_log_service = Depends(get_audit_log_service),
 ) -> PaymentService:
     """Get PaymentService instance"""
+    from fastapi.params import Depends as DependsType
+    if isinstance(payment_repository, DependsType):
+        payment_repository = get_payment_repository()
+    if isinstance(appointment_repository, DependsType):
+        appointment_repository = get_appointment_repository()
+    if isinstance(user_repository, DependsType):
+        user_repository = get_user_repository()
+    if isinstance(doctor_profile_repository, DependsType):
+        doctor_profile_repository = get_doctor_profile_repository()
+    if isinstance(audit_log_service, DependsType):
+        audit_log_service = get_audit_log_service()
     return PaymentService(
         payment_repository=payment_repository,
         appointment_repository=appointment_repository,
@@ -474,6 +512,21 @@ def get_payment_gateway_service(
     audit_log_service = Depends(get_audit_log_service),
 ) -> PaymentGatewayService:
     """Get PaymentGatewayService instance"""
+    from fastapi.params import Depends as DependsType
+    if isinstance(payment_repository, DependsType):
+        payment_repository = get_payment_repository()
+    if isinstance(appointment_repository, DependsType):
+        appointment_repository = get_appointment_repository()
+    if isinstance(doctor_profile_repository, DependsType):
+        doctor_profile_repository = get_doctor_profile_repository()
+    if isinstance(doctor_wallet_repository, DependsType):
+        doctor_wallet_repository = get_doctor_wallet_repository()
+    if isinstance(notification_service, DependsType):
+        notification_service = get_notification_service()
+    if isinstance(user_repository, DependsType):
+        user_repository = get_user_repository()
+    if isinstance(audit_log_service, DependsType):
+        audit_log_service = get_audit_log_service()
     return PaymentGatewayService(
         payment_repository=payment_repository,
         appointment_repository=appointment_repository,
@@ -1438,6 +1491,22 @@ def get_memory_sync_service(
     audit_log_service = Depends(get_audit_log_service),
 ) -> MemorySyncService:
     """Get MemorySyncService instance"""
+    from fastapi.params import Depends as DependsType
+    if isinstance(patient_memory_repository, DependsType):
+        patient_memory_repository = get_patient_memory_repository()
+    if isinstance(user_repository, DependsType):
+        user_repository = get_user_repository()
+    if isinstance(patient_summary_builder, DependsType):
+        patient_summary_builder = get_patient_summary_builder()
+    if isinstance(embedding_service, DependsType):
+        embedding_service = get_embedding_service()
+    if isinstance(vector_service, DependsType):
+        vector_service = get_vector_service()
+    if isinstance(index_version_service, DependsType):
+        index_version_service = get_index_version_service()
+    if isinstance(audit_log_service, DependsType):
+        audit_log_service = get_audit_log_service()
+
     return MemorySyncService(
         patient_memory_repository=patient_memory_repository,
         user_repository=user_repository,

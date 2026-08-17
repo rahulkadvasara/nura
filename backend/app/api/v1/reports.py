@@ -70,6 +70,7 @@ async def verify_report_access(report: ReportInDB, user: UserInDB) -> None:
     )
 
 
+@router.post("")
 @router.post(
     "/",
     response_model=SuccessResponse,
@@ -144,6 +145,7 @@ async def upload_report(
         )
 
 
+@router.get("")
 @router.get(
     "/",
     response_model=SuccessResponse,
@@ -219,10 +221,13 @@ async def delete_report(
         if report.file_metadata:
             try:
                 meta = report.file_metadata
-                await storage_service.delete_file(
-                    bucket=meta.get("bucket", "reports"),
-                    object_key=meta.get("object_key")
-                )
+                bucket = getattr(meta, "bucket", "reports") if not isinstance(meta, dict) else meta.get("bucket", "reports")
+                object_key = getattr(meta, "object_key", None) if not isinstance(meta, dict) else meta.get("object_key")
+                if object_key:
+                    await storage_service.delete_file(
+                        bucket=bucket,
+                        object_key=object_key
+                    )
             except Exception as e:
                 logger.error(f"Failed to delete report file using metadata: {e}")
         elif report.file_url:
@@ -753,10 +758,11 @@ async def get_patient_memory(
         )
     
     memory = await memory_repo.get_by_patient_id(str(current_user.id))
+    memory_dict = memory.model_dump() if hasattr(memory, "model_dump") else memory
     return SuccessResponse(
         success=True,
         message="Patient memory retrieved successfully",
-        data=memory
+        data=memory_dict
     )
 
 

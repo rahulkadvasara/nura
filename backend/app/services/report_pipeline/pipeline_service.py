@@ -46,6 +46,11 @@ class PipelineService:
         self.event_dispatcher = event_dispatcher
         self.max_stage_retries = max_stage_retries
 
+    def _get_report_id_filter(self, report_id: str) -> dict:
+        if ObjectId.is_valid(report_id):
+            return {"_id": ObjectId(report_id)}
+        return {"_id": report_id}
+
     async def execute_pipeline(self, report_id: str, force_retry: bool = False) -> Dict[str, Any]:
         """Execute end-to-end processing pipeline with stage retries, recovery, and telemetry tracking"""
         pipeline_start = time.time()
@@ -64,7 +69,7 @@ class PipelineService:
         
         # Initial status update
         await self.report_repository.collection.update_one(
-            {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id if not isinstance(report_id, bytes) else report_id},
+            self._get_report_id_filter(report_id),
             {
                 "$set": {
                     "pipeline_status": PipelineState.PROCESSING,
@@ -217,7 +222,7 @@ class PipelineService:
                 # Transition status to READY
                 total_duration_ms = (time.time() - pipeline_start) * 1000.0
                 await self.report_repository.collection.update_one(
-                    {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id if not isinstance(report_id, bytes) else report_id},
+                    self._get_report_id_filter(report_id),
                     {
                         "$set": {
                             "pipeline_status": PipelineState.READY,
@@ -243,7 +248,7 @@ class PipelineService:
                 # Transition status to PARTIAL_SUCCESS or FAILED based on validator issues
                 logger.warning(f"Report validation audit failed for {report_id}: {audit['issues']}")
                 await self.report_repository.collection.update_one(
-                    {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id if not isinstance(report_id, bytes) else report_id},
+                    self._get_report_id_filter(report_id),
                     {
                         "$set": {
                             "pipeline_status": PipelineState.PARTIAL_SUCCESS,
@@ -265,7 +270,7 @@ class PipelineService:
             
             # Transition status to FAILED
             await self.report_repository.collection.update_one(
-                {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id if not isinstance(report_id, bytes) else report_id},
+                self._get_report_id_filter(report_id),
                 {
                     "$set": {
                         "pipeline_status": PipelineState.FAILED,
@@ -310,7 +315,7 @@ class PipelineService:
         """Update report pipeline status key in MongoDB"""
         try:
             await self.report_repository.collection.update_one(
-                {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id if not isinstance(report_id, bytes) else report_id},
+                self._get_report_id_filter(report_id),
                 {"$set": {"pipeline_status": status}}
             )
         except Exception as e:

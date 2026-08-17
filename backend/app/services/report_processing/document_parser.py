@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from PIL import Image
 
+from bson import ObjectId
 from app.models.report import ReportInDB, ProcessingStatus, ReportUpdate
 from app.repositories.report_repository import ReportRepository
 from app.services.report_processing.utils import detect_file_type, normalize_text_content
@@ -37,6 +38,11 @@ class DocumentParser:
         self.image_preprocessor = image_preprocessor
         self.ocr_service = ocr_service
 
+    def _get_report_id_filter(self, report_id: str) -> dict:
+        if ObjectId.is_valid(report_id):
+            return {"_id": ObjectId(report_id)}
+        return {"_id": report_id}
+
     async def process_report(self, report_id: str) -> Optional[ReportInDB]:
         """Trigger end-to-end OCR document processing pipeline for an uploaded report record"""
         start_time = time.time()
@@ -53,7 +59,7 @@ class DocumentParser:
 
         # Update status to PROCESSING
         await self.report_repository.collection.update_one(
-            {"_id": self.report_repository.collection.find_one({"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id}) or report_id},
+            self._get_report_id_filter(report_id),
             {
                 "$set": {
                     "ocr_status": "processing",
@@ -250,7 +256,7 @@ class DocumentParser:
 
         # Write updates to MongoDB
         await self.report_repository.collection.update_one(
-            {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id if not isinstance(report_id, bytes) else report_id},
+            self._get_report_id_filter(report_id),
             {"$set": update_data}
         )
 

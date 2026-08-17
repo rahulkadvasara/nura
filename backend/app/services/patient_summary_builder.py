@@ -74,7 +74,14 @@ class PatientSummaryBuilder:
 
         # 2. Fetch and aggregate reports
         reports = await self.report_repository.get_many({"patient_id": patient_id}, limit=100)
-        reports.sort(key=lambda r: r.created_at if hasattr(r, "created_at") else datetime.min, reverse=True)
+        def _get_dt(r):
+            dt = getattr(r, "created_at", None)
+            if not dt:
+                return datetime.min.replace(tzinfo=timezone.utc)
+            if isinstance(dt, datetime):
+                return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+            return datetime.min.replace(tzinfo=timezone.utc)
+        reports.sort(key=_get_dt, reverse=True)
 
         recent_findings: List[str] = []
         report_conditions: List[str] = []

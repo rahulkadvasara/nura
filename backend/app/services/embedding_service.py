@@ -253,11 +253,11 @@ class EmbeddingService:
 
         cb = get_circuit_breaker("embedding_service", fallback_func=fallback_embeddings)
         
-        async def do_generate():
+        async def do_generate(texts_input: List[str] = texts):
             loop = asyncio.get_running_loop()
             embeddings = await loop.run_in_executor(
                 None,
-                lambda: self.model.encode(texts, normalize_embeddings=True)
+                lambda: self.model.encode(texts_input, normalize_embeddings=True)
             )
             return [v.tolist() for v in embeddings]
 

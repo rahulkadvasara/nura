@@ -88,11 +88,19 @@ class PatientContextService:
         memory = await self.patient_memory_repository.get_by_patient_id(patient_id)
         sources_used.add("patient_memory")
 
+        def _safe_dt(obj):
+            dt = getattr(obj, "created_at", None)
+            if not dt:
+                return datetime.min.replace(tzinfo=timezone.utc)
+            if isinstance(dt, datetime):
+                return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+            return datetime.min.replace(tzinfo=timezone.utc)
+
         # 3. Base collection queries (gather all documents first)
         # Reports
         reports_cursor = await self.report_repository.get_many({"patient_id": patient_id}, limit=100)
         sources_used.add("reports")
-        reports_cursor.sort(key=lambda x: x.created_at if hasattr(x, "created_at") else datetime.min, reverse=True)
+        reports_cursor.sort(key=_safe_dt, reverse=True)
 
         # Appointments
         appointments_cursor = await self.appointment_repository.get_many({"patient_id": patient_id}, limit=100)
@@ -102,12 +110,12 @@ class PatientContextService:
         # Consultations
         consultations_cursor = await self.consultation_repository.get_many({"patient_id": patient_id}, limit=100)
         sources_used.add("consultations")
-        consultations_cursor.sort(key=lambda x: x.created_at if hasattr(x, "created_at") else datetime.min, reverse=True)
+        consultations_cursor.sort(key=_safe_dt, reverse=True)
 
         # Prescriptions
         prescriptions_cursor = await self.prescription_repository.get_many({"patient_id": patient_id}, limit=100)
         sources_used.add("prescriptions")
-        prescriptions_cursor.sort(key=lambda x: x.created_at if hasattr(x, "created_at") else datetime.min, reverse=True)
+        prescriptions_cursor.sort(key=_safe_dt, reverse=True)
 
         # Active Reminders (filter only unresolved reminders)
         reminders_cursor = await self.reminder_repository.get_many({"patient_id": patient_id, "status": "active"}, limit=100)
@@ -116,7 +124,7 @@ class PatientContextService:
         # Recent Health Insights
         insights_cursor = await self.health_insight_repository.get_many({"patient_id": patient_id}, limit=100)
         sources_used.add("health_insights")
-        insights_cursor.sort(key=lambda x: x.created_at if hasattr(x, "created_at") else datetime.min, reverse=True)
+        insights_cursor.sort(key=_safe_dt, reverse=True)
 
         # Chat Sessions (metadata only)
         chat_sessions_cursor = await self.chat_session_repository.get_many({"patient_id": patient_id}, limit=100)

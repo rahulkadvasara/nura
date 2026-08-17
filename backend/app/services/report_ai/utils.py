@@ -13,7 +13,6 @@ class ReportPromptLoader(PromptLoader):
         # Resolve to backend/app/prompts/report
         base_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-            "app",
             "prompts",
             "report"
         )

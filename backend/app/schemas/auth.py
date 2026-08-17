@@ -4,7 +4,7 @@ Pydantic v2 schemas for authentication API requests and responses
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Any
 from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
 
 from app.models import UserRole, AuthProvider
@@ -86,7 +86,7 @@ class SuccessResponse(BaseModel):
     """Generic success response schema"""
     success: bool = Field(default=True, description="Success status")
     message: str = Field(..., description="Success message")
-    data: Optional[dict] = Field(None, description="Response data")
+    data: Optional[Any] = Field(None, description="Response data")
 
 
 class ErrorResponse(BaseModel):

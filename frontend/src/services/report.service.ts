@@ -147,7 +147,7 @@ export interface ReportTelemetryStats {
 export const reportService = {
   getReports: async (patientId?: string): Promise<ReportResponse[]> => {
     const params = patientId ? { patient_id: patientId } : {}
-    const response = await apiClient.get<{ success: boolean; data: { reports: ReportResponse[] } }>('/reports', { params })
+    const response = await apiClient.get<{ success: boolean; data: { reports: ReportResponse[] } }>('/reports/', { params })
     return response.data.data.reports
   },
 
@@ -157,7 +157,7 @@ export const reportService = {
     formData.append('report_type', reportType)
     formData.append('file', file)
 
-    const response = await apiClient.post<{ success: boolean; data: { report: ReportResponse } }>('/reports', formData, {
+    const response = await apiClient.post<{ success: boolean; data: { report: ReportResponse } }>('/reports/', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

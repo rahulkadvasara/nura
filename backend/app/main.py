@@ -174,6 +174,19 @@ def create_application() -> FastAPI:
             }
         )
 
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception):
+        import logging
+        logging.getLogger("nura.main").exception(f"Unhandled server exception: {exc}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "success": False,
+                "message": f"Internal server error: {str(exc)}",
+                "errors": None
+            }
+        )
+
     # Include routers
     app.include_router(
         health.router,
