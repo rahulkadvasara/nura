@@ -13,7 +13,9 @@ class AISettings(BaseSettings):
     """AI application settings loaded from environment variables"""
     
     GROQ_API_KEY: str = Field(default="", description="API key for Groq service authentication")
-    GROQ_MODEL: str = Field(default="llama-3.3-70b-versatile", description="Model name to use for Groq service")
+    GROQ_MODEL: str = Field(default="groq/compound", description="Primary model name for Groq service")
+    GROQ_BACKUP_MODEL: str = Field(default="groq/compound-mini", description="Backup model name for Groq rate limit fallback")
+    GROQ_CLASSIFIER_MODEL: str = Field(default="groq/compound-mini", description="Fast lightweight model for document classification")
     
     # Exposed Model Names
     MODEL_LLAMA_3_3_70B: str = "llama-3.3-70b-versatile"

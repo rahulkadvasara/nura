@@ -1712,7 +1712,8 @@ def get_pipeline_service() -> Any:
             sync_service=get_report_sync_service(),
             telemetry=get_pipeline_telemetry(),
             validator=get_pipeline_validator(),
-            event_dispatcher=get_event_dispatcher()
+            event_dispatcher=get_event_dispatcher(),
+            progress_tracker=get_report_progress_tracker()
         )
     return _pipeline_service_instance
 
