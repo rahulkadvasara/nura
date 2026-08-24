@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { getCleanFileName } from '@/lib/utils'
 import {
   FileText,
   Upload,
@@ -602,8 +603,9 @@ export default function PatientRecordsPage() {
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-bold text-slate-900">
-                            {report.file_url.split('/').pop()?.split('_').pop() || 'Medical Report'}
+                            {getCleanFileName(report)}
                           </span>
+
                           {report.document_type && (
                             <Badge className="bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-50 rounded">
                               {report.document_type}
@@ -720,8 +722,9 @@ export default function PatientRecordsPage() {
                     Structured Clinical Inspector
                   </CardTitle>
                   <span className="text-xs text-slate-500 mt-1 block">
-                    File: {inspectingReport.file_url.split('/').pop()?.substring(14) || 'record'}
+                    File: {getCleanFileName(inspectingReport)}
                   </span>
+
                 </div>
 
                 <div className="flex flex-wrap gap-2">

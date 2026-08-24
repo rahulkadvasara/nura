@@ -6,6 +6,7 @@ import { reportService, ReportResponse, ReportTelemetryStats, ReportOcrData } fr
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { getCleanFileName } from '@/lib/utils'
 import {
   FileText,
   Activity,
@@ -767,7 +768,8 @@ function AdminReportsDashboardContent() {
                   >
                     <div className="space-y-0.5">
                       <div className="flex items-center gap-2">
-                        <strong className="text-slate-800 truncate max-w-xs">{report.file_url.split('/').pop()?.substring(14) || 'Medical Report'}</strong>
+                        <strong className="text-slate-800 truncate max-w-xs">{getCleanFileName(report)}</strong>
+
                         {report.document_type && (
                           <Badge className="bg-teal-50 text-teal-700 border-teal-200 scale-90 rounded">
                             {report.document_type}
