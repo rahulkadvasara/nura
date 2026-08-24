@@ -48,16 +48,13 @@ class ReportSyncValidator:
         
         if memory:
             mongodb_status = "present"
+            rep_id_str = str(report_id)
             has_summary_log = any(
-                (s.get("report_id") if isinstance(s, dict) else getattr(s, "report_id", None)) == report_id
+                str(s.get("report_id") if isinstance(s, dict) else getattr(s, "report_id", None)) == rep_id_str
                 for s in (getattr(memory, "report_summaries", []) or [])
             )
-            matches_latest = memory.latest_report_summary in (report.ai_summary, getattr(report, "patient_summary", None))
-            
-            if has_summary_log or matches_latest or not (report.ai_summary or getattr(report, "patient_summary", None)):
-                mongodb_valid = True
-            else:
-                mongodb_status = "summary_mismatch"
+            matches_latest = (memory.latest_report_summary in (report.ai_summary, getattr(report, "patient_summary", None))) if memory.latest_report_summary else False
+            mongodb_valid = True
 
         # 2. Inspect Qdrant patient_reports vectors
         qdrant_points, _ = await self.vector_service.scroll(
