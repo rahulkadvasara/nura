@@ -251,6 +251,9 @@ export default function PatientRecordsPage() {
       const sync = await reportService.getReportSyncStatus(reportId)
       setReportSyncStatus(sync)
       
+      const pipe = await reportService.getPipelineStatus(reportId)
+      setPipelineStatus(pipe)
+
       const mem = await reportService.getPatientMemory()
       setPatientMemory(mem)
     } catch (err) {
@@ -816,7 +819,7 @@ export default function PatientRecordsPage() {
                         { key: 'risk', label: 'Clinical Risk', active: !!pipelineStatus.overall_risk, duration: pipelineStatus.risk_duration_ms },
                         { key: 'summary', label: 'AI Summary', active: !!pipelineStatus.ai_summary, duration: pipelineStatus.summary_duration_ms },
                         { key: 'sync', label: 'DB Sync', active: pipelineStatus.is_synchronized, duration: pipelineStatus.sync_duration_ms },
-                        { key: 'ready', label: 'Ready', active: pipelineStatus.pipeline_status === 'READY', duration: pipelineStatus.pipeline_duration_ms }
+                        { key: 'ready', label: 'Ready', active: pipelineStatus.pipeline_status === 'READY' || (pipelineStatus.ocr_status === 'completed' && !!pipelineStatus.overall_risk && !!pipelineStatus.ai_summary && pipelineStatus.is_synchronized), duration: pipelineStatus.pipeline_duration_ms }
                       ].map((step, idx) => (
                         <div key={idx} className={`p-2.5 rounded border text-center space-y-1 relative ${
                           step.active 
@@ -1055,8 +1058,12 @@ export default function PatientRecordsPage() {
                             </h3>
                           </div>
                           <div className="bg-white/15 px-4 py-2.5 rounded border border-white/10 text-right">
-                            <span className="text-[9px] uppercase font-bold tracking-wider block opacity-80">Risk Score Metric</span>
-                            <span className="text-2xl font-black block mt-0.5">{riskData.risk_score.toFixed(0)} / 100</span>
+                            <span className="text-2xl font-black block mt-0.5">
+                              {riskData.risk_score.toFixed(0)} / 100
+                              {riskData.risk_score === 0 && (riskData.overall_risk === 'NORMAL' || riskData.overall_risk === 'LOW') && (
+                                <span className="text-xs font-semibold block opacity-90 mt-0.5">(Optimal / Normal Baseline)</span>
+                              )}
+                            </span>
                           </div>
                         </div>
 

@@ -914,15 +914,31 @@ async def get_report_pipeline_status(
 
     await verify_report_access(report, current_user)
 
+    p_status = getattr(report, "pipeline_status", None)
+    is_sync = getattr(report, "is_synchronized", False)
+    has_sum = bool(getattr(report, "ai_summary", None) or getattr(report, "patient_summary", None))
+    has_risk = bool(getattr(report, "overall_risk", None))
+    ocr_done = getattr(report, "ocr_status", None) == "completed"
+
+    if (p_status != "READY" and p_status != "PipelineState.READY") and (is_sync and has_sum and has_risk and ocr_done):
+        p_status = "READY"
+        try:
+            await report_service.report_repository.collection.update_one(
+                report_service._get_report_id_filter(report_id),
+                {"$set": {"pipeline_status": "READY", "processing_status": "completed"}}
+            )
+        except Exception as e:
+            logger.warning(f"Failed to auto-update pipeline_status READY for {report_id}: {e}")
+
     pipeline_data = {
         "report_id": report_id,
-        "pipeline_status": getattr(report, "pipeline_status", "pending") or "pending",
+        "pipeline_status": p_status or "pending",
         "processing_status": report.processing_status,
         "ocr_status": getattr(report, "ocr_status", "pending"),
         "extraction_status": getattr(report, "extraction_status", "pending"),
         "overall_risk": getattr(report, "overall_risk", None),
-        "ai_summary": getattr(report, "ai_summary", None),
-        "is_synchronized": getattr(report, "is_synchronized", False),
+        "ai_summary": getattr(report, "ai_summary", None) or getattr(report, "patient_summary", None),
+        "is_synchronized": is_sync,
         "ocr_duration_ms": getattr(report, "ocr_duration_ms", 0.0),
         "extraction_duration_ms": getattr(report, "extraction_duration_ms", 0.0),
         "risk_duration_ms": getattr(report, "risk_duration_ms", 0.0),
@@ -988,13 +1004,35 @@ async def download_original_report_file(
         )
     await verify_report_access(report, current_user)
     
-    if not report.file_url or not os.path.exists(report.file_url):
+    file_path = report.file_url
+    if not file_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Original report file URL is empty"
+        )
+
+    # Normalize relative/absolute file path candidates
+    candidates = [
+        file_path,
+        os.path.join(UPLOAD_DIR, os.path.basename(file_path)),
+        os.path.join("uploads", file_path),
+        os.path.join("uploads/reports", os.path.basename(file_path)),
+    ]
+    
+    resolved_path = None
+    for cand in candidates:
+        if os.path.exists(cand) and os.path.isfile(cand):
+            resolved_path = cand
+            break
+
+    if not resolved_path:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Original report file does not exist on disk"
         )
         
-    return FileResponse(report.file_url)
+    filename = os.path.basename(resolved_path)
+    return FileResponse(resolved_path, filename=filename)
 
 
 # ============================================================

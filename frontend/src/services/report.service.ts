@@ -286,7 +286,9 @@ export const reportService = {
   },
 
   downloadReportFile: (reportId: string): string => {
-    return `${apiClient.defaults.baseURL || 'http://localhost:8000/api/v1'}/reports/${reportId}/download`
+    const token = typeof window !== 'undefined' ? (localStorage.getItem('token') || localStorage.getItem('access_token') || '') : ''
+    const baseUrl = apiClient.defaults.baseURL || 'http://localhost:8000/api/v1'
+    return `${baseUrl}/reports/${reportId}/download${token ? `?token=${encodeURIComponent(token)}` : ''}`
   },
 
   // ── Sprint 7: Progress Tracking ──────────────────────────────────────

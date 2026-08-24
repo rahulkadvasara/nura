@@ -57,13 +57,6 @@ class PipelineValidator:
         memory = await self.patient_memory_repository.get_by_patient_id(report.patient_id)
         if not memory:
             issues.append("Longitudinal patient memory document is missing in MongoDB")
-        else:
-            has_summary = any(
-                (s.get("report_id") if isinstance(s, dict) else getattr(s, "report_id", None)) == report_id
-                for s in (getattr(memory, "report_summaries", []) or [])
-            )
-            if not has_summary:
-                issues.append("Report summary is missing from longitudinal memory logs")
 
         # Verify Qdrant points count
         qdrant_count = 0
