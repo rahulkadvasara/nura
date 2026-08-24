@@ -1055,8 +1055,12 @@ export default function PatientRecordsPage() {
                             </h3>
                           </div>
                           <div className="bg-white/15 px-4 py-2.5 rounded border border-white/10 text-right">
-                            <span className="text-[9px] uppercase font-bold tracking-wider block opacity-80">Risk Score Metric</span>
-                            <span className="text-2xl font-black block mt-0.5">{riskData.risk_score.toFixed(0)} / 100</span>
+                            <span className="text-2xl font-black block mt-0.5">
+                              {riskData.risk_score.toFixed(0)} / 100
+                              {riskData.risk_score === 0 && (riskData.overall_risk === 'NORMAL' || riskData.overall_risk === 'LOW') && (
+                                <span className="text-xs font-semibold block opacity-90 mt-0.5">(Optimal / Normal Baseline)</span>
+                              )}
+                            </span>
                           </div>
                         </div>
 

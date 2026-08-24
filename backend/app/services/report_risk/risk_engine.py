@@ -16,7 +16,7 @@ class RiskEngine:
     def __init__(self, ai_service: AIService):
         self.ai_service = ai_service
 
-    def calculate_score_and_severity(self, rule_findings: List[Dict[str, Any]], critical_labs_count: int) -> Tuple[float, str]:
+    def calculate_score_and_severity(self, rule_findings: List[Dict[str, Any]], critical_labs_count: int, evaluated_labs: List[Dict[str, Any]] = None) -> Tuple[float, str]:
         """Calculates risk score (0.0 to 100.0) and overall risk category"""
         score = 0.0
         
@@ -40,6 +40,17 @@ class RiskEngine:
             elif sev == "LOW":
                 score += 7.0
                 has_low = True
+
+        # Accumulate score weights from individual evaluated lab parameters with non-NORMAL statuses
+        if evaluated_labs:
+            for lab in evaluated_labs:
+                st = (lab.get("status") or "").upper()
+                if st in ("HIGH", "LOW"):
+                    score += 10.0
+                    has_low = True
+                elif st in ("CRITICAL_HIGH", "CRITICAL_LOW"):
+                    score += 25.0
+                    has_critical = True
 
         # Cap score at 100.0
         score = min(100.0, score)

@@ -101,7 +101,7 @@ class RiskAnalysisService:
             recommendations = self.recommendation_engine.generate_recommendations(rule_findings, critical_labs_count)
 
             # 5. Risk Scoring and Category mapping
-            risk_score, overall_risk = self.risk_engine.calculate_score_and_severity(rule_findings, critical_labs_count)
+            risk_score, overall_risk = self.risk_engine.calculate_score_and_severity(rule_findings, critical_labs_count, evaluated_labs)
 
             # 6. Query AI explanations justifications
             ai_justifications = await self.risk_engine.analyze_risks(ocr_text, rule_findings)

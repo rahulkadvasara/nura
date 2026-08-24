@@ -117,13 +117,14 @@ class ReportPatientMemoryBuilder:
                 })
 
         # 4. Update report summaries log
-        if report.ai_summary:
+        sum_text = report.ai_summary or getattr(report, "patient_summary", None)
+        if sum_text:
             exists = any(item.get("report_id") == report.id for item in rep_summaries)
             if not exists:
                 rep_summaries.append({
                     "report_id": report.id,
                     "report_type": str(report.report_type),
-                    "ai_summary": report.ai_summary,
+                    "ai_summary": sum_text,
                     "summary_confidence": getattr(report, "summary_confidence", 0.90),
                     "generated_at": report_date_str
                 })

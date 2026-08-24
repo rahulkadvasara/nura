@@ -80,8 +80,8 @@ class ReportSyncService:
             patient_id = report.patient_id
             
             # Ensure report is sufficiently processed to permit sync
-            if report.processing_status != "completed":
-                raise ValueError(f"Report {report_id} status is {report.processing_status}. Must be 'completed' to synchronize.")
+            if report.processing_status not in ("completed", "processing", "uploaded"):
+                raise ValueError(f"Report {report_id} status is {report.processing_status}. Must be active or completed to synchronize.")
 
             # 2. Update patient_memory in MongoDB
             updated_mem = await self.memory_builder.build_incremental_memory(patient_id, report)
