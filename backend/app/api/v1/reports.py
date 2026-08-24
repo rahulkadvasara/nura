@@ -1004,13 +1004,35 @@ async def download_original_report_file(
         )
     await verify_report_access(report, current_user)
     
-    if not report.file_url or not os.path.exists(report.file_url):
+    file_path = report.file_url
+    if not file_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Original report file URL is empty"
+        )
+
+    # Normalize relative/absolute file path candidates
+    candidates = [
+        file_path,
+        os.path.join(UPLOAD_DIR, os.path.basename(file_path)),
+        os.path.join("uploads", file_path),
+        os.path.join("uploads/reports", os.path.basename(file_path)),
+    ]
+    
+    resolved_path = None
+    for cand in candidates:
+        if os.path.exists(cand) and os.path.isfile(cand):
+            resolved_path = cand
+            break
+
+    if not resolved_path:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Original report file does not exist on disk"
         )
         
-    return FileResponse(report.file_url)
+    filename = os.path.basename(resolved_path)
+    return FileResponse(resolved_path, filename=filename)
 
 
 # ============================================================

@@ -3,9 +3,9 @@ Nura - Dependencies
 Dependency injection for services and repositories
 """
 
-from typing import AsyncGenerator, Any
+from typing import AsyncGenerator, Any, Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError, ExpiredSignatureError
 
@@ -538,17 +538,31 @@ def get_payment_gateway_service(
     )
 
 
-reusable_oauth2 = HTTPBearer()
+reusable_oauth2 = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
-    token: HTTPAuthorizationCredentials = Depends(reusable_oauth2),
+    request: Request,
+    token: Optional[HTTPAuthorizationCredentials] = Depends(reusable_oauth2),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> UserInDB:
-    """Validate JWT access token and return the user"""
+    """Validate JWT access token from Authorization header or query parameter and return user"""
+    token_str = None
+    if token and token.credentials:
+        token_str = token.credentials
+    else:
+        token_str = request.query_params.get("token") or request.query_params.get("access_token")
+
+    if not token_str:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     try:
         payload = jwt.decode(
-            token.credentials,
+            token_str,
             settings.SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM]
         )
