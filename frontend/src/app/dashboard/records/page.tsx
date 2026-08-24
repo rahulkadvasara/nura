@@ -251,6 +251,9 @@ export default function PatientRecordsPage() {
       const sync = await reportService.getReportSyncStatus(reportId)
       setReportSyncStatus(sync)
       
+      const pipe = await reportService.getPipelineStatus(reportId)
+      setPipelineStatus(pipe)
+
       const mem = await reportService.getPatientMemory()
       setPatientMemory(mem)
     } catch (err) {
@@ -816,7 +819,7 @@ export default function PatientRecordsPage() {
                         { key: 'risk', label: 'Clinical Risk', active: !!pipelineStatus.overall_risk, duration: pipelineStatus.risk_duration_ms },
                         { key: 'summary', label: 'AI Summary', active: !!pipelineStatus.ai_summary, duration: pipelineStatus.summary_duration_ms },
                         { key: 'sync', label: 'DB Sync', active: pipelineStatus.is_synchronized, duration: pipelineStatus.sync_duration_ms },
-                        { key: 'ready', label: 'Ready', active: pipelineStatus.pipeline_status === 'READY', duration: pipelineStatus.pipeline_duration_ms }
+                        { key: 'ready', label: 'Ready', active: pipelineStatus.pipeline_status === 'READY' || (pipelineStatus.ocr_status === 'completed' && !!pipelineStatus.overall_risk && !!pipelineStatus.ai_summary && pipelineStatus.is_synchronized), duration: pipelineStatus.pipeline_duration_ms }
                       ].map((step, idx) => (
                         <div key={idx} className={`p-2.5 rounded border text-center space-y-1 relative ${
                           step.active 
