@@ -1098,9 +1098,11 @@ def get_document_parser():
             report_repository=get_report_repository(),
             pdf_extractor=get_pdf_extractor(),
             image_preprocessor=get_image_preprocessor(),
-            ocr_service=get_ocr_service()
+            ocr_service=get_ocr_service(),
+            storage_service=get_storage_service()
         )
     return _document_parser_instance
+
 
 
 def get_report_service():
