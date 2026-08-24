@@ -42,10 +42,12 @@ class DocumentClassifier:
                 '{"document_type": "<selected_category>", "confidence": <float_score_between_0_and_1>}'
             )
             
+            from app.core.ai_config import ai_settings
             res = await self.ai_service.generate_json(
                 prompt=f"OCR Text:\n\n{ocr_text[:3000]}",
                 system_prompt=system_prompt,
-                temperature=0.0
+                temperature=0.0,
+                model=ai_settings.GROQ_CLASSIFIER_MODEL
             )
             
             parsed = json.loads(res.response)

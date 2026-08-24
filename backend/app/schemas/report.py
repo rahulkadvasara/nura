@@ -145,7 +145,7 @@ class ReportResponse(BaseModel):
 
     id: str = Field(..., description="Report ID")
     patient_id: str = Field(..., description="Patient user ID")
-    uploaded_by: str = Field(..., description="Uploading user ID")
+    uploaded_by: Optional[str] = Field(None, description="Uploading user ID")
     report_type: ReportType = Field(..., description="Type of medical report")
     file_url: str = Field(..., description="URL of the report file")
     file_metadata: Optional[FileMetadata] = Field(None, description="Metadata of uploaded report file")

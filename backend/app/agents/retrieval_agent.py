@@ -150,13 +150,21 @@ class RetrievalAgent(BaseRetrievalAgent):
         # Construct flat lookup scores mapping for point matches
         scores_map = {match["id"]: match["score"] for match in retrieval_raw.get("results", [])}
 
+        raw_citations = assembly_result.get("citations", [])
+        if isinstance(raw_citations, dict):
+            citations_list = list(raw_citations.values()) if raw_citations else []
+        elif isinstance(raw_citations, list):
+            citations_list = raw_citations
+        else:
+            citations_list = []
+
         # Build output RetrievalPackage
         package_data = {
             "intent": intent,
             "collections_used": collections,
             "retrieved_chunks": retrieval_raw.get("results", []),
             "context": assembly_result.get("context", ""),
-            "citations": assembly_result.get("citations", {}),
+            "citations": citations_list,
             "metadata": {
                 "intent_scores": intent_scores,
                 "token_budget": token_budget,

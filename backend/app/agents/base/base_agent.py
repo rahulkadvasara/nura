@@ -70,8 +70,8 @@ class BaseAgent(ABC):
 
     async def run(self, input_data: Any, context: Optional[AgentContext] = None) -> AgentResponse:
         """Runs the lifecycle of the agent, executing the core agent task with retries, timeout, and validation"""
-        ctx = context or AgentContext()
         start_time = time.perf_counter()
+        latency_ms = 0.0
         
         # Standardized logging on execution start
         self.logger.info(

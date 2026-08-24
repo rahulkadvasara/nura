@@ -67,7 +67,7 @@ class ReportBase(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     patient_id: str = Field(..., description="Reference to the patient user ID")
-    uploaded_by: str = Field(..., description="Reference to the user ID who uploaded the report")
+    uploaded_by: Optional[str] = Field(None, description="Reference to the user ID who uploaded the report")
     report_type: ReportType = Field(default=ReportType.OTHER, description="Type of medical report")
     file_url: str = Field(..., description="URL of the uploaded report file")
     file_metadata: Optional[FileMetadata] = Field(None, description="Metadata of uploaded report file")
