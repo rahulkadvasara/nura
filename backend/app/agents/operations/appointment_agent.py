@@ -14,7 +14,9 @@ from app.agents.operations.schemas import AppointmentAgentResponse
 from app.agents.operations.telemetry import get_operations_telemetry
 from app.agents.operations.utils import parse_llm_json_response
 from app.core.ai_config import ai_settings
+from app.services.ai_service import AIService
 from app.services.appointment_service import AppointmentService
+
 from app.services.doctor_service import DoctorProfileService, DoctorAvailabilityService
 from app.schemas.appointment import AppointmentCreateSchema, AppointmentUpdateSchema
 from app.schemas.doctor import DoctorAvailabilityUpdateSchema
@@ -32,6 +34,7 @@ class AppointmentAgent(BaseAgent):
         doctor_service: DoctorProfileService,
         availability_service: DoctorAvailabilityService,
         prompt_loader: Optional[PromptLoader] = None,
+        ai_service: Optional[AIService] = None,
         settings=None
     ):
         super().__init__(name="AppointmentAgent", settings=settings or ai_settings)
@@ -39,7 +42,13 @@ class AppointmentAgent(BaseAgent):
         self.doctor_service = doctor_service
         self.availability_service = availability_service
         self.prompt_loader = prompt_loader or PromptLoader()
+        if ai_service is None:
+            from app.core.dependencies import get_ai_service
+            self.ai_service = get_ai_service()
+        else:
+            self.ai_service = ai_service
         self.telemetry = get_operations_telemetry()
+
 
     async def execute(self, input_data: Any, context: Optional[AgentContext] = None) -> Any:
         """
@@ -80,11 +89,18 @@ class AppointmentAgent(BaseAgent):
             specialist_recommendation = context.metadata.get("doctor_recommendation", "None")
 
         # Fetch appointments history
+        is_active_query = any(kw in query.lower() for kw in ["active", "upcoming", "future", "scheduled", "open", "pending", "approved"])
+        is_all_query = any(kw in query.lower() for kw in ["all", "past", "history", "completed", "previous"])
+
         try:
             history = await self.appointment_service.list_patient_appointments_history(patient_id)
             for h in history:
+                status_val = str(h.get('status', '')).lower()
+                if is_active_query or not is_all_query:
+                    if status_val not in ["approved", "pending", "scheduled", "in_progress"]:
+                        continue
                 history_list.append(
-                    f"- Appointment ID: {h['id']} | Doctor: {h['doctor_name']} ({h['specialization']}) | Date: {h['appointment_date']} | Time: {h['appointment_time']} | Status: {h['status']}"
+                    f"Appointment ID: {h['id']} | Doctor: {h['doctor_name']} ({h['specialization']}) | Date: {h['appointment_date']} | Time: {h['appointment_time']} | Status: {h['status']}"
                 )
         except Exception as e:
             logger.warning(f"Failed to fetch appointments history for patient {patient_id}: {e}")
@@ -129,31 +145,30 @@ class AppointmentAgent(BaseAgent):
             # 3. Handle Actions
             if action == "search_doctors":
                 doc_name = params.get("doctor_name")
-                spec = params.get("specialization")
+                specialization = params.get("specialization")
                 
                 doctors = await self.doctor_service.search_verified_doctors(
                     name_query=doc_name,
-                    specialization=spec
+                    specialization=specialization
                 )
                 search_results = [d.model_dump() for d in doctors]
                 message = f"Found {len(search_results)} matching doctors."
-                reasoning = f"Searched doctor profiles in the directory matching name '{doc_name}' or specialty '{spec}'."
+                reasoning = f"Searched doctor profiles matching name='{doc_name}', spec='{specialization}'."
 
-            elif action == "recommend_slots":
+            elif action == "get_slots":
                 doctor_id = params.get("doctor_id")
                 if not doctor_id:
                     raise ValueError("doctor_id is required to fetch available slots")
 
                 active_slots = await self.availability_service.get_active_availability(doctor_id)
-                slots = [s.model_dump() for s in active_slots if s.is_available]
-                message = f"Found {len(slots)} available slots for doctor with ID {doctor_id}."
-                reasoning = "Retrieved active availability slots from the calendar database."
+                slots = [s.model_dump() for s in active_slots if getattr(s, "is_available", True)]
+                message = f"Found {len(slots)} available slots for doctor {doctor_id}."
+                reasoning = f"Queried active availability slots for doctor_id={doctor_id}."
 
             elif action == "book_appointment":
                 doctor_id = params.get("doctor_id")
                 avail_id = params.get("availability_id")
-                reason = params.get("reason") or "General Consultation"
-                notes = params.get("notes")
+                reason = params.get("reason") or "Consultation appointment"
                 
                 if not doctor_id or not avail_id:
                     raise ValueError("doctor_id and availability_id are required to book appointments")
@@ -161,20 +176,19 @@ class AppointmentAgent(BaseAgent):
                 schema = AppointmentCreateSchema(
                     doctor_id=doctor_id,
                     availability_id=avail_id,
-                    reason=reason,
-                    notes=notes
+                    reason=reason
                 )
-                res_db = await self.appointment_service.create_appointment(patient_id, schema)
                 
-                # Mark availability slot as booked/not available
+                res_db = await self.appointment_service.create_appointment(patient_id, schema)
                 await self.availability_service.update_availability(
                     avail_id, 
                     DoctorAvailabilityUpdateSchema(is_available=False)
                 )
-
+                service_calls += 1
+                
                 appointment = self.appointment_service.to_response(res_db).model_dump()
                 message = "Appointment booked successfully."
-                reasoning = f"Created pending appointment slot for Doctor ID {doctor_id}."
+                reasoning = f"Created appointment record {res_db.id} and marked availability slot {avail_id} as unavailable."
 
             elif action == "reschedule_appointment":
                 appointment_id = params.get("appointment_id")
@@ -184,15 +198,11 @@ class AppointmentAgent(BaseAgent):
                 if not appointment_id or not new_avail_id:
                     raise ValueError("appointment_id and availability_id are required to reschedule")
 
-                # Fetch original appointment
                 existing_appt = await self.appointment_service.get_appointment_by_id(appointment_id)
                 if not existing_appt or existing_appt.patient_id != patient_id:
                     raise ValueError(f"Appointment with ID {appointment_id} not found or access denied")
 
-                # Reschedule workflow consists of two steps:
-                # 1. Cancel old appointment
                 await self.appointment_service.cancel_patient_appointment(appointment_id, patient_id)
-                # Re-activate old slot
                 if existing_appt.availability_id:
                     await self.availability_service.update_availability(
                         existing_appt.availability_id,
@@ -200,14 +210,12 @@ class AppointmentAgent(BaseAgent):
                     )
                 service_calls += 1
 
-                # 2. Book new appointment
                 schema = AppointmentCreateSchema(
                     doctor_id=existing_appt.doctor_id,
                     availability_id=new_avail_id,
                     reason=reason
                 )
                 res_db = await self.appointment_service.create_appointment(patient_id, schema)
-                # Mark new slot unavailable
                 await self.availability_service.update_availability(
                     new_avail_id,
                     DoctorAvailabilityUpdateSchema(is_available=False)
@@ -228,7 +236,6 @@ class AppointmentAgent(BaseAgent):
                     raise ValueError(f"Appointment with ID {appointment_id} not found or access denied")
 
                 res_db = await self.appointment_service.cancel_patient_appointment(appointment_id, patient_id)
-                # Re-activate availability slot
                 if res_db and res_db.availability_id:
                     await self.availability_service.update_availability(
                         res_db.availability_id,
@@ -242,9 +249,10 @@ class AppointmentAgent(BaseAgent):
 
             else:  # explain_status
                 if history_list:
-                    message = f"You have {len(history_list)} registered appointments:\n" + "\n".join(history_list)
+                    count_str = f"{len(history_list)} active appointment{'s' if len(history_list) > 1 else ''}" if is_active_query else f"{len(history_list)} appointment{'s' if len(history_list) > 1 else ''}"
+                    message = f"You have {count_str}:"
                 else:
-                    message = "You have no appointments scheduled."
+                    message = "You have no active appointments scheduled." if is_active_query else "You have no appointments scheduled."
                 reasoning = "Fetched appointments history from database."
 
         except Exception as e:

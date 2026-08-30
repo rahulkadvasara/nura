@@ -185,7 +185,12 @@ async def migrate():
             os.path.join("uploads", "reports", filename),
             os.path.join("backend", "uploads", "reports", filename),
             os.path.join("..", "uploads", "reports", filename),
+            os.path.join("uploads", "reports", "patients", patient_id, filename),
+            os.path.join("backend", "uploads", "reports", "patients", patient_id, filename),
+            os.path.join("..", "uploads", "reports", "patients", patient_id, filename),
+            os.path.join("uploads", file_url),
         ]
+
         
         local_path = None
         for p in candidate_paths:
@@ -287,7 +292,12 @@ async def migrate():
             os.path.join("uploads", "doctor-documents", filename),
             os.path.join("backend", "uploads", "doctor-documents", filename),
             os.path.join("..", "uploads", "doctor-documents", filename),
+            os.path.join("uploads", "doctor-documents", "doctors", doctor_id, filename),
+            os.path.join("backend", "uploads", "doctor-documents", "doctors", doctor_id, filename),
+            os.path.join("..", "uploads", "doctor-documents", "doctors", doctor_id, filename),
+            os.path.join("uploads", doc_url),
         ]
+
         
         local_path = None
         for p in candidate_paths:

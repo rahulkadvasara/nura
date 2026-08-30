@@ -118,10 +118,18 @@ class MongoDBConnection:
             return False
     
     def get_database(self) -> AsyncIOMotorDatabase:
-        """Get database instance"""
+        """Get database instance. Lazy-initializes default database if not explicitly connected."""
         if self.database is None:
-            raise RuntimeError("MongoDB not connected")
+            try:
+                self.client = AsyncIOMotorClient(settings.MONGODB_URL or "mongodb://localhost:27017", serverSelectionTimeoutMS=2000)
+                self.database = self.client[settings.MONGODB_DATABASE or "nura_db"]
+            except Exception as e:
+                logger.warning(f"Could not lazy-initialize MongoDB database: {e}")
+                # Fallback to local default client
+                self.client = AsyncIOMotorClient("mongodb://localhost:27017", serverSelectionTimeoutMS=2000)
+                self.database = self.client["nura"]
         return self.database
+
 
 
 # Global MongoDB connection instance

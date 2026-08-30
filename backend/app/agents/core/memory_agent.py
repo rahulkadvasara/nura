@@ -72,7 +72,10 @@ class MemoryAgent(BaseAgent):
         
         if patient_id:
             # 1. Fetch longitudinal memory from MongoDB
-            patient_memory = await self.patient_memory_repository.get_by_patient_id(patient_id)
+            try:
+                patient_memory = await self.patient_memory_repository.get_by_patient_id(patient_id)
+            except Exception as e:
+                self.logger.warning(f"Failed to fetch longitudinal memory: {e}")
             
             # 2. Fetch recent conversation messages
             if session_id:
@@ -100,7 +103,8 @@ class MemoryAgent(BaseAgent):
                 # Re-fetch updated memory if it changed during sync
                 patient_memory = await self.patient_memory_repository.get_by_patient_id(patient_id)
             except Exception as e:
-                self.logger.error(f"Failed to execute memory synchronization: {str(e)}", exc_info=True)
+                self.logger.warning(f"Failed to execute memory synchronization: {str(e)}")
+
 
         total_latency = (time.perf_counter() - start_time) * 1000.0
         

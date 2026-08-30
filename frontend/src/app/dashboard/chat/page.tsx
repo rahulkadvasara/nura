@@ -21,6 +21,7 @@ import {
   useBookmarkMessage,
   useRemoveBookmark,
   useBookmarks,
+  useFollowupQuestions,
 } from '@/hooks/use-chat'
 import {
   Plus,
@@ -103,11 +104,13 @@ export default function ChatPage() {
   // Message input state
   const [messageText, setMessageText] = useState('')
   const [messageRole, setMessageRole] = useState<'USER' | 'ASSISTANT' | 'SYSTEM'>('USER')
+  const [optimisticUserMsg, setOptimisticUserMsg] = useState<any | null>(null)
 
   // Streaming State
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingText, setStreamingText] = useState('')
   const [streamingAgent, setStreamingAgent] = useState('')
+  const [streamingCards, setStreamingCards] = useState<any[]>([])
   const abortControllerRef = useRef<AbortController | null>(null)
 
   // Feedback State
@@ -319,8 +322,12 @@ export default function ChatPage() {
     setIsStreaming(true)
     setStreamingText('')
     setStreamingAgent('')
+    setStreamingCards([])
 
     abortControllerRef.current = new AbortController()
+    let finalAccText = ''
+    let finalAgent = ''
+    let finalCards: any[] = []
 
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
@@ -371,10 +378,16 @@ export default function ChatPage() {
           try {
             const parsed = JSON.parse(rawJson)
             if (parsed.type === 'token') {
+              finalAccText += parsed.content
               setStreamingText((prev) => prev + parsed.content)
             } else if (parsed.type === 'metadata') {
               if (parsed.agent_used) {
+                finalAgent = parsed.agent_used
                 setStreamingAgent(parsed.agent_used)
+              }
+              if (parsed.cards && Array.isArray(parsed.cards)) {
+                finalCards = parsed.cards
+                setStreamingCards(parsed.cards)
               }
             } else if (parsed.type === 'error') {
               toast.error(parsed.error || 'AI pipeline errored')
@@ -393,10 +406,35 @@ export default function ChatPage() {
         toast.error(err.message || 'Streaming failed')
       }
     } finally {
+      if (finalAccText.trim() && selectedSessionId) {
+        const tempAssistantMsg = {
+          id: `temp-assistant-${Date.now()}`,
+          session_id: selectedSessionId,
+          patient_id: patientId,
+          role: 'ASSISTANT',
+          content: finalAccText,
+          created_at: new Date().toISOString(),
+          metadata: { agent: finalAgent, cards: finalCards },
+          cards: finalCards,
+          citations: [],
+          token_usage: {},
+          deleted: false
+        }
+        queryClient.setQueriesData({ queryKey: ['chat', 'messages', selectedSessionId] }, (oldData: any) => {
+          if (!oldData) return { messages: [tempAssistantMsg], total: 1, limit: 100, skip: 0 }
+          const list = Array.isArray(oldData.messages) ? oldData.messages : (Array.isArray(oldData) ? oldData : [])
+          return {
+            ...oldData,
+            messages: [...list, tempAssistantMsg]
+          }
+        })
+      }
+
       setIsStreaming(false)
       setStreamingText('')
       setStreamingAgent('')
-      // Invalidate message queries to reload complete messages list from server
+      setStreamingCards([])
+
       queryClient.invalidateQueries({ queryKey: ['chat', 'messages', selectedSessionId] })
       queryClient.invalidateQueries({ queryKey: ['chat', 'session', selectedSessionId] })
       queryClient.invalidateQueries({ queryKey: ['chat', 'sessions'] })
@@ -407,29 +445,56 @@ export default function ChatPage() {
   // Handle message post
   const handleSendMessage = async (e: React.FormEvent, customText?: string) => {
     if (e) e.preventDefault()
-    const textToSend = customText || messageText
-    if (!textToSend.trim() || !selectedSessionId) return
+    const textToSend = (customText || messageText).trim()
+    if (!textToSend || !selectedSessionId) return
 
     if (!customText) {
       setMessageText('')
     }
 
+    if (messageRole === 'USER') {
+      // Instantly update React Query cache for this session so user message renders in 0ms!
+      const tempMsg = {
+        id: `temp-user-${Date.now()}`,
+        session_id: selectedSessionId,
+        patient_id: patientId,
+        role: 'USER',
+        content: textToSend,
+        created_at: new Date().toISOString(),
+        metadata: {},
+        citations: [],
+        token_usage: {},
+        deleted: false
+      }
+      queryClient.setQueriesData({ queryKey: ['chat', 'messages', selectedSessionId] }, (oldData: any) => {
+        if (!oldData) return { messages: [tempMsg], total: 1, limit: 100, skip: 0 }
+        const existingMessages = Array.isArray(oldData.messages) ? oldData.messages : (Array.isArray(oldData) ? oldData : [])
+        return {
+          ...oldData,
+          messages: [...existingMessages, tempMsg]
+        }
+      })
+      setOptimisticUserMsg(tempMsg)
+    }
+
     try {
       if (messageRole === 'USER') {
         // Run AI pipeline with Streaming SSE
-        await handleStartMessageStream(textToSend.trim())
+        await handleStartMessageStream(textToSend)
       } else {
         // Manual simulation fallback
         await createMessageMutation.mutateAsync({
           session_id: selectedSessionId,
           patient_id: patientId,
           role: messageRole,
-          content: textToSend.trim(),
+          content: textToSend,
         })
         toast.success('Manual message stored')
       }
     } catch (err: any) {
       toast.error(err.message || 'Execution crashed')
+    } finally {
+      setOptimisticUserMsg(null)
     }
   }
 
@@ -1027,7 +1092,7 @@ export default function ChatPage() {
                 <div className="flex items-center justify-center h-full">
                   <span className="text-xs text-slate-400 animate-pulse">Loading conversation...</span>
                 </div>
-              ) : history.messages.length === 0 && !isStreaming ? (
+              ) : history.messages.length === 0 && !isStreaming && !optimisticUserMsg ? (
                 <div className="flex flex-col items-center justify-center h-full text-center max-w-sm mx-auto p-4 space-y-4">
                   <div className="h-10 w-10 rounded-full bg-teal-50 flex items-center justify-center">
                     <Sparkles className="h-5 w-5 text-teal-600 animate-pulse" />
@@ -1043,10 +1108,10 @@ export default function ChatPage() {
                     <span className="text-[10px] text-slate-450 font-bold uppercase tracking-wider">Suggested Queries:</span>
                     <div className="flex flex-wrap justify-center gap-1.5 w-full">
                       {[
-                        "Explain my lab report details",
-                        "Check medication safety constraints",
-                        "Summarize my overall health profile",
-                        "What key questions should I ask my doctor?"
+                        "What are my active appointments?",
+                        "Suggest a doctor for consultation",
+                        "Explain my blood test report details",
+                        "Check if my medications interact"
                       ].map((promptText, pIdx) => (
                         <button
                           key={pIdx}
@@ -1062,7 +1127,12 @@ export default function ChatPage() {
                 </div>
               ) : (
                 <>
-                  {history.messages.map((message) => {
+                  {(() => {
+                    const allMsgs = [...history.messages]
+                    if (optimisticUserMsg && !allMsgs.some(m => m.id === optimisticUserMsg.id || (m.role === 'USER' && m.content === optimisticUserMsg.content))) {
+                      allMsgs.push(optimisticUserMsg)
+                    }
+                    return allMsgs.map((message) => {
                     const isUser = message.role === 'USER'
                     const isSystem = message.role === 'SYSTEM'
 
@@ -1355,7 +1425,7 @@ export default function ChatPage() {
                         </div>
                       </div>
                     )
-                  })}
+                  })})()}
                 </>
               )}
 
@@ -1365,11 +1435,57 @@ export default function ChatPage() {
                   <div className="h-8 w-8 rounded-full bg-teal-50 border border-teal-200 flex items-center justify-center flex-shrink-0 shadow-sm animate-pulse">
                     <Sparkles className="h-4 w-4 text-teal-600" />
                   </div>
-                  <div className="flex flex-col">
+                  <div className="flex flex-col max-w-full">
                     <div className="px-4 py-2.5 rounded-2xl bg-white border border-slate-150 text-slate-700 rounded-tl-none text-xs leading-relaxed shadow-sm">
                       <div>{renderMarkdown(streamingText)}</div>
                       <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-teal-600 animate-pulse" />
                     </div>
+
+                    {streamingCards && streamingCards.length > 0 && (
+                      <div className="mt-2.5 space-y-3 max-w-md w-full animate-in slide-in-from-bottom-2 duration-300">
+                        {streamingCards.map((card, cidx) => (
+                          <div
+                            key={cidx}
+                            className="p-3.5 rounded-xl border border-slate-150 bg-white/70 backdrop-blur-md shadow-sm flex flex-col gap-3"
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className="p-2 rounded-lg bg-teal-50 border border-teal-100 text-teal-600">
+                                <Calendar className="h-4 w-4" />
+                              </div>
+                              <div className="flex-1">
+                                <h4 className="text-xs font-bold text-slate-800">{card.title}</h4>
+                                {card.subtitle && <p className="text-[10px] text-slate-500 font-medium">{card.subtitle}</p>}
+                              </div>
+                              {card.status && (
+                                <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-teal-50 text-teal-700 border border-teal-100">
+                                  {card.status}
+                                </span>
+                              )}
+                            </div>
+                            {card.summary && (
+                              <p className="text-[10px] text-slate-600 leading-normal font-medium bg-slate-50/50 p-2 rounded-lg border border-slate-100/50">
+                                {card.summary}
+                              </p>
+                            )}
+                            {card.actions && card.actions.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mt-0.5">
+                                {card.actions.map((action: any, aidx: number) => (
+                                  <a
+                                    key={aidx}
+                                    href={action.url}
+                                    className="px-3 py-1.5 rounded-lg text-[9px] font-bold transition-all flex items-center gap-1 shadow-sm bg-teal-600 text-white hover:bg-teal-700"
+                                  >
+                                    <span>{action.label}</span>
+                                    <ChevronRight className="h-3 w-3" />
+                                  </a>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     {streamingAgent && (
                       <div className="mt-1 text-[9px] text-slate-400 font-bold">
                         agent: {streamingAgent}
@@ -1697,7 +1813,6 @@ function FollowUpQuestionsSection({
   messageId: string
   onQuestionClick: (q: string) => void
 }) {
-  const { useFollowupQuestions } = require('@/hooks/use-chat')
   const { data: questions = [], isLoading } = useFollowupQuestions(messageId)
 
   if (isLoading || questions.length === 0) return null

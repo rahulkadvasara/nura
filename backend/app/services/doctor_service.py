@@ -190,6 +190,62 @@ class DoctorProfileService(BaseService[DoctorProfileInDB, DoctorProfileCreate, D
         """List only verified doctor profiles."""
         return await self.profile_repository.get_verified_doctors(limit=limit, skip=skip)
 
+    async def list_verified_doctors_with_names(
+        self, 
+        limit: int = 100, 
+        skip: int = 0,
+        specialization: Optional[str] = None
+    ) -> List[DoctorDiscoveryResponse]:
+        """List verified doctor profiles populated with full user names from UserRepository, optionally filtered by specialization."""
+        verified = await self.profile_repository.get_verified_doctors(limit=100, skip=skip)
+        if not verified:
+            return []
+        
+        if specialization:
+            spec_lower = specialization.lower().strip()
+            spec_filtered = [
+                p for p in verified 
+                if p.specialization and (spec_lower in p.specialization.lower() or p.specialization.lower() in spec_lower)
+            ]
+            if spec_filtered:
+                verified = spec_filtered
+
+        verified = verified[:limit]
+        
+        if not self.user_repository:
+            from app.core.dependencies import get_user_repository
+            self.user_repository = get_user_repository()
+
+        user_ids = [p.user_id for p in verified if p.user_id]
+        users = await self.user_repository.get_many({"_id": {"$in": user_ids}})
+        user_map = {u.id: u for u in users}
+
+        results = []
+        for p in verified:
+            user = user_map.get(p.user_id)
+            doc_name = user.full_name if user and user.full_name else None
+            if not doc_name and p.user_id:
+                doc_name = f"Doctor {p.user_id[:6]}"
+            results.append(
+                DoctorDiscoveryResponse(
+                    id=p.id,
+                    user_id=p.user_id,
+                    name=doc_name or "Medical Specialist",
+                    specialization=p.specialization or "General Medicine",
+                    qualifications=p.qualifications,
+                    experience_years=p.experience_years,
+                    consultation_fee=p.consultation_fee,
+                    bio=p.bio,
+                    languages=p.languages,
+                    hospital=p.hospital,
+                    education=p.education,
+                    profile_picture=user.profile_picture if user else None,
+                    average_rating=p.average_rating,
+                    total_reviews=p.total_reviews,
+                )
+            )
+        return results
+
     async def list_by_status(
         self,
         status: DoctorProfileStatus,

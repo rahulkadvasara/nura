@@ -251,6 +251,98 @@ class MemoryAgentNode:
         }
 
 
+class GreetingAgentNode:
+    """Executes GreetingAgent to generate friendly, personalized greetings"""
+
+    async def __call__(self, state: GraphState) -> Dict[str, Any]:
+        from app.core.dependencies import get_greeting_agent
+        from app.agents.base.context import AgentContext
+        
+        agent = get_greeting_agent()
+        ctx = AgentContext(
+            request_id=state.request_id,
+            session_id=state.session_id,
+            conversation_id=state.conversation_id,
+            patient_id=state.patient_id,
+            doctor_id=state.doctor_id,
+            user_id=state.user_id,
+            role=state.role,
+            metadata=dict(state.metadata or {})
+        )
+        
+        res = await agent.run(state.query, ctx)
+        trace = list(state.execution_trace) if state.execution_trace else []
+        trace.append("GreetingAgent")
+        
+        if not res.success:
+            return {
+                "current_node": "GreetingAgent",
+                "previous_node": state.current_node,
+                "execution_trace": trace,
+                "error": res.message
+            }
+            
+        meta = dict(state.metadata or {})
+        meta.update(res.metadata or {})
+        greeting_data = res.response
+        greeting_text = greeting_data.greeting if hasattr(greeting_data, "greeting") else str(greeting_data)
+        
+        return {
+            "current_node": "GreetingAgent",
+            "previous_node": state.current_node,
+            "execution_trace": trace,
+            "response": greeting_text,
+            "metadata": meta,
+            "token_usage": getattr(greeting_data, "usage", {})
+        }
+
+
+class GeneralChatAgentNode:
+    """Executes GeneralChatAgent to answer queries about assistant identity and capabilities"""
+
+    async def __call__(self, state: GraphState) -> Dict[str, Any]:
+        from app.core.dependencies import get_general_chat_agent
+        from app.agents.base.context import AgentContext
+        
+        agent = get_general_chat_agent()
+        ctx = AgentContext(
+            request_id=state.request_id,
+            session_id=state.session_id,
+            conversation_id=state.conversation_id,
+            patient_id=state.patient_id,
+            doctor_id=state.doctor_id,
+            user_id=state.user_id,
+            role=state.role,
+            metadata=dict(state.metadata or {})
+        )
+        
+        res = await agent.run(state.query, ctx)
+        trace = list(state.execution_trace) if state.execution_trace else []
+        trace.append("GeneralChatAgent")
+        
+        if not res.success:
+            return {
+                "current_node": "GeneralChatAgent",
+                "previous_node": state.current_node,
+                "execution_trace": trace,
+                "error": res.message
+            }
+            
+        meta = dict(state.metadata or {})
+        meta.update(res.metadata or {})
+        chat_data = res.response
+        chat_text = chat_data.answer if hasattr(chat_data, "answer") else str(chat_data)
+        
+        return {
+            "current_node": "GeneralChatAgent",
+            "previous_node": state.current_node,
+            "execution_trace": trace,
+            "response": chat_text,
+            "metadata": meta,
+            "token_usage": getattr(chat_data, "usage", {})
+        }
+
+
 class UnknownAgentNode:
     """Fallback agent node handling unrecognized intents"""
 
@@ -263,6 +355,7 @@ class UnknownAgentNode:
             "execution_trace": trace,
             "response": "I'm sorry, I could not classify your query's clinical intent. Please try rephrasing your symptoms or question."
         }
+
 
 
 class ReportAnalysisAgentNode:
@@ -566,13 +659,27 @@ class RetrievalAgentNode:
     async def __call__(self, state: GraphState) -> Dict[str, Any]:
         trace = list(state.execution_trace) if state.execution_trace else []
         trace.append(RETRIEVAL_AGENT_NODE)
-        
+        meta = dict(state.metadata or {})
         retrieved_context_str = ""
         citations = []
-        meta = dict(state.metadata or {})
-        
+
+        # Skip heavy vector RAG retrieval for operational & conversational agents
+        bypass_retrieval_agents = {"GreetingAgent", "GeneralChatAgent", "AppointmentAgent", "ReminderAgent"}
+        if state.selected_agent in bypass_retrieval_agents:
+            return {
+                "current_node": RETRIEVAL_AGENT_NODE,
+                "previous_node": state.current_node,
+                "retrieved_context": "",
+                "citations": [],
+                "execution_trace": trace,
+                "metadata": meta
+            }
+
+
+
         # Only perform retrieval if there is a search query
         if state.query:
+
             try:
                 from app.core.dependencies import get_retrieval_agent
                 from app.agents.base.context import AgentContext

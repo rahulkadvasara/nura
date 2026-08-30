@@ -12,12 +12,14 @@ from app.core.exceptions import AIConfigurationError
 class AISettings(BaseSettings):
     """AI application settings loaded from environment variables"""
     
-    GROQ_API_KEY: str = Field(default="", description="API key for Groq service authentication")
-    GROQ_MODEL: str = Field(default="groq/compound", description="Primary model name for Groq service")
-    GROQ_BACKUP_MODEL: str = Field(default="groq/compound-mini", description="Backup model name for Groq rate limit fallback")
-    GROQ_CLASSIFIER_MODEL: str = Field(default="groq/compound-mini", description="Fast lightweight model for document classification")
+    GROQ_API_KEY: str = Field(default="", description="API key for AI service authentication")
+    GROQ_MODEL: str = Field(default="openai/gpt-oss-120b", description="Primary model name for AI service")
+    GROQ_BACKUP_MODEL: str = Field(default="openai/gpt-oss-20b", description="Backup model name for rate limit fallback")
+    GROQ_CLASSIFIER_MODEL: str = Field(default="openai/gpt-oss-20b", description="Fast lightweight model for intent classification")
     
     # Exposed Model Names
+    MODEL_OPENAI_120B: str = "openai/gpt-oss-120b"
+    MODEL_OPENAI_20B: str = "openai/gpt-oss-20b"
     MODEL_LLAMA_3_3_70B: str = "llama-3.3-70b-versatile"
     MODEL_LLAMA_3_1_8B: str = "llama-3.1-8b-instant"
     MODEL_MIXTRAL_8X7B: str = "mixtral-8x7b-32768"

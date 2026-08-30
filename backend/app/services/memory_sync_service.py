@@ -295,10 +295,15 @@ class MemorySyncService:
             }
 
         except Exception as e:
-            logger.error(f"Error executing sync for patient {patient_id}: {str(e)}", exc_info=True)
+            logger.warning(f"Error executing sync for patient {patient_id}: {str(e)}")
             # Metrics failure
             memory_sync_metrics.record_failure()
-            raise e
+            return {
+                "success": False,
+                "patient_id": patient_id,
+                "error": str(e)
+            }
+
 
     async def sync_all_patients(self) -> Dict[str, Any]:
         """

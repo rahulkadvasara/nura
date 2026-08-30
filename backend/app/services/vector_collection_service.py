@@ -22,8 +22,12 @@ class VectorCollectionService:
     
     def __init__(self, client: Optional[QdrantClient] = None, settings: AISettings = ai_settings):
         self.settings = settings
-        self.settings.validate_config()
+        try:
+            self.settings.validate_config()
+        except AIConfigurationError as e:
+            logger.warning(f"VectorCollectionService config unvalidated: {e}")
         self._client = client
+
 
     @property
     def client(self) -> QdrantClient:
@@ -41,9 +45,14 @@ class VectorCollectionService:
         return name
 
     def ensure_payload_indexes(self, collection_name: str) -> None:
-        """Create KEYWORD payload indexes for common metadata filter fields (patient_id, report_id, etc.)"""
+        """Create KEYWORD payload indexes for common metadata filter fields (patient_id, session_id, etc.)"""
         target_name = self.get_collection_name(collection_name)
-        for field in ["patient_id", "report_id", "user_id", "doctor_id"]:
+        for field in [
+            "patient_id", "report_id", "user_id", "doctor_id",
+            "session_id", "chat_session_id", "message_id",
+            "reminder_id", "appointment_id", "document_id",
+            "source", "type", "status", "intent"
+        ]:
             try:
                 self.client.create_payload_index(
                     collection_name=target_name,

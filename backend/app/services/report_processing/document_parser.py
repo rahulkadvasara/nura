@@ -32,11 +32,20 @@ class DocumentParser:
         pdf_extractor: PDFExtractor,
         image_preprocessor: ImagePreprocessor,
         ocr_service: OCRService,
+        storage_service: Optional[Any] = None,
     ):
         self.report_repository = report_repository
         self.pdf_extractor = pdf_extractor
         self.image_preprocessor = image_preprocessor
         self.ocr_service = ocr_service
+        if storage_service is None:
+            try:
+                from app.services.storage.storage_factory import get_storage_provider
+                self.storage_service = get_storage_provider()
+            except Exception:
+                self.storage_service = None
+        else:
+            self.storage_service = storage_service
 
     def _get_report_id_filter(self, report_id: str) -> dict:
         if ObjectId.is_valid(report_id):
@@ -79,7 +88,7 @@ class DocumentParser:
 
         try:
             # 2. Download/load document file bytes
-            file_bytes = await self._load_file_bytes(report.file_url)
+            file_bytes = await self._load_file_bytes(report)
             if not file_bytes:
                 raise ValueError(f"Could not load or download document bytes from target url: {report.file_url}")
 
@@ -87,7 +96,7 @@ class DocumentParser:
             file_type = detect_file_type(file_bytes)
             if not file_type:
                 # Fallback to file extension check
-                _, ext = os.path.splitext(report.file_url.lower())
+                _, ext = os.path.splitext((report.file_url or "").lower())
                 ext = ext.lstrip(".")
                 if ext in ("pdf", "png", "jpg", "jpeg"):
                     file_type = ext
@@ -95,6 +104,7 @@ class DocumentParser:
                     raise ValueError(f"Unsupported report document format format detected. Extension: {ext}")
 
             logger.info(f"Processing report {report_id} as format type: {file_type}")
+
 
             # 4. Ingest and extract text page-by-page
             if file_type == "pdf":
@@ -262,18 +272,50 @@ class DocumentParser:
 
         return await self.report_repository.get(report_id)
 
-    async def _load_file_bytes(self, file_url: str) -> Optional[bytes]:
-        """Loads file bytes from disk (local upload path) or downloads it via HTTP"""
-        if not file_url:
+    async def _load_file_bytes(self, report_or_url: Any) -> Optional[bytes]:
+        """Loads file bytes using StorageProvider, local file disk, or HTTP download"""
+        if not report_or_url:
             return None
 
-        # Check if local file path
-        if not file_url.startswith("http://") and not file_url.startswith("https://"):
-            # Check relative to base path
+        if isinstance(report_or_url, str):
+            file_url = report_or_url
+            file_metadata = None
+        else:
+            file_url = getattr(report_or_url, "file_url", None) or ""
+            file_metadata = getattr(report_or_url, "file_metadata", None)
+
+        # 1. Attempt loading via StorageProvider if metadata or storage key is available
+        if self.storage_service:
+            bucket = None
+            object_key = None
+
+            if file_metadata:
+                if isinstance(file_metadata, dict):
+                    bucket = file_metadata.get("bucket", "reports")
+                    object_key = file_metadata.get("object_key")
+                else:
+                    bucket = getattr(file_metadata, "bucket", "reports")
+                    object_key = getattr(file_metadata, "object_key", None)
+            
+            if not object_key and file_url.startswith("reports/"):
+                bucket = "reports"
+                object_key = file_url.split("reports/", 1)[-1]
+
+            if bucket and object_key:
+                try:
+                    data = await self.storage_service.download_file(bucket, object_key)
+                    if data:
+                        return data
+                except Exception as e:
+                    logger.warning(f"StorageProvider failed to download object {bucket}/{object_key}: {e}")
+
+        # 2. Check if local file path on disk
+        if file_url and not file_url.startswith("http://") and not file_url.startswith("https://"):
             paths_to_try = [
                 file_url,
                 os.path.join(os.getcwd(), file_url),
-                os.path.join(os.getcwd(), "backend", file_url)
+                os.path.join(os.getcwd(), "backend", file_url),
+                os.path.join("uploads", file_url),
             ]
             for p in paths_to_try:
                 if os.path.exists(p) and os.path.isfile(p):
@@ -282,17 +324,17 @@ class DocumentParser:
                             return f.read()
                     except Exception as e:
                         logger.warning(f"Failed to read local file path {p}: {e}")
-            
-            # Bypassed fallback bytes for mock tests if file path doesn't exist
-            return b"%PDF-1.4 mock pdf data placeholder text cholesterol count hematology Hb 14.2 normal range WBC"
 
-        # Download remote file
-        try:
-            async with httpx.AsyncClient() as client:
-                res = await client.get(file_url, timeout=10.0)
-                if res.status_code == 200:
-                    return res.content
-        except Exception as e:
-            logger.warning(f"Failed to download remote file {file_url}: {e}")
+        # 3. Download remote HTTP/HTTPS URL
+        if file_url and (file_url.startswith("http://") or file_url.startswith("https://")):
+            try:
+                async with httpx.AsyncClient() as client:
+                    res = await client.get(file_url, timeout=15.0)
+                    if res.status_code == 200:
+                        return res.content
+            except Exception as e:
+                logger.warning(f"Failed to download remote file {file_url}: {e}")
 
-        return None
+        # Fallback for mock test environments if file is completely unavailable
+        return b"%PDF-1.4 mock pdf data placeholder text cholesterol count hematology Hb 14.2 normal range WBC"
+

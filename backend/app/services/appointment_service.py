@@ -190,9 +190,22 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
         patient_id: str,
         limit: int = 100,
         skip: int = 0,
+        active_only: bool = False,
     ) -> List[AppointmentInDB]:
-        """Fetch all appointments for a patient"""
-        return await self.appointment_repository.get_by_patient_id(patient_id, limit=limit, skip=skip)
+        """Fetch appointments for a patient, sorted newest first, optionally filtered to active ones."""
+        appts = await self.appointment_repository.get_many({"patient_id": patient_id}, limit=100, skip=0)
+        appts.sort(key=lambda a: a.created_at, reverse=True)
+
+        if active_only:
+            valid_statuses = {"approved", "pending", "in_progress", "scheduled"}
+            filtered = []
+            for appt in appts:
+                st = appt.status.value if hasattr(appt.status, "value") else str(appt.status)
+                if st.lower() in valid_statuses:
+                    filtered.append(appt)
+            return filtered[skip:skip+limit]
+
+        return appts[skip:skip+limit]
 
     async def list_appointments_by_doctor(
         self,

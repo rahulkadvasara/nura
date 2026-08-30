@@ -1098,9 +1098,11 @@ def get_document_parser():
             report_repository=get_report_repository(),
             pdf_extractor=get_pdf_extractor(),
             image_preprocessor=get_image_preprocessor(),
-            ocr_service=get_ocr_service()
+            ocr_service=get_ocr_service(),
+            storage_service=get_storage_service()
         )
     return _document_parser_instance
+
 
 
 def get_report_service():
@@ -1344,6 +1346,13 @@ def get_doctor_recommendation_agent() -> DoctorRecommendationAgent:
     return _doctor_recommendation_agent_instance
 
 
+_medical_knowledge_agent_instance = None
+_symptom_agent_instance = None
+_memory_agent_instance = None
+_greeting_agent_instance = None
+_general_chat_agent_instance = None
+
+
 def get_medical_knowledge_agent() -> MedicalKnowledgeAgent:
     """Get singleton MedicalKnowledgeAgent instance"""
     global _medical_knowledge_agent_instance
@@ -1370,7 +1379,31 @@ def get_symptom_agent() -> SymptomAgent:
     return _symptom_agent_instance
 
 
+def get_greeting_agent():
+    """Get singleton GreetingAgent instance"""
+    global _greeting_agent_instance
+    if _greeting_agent_instance is None:
+        from app.agents.core.greeting_agent import GreetingAgent
+        _greeting_agent_instance = GreetingAgent(
+            patient_context_service=get_patient_context_service(),
+            ai_service=get_ai_service()
+        )
+    return _greeting_agent_instance
+
+
+def get_general_chat_agent():
+    """Get singleton GeneralChatAgent instance"""
+    global _general_chat_agent_instance
+    if _general_chat_agent_instance is None:
+        from app.agents.core.general_chat_agent import GeneralChatAgent
+        _general_chat_agent_instance = GeneralChatAgent(
+            ai_service=get_ai_service()
+        )
+    return _general_chat_agent_instance
+
+
 def get_memory_agent() -> MemoryAgent:
+
     """Get singleton MemoryAgent instance"""
     global _memory_agent_instance
     if _memory_agent_instance is None:

@@ -16,6 +16,49 @@ from app.services.doctor_service import DoctorProfileService
 logger = logging.getLogger(__name__)
 
 
+SPECIALTY_MAP = {
+    "back pain": "Orthopedic",
+    "back": "Orthopedic",
+    "spine": "Orthopedic",
+    "joint": "Orthopedic",
+    "bone": "Orthopedic",
+    "knee": "Orthopedic",
+    "shoulder": "Orthopedic",
+    "chest pain": "Cardiology",
+    "heart": "Cardiology",
+    "cardio": "Cardiology",
+    "blood pressure": "Cardiology",
+    "headache": "Neurology",
+    "migraine": "Neurology",
+    "dizzy": "Neurology",
+    "brain": "Neurology",
+    "skin": "Dermatology",
+    "rash": "Dermatology",
+    "acne": "Dermatology",
+    "eczema": "Dermatology",
+    "stomach": "Gastroenterology",
+    "acid": "Gastroenterology",
+    "gut": "Gastroenterology",
+    "child": "Pediatrics",
+    "kid": "Pediatrics",
+    "baby": "Pediatrics",
+    "eye": "Ophthalmology",
+    "ear": "ENT",
+    "throat": "ENT",
+}
+
+
+def detect_specialty_from_query(query: str) -> Optional[str]:
+    q_lower = query.lower()
+    for symptom, specialty in SPECIALTY_MAP.items():
+        if symptom in q_lower:
+            return specialty
+    for specialty in ["cardiologist", "cardiology", "dermatologist", "dermatology", "neurologist", "neurology", "pediatrician", "pediatrics", "orthopedic", "orthopedics", "gastroenterologist", "ophthalmologist", "ent"]:
+        if specialty in q_lower:
+            return specialty.capitalize()
+    return None
+
+
 class HealthcareContextResolver:
     """Detects references to report, medication, reminder, appointment, doctor profiles, etc."""
 
@@ -74,18 +117,50 @@ class HealthcareContextResolver:
             except Exception as e:
                 logger.error(f"Resolver failed to fetch reminders: {e}")
 
-        # 4. Appointments & Doctors detection
-        if any(kw in msg_lower for kw in ["appointment", "visit", "consult", "book", "doctor", "specialty", "physician"]):
+        # 4. Appointments & Doctors detection (Strict Context Disentanglement)
+        is_doctor_discovery = (
+            any(kw in msg_lower for kw in ["suggest", "recommend", "find doctor", "find a doctor", "list doctor", "which doctor", "who should i see", "doctor for", "specialist for"]) or
+            ("doctor" in msg_lower and any(act in msg_lower for act in ["suggest", "recommend", "find", "get", "need", "looking"])) or
+            any(spec in msg_lower for spec in ["cardiologist", "dermatologist", "neurologist", "pediatrician", "orthopedic", "physician"])
+        )
+
+        is_appointment_query = (
+            any(kw in msg_lower for kw in ["my appointment", "my appointments", "my booked", "booked appointment", "active appointment", "active appointments", "upcoming appointment", "scheduled appointment", "appointment history", "cancel appointment", "reschedule appointment"]) or
+            any(typo in msg_lower for typo in ["active appoiment", "active appoiments", "my appoiments", "my appoiment", "appoiments", "appoiment"]) or
+            ("appointment" in msg_lower and not is_doctor_discovery)
+        )
+
+        if is_doctor_discovery:
             try:
-                appointments = await self.appointment_service.list_appointments_by_patient(patient_id, limit=5)
-                if appointments:
-                    resolved["appointments"] = appointments
-                
-                doctors = await self.doctor_service.list_verified_doctors(limit=5)
+                target_specialty = detect_specialty_from_query(message)
+                if hasattr(self.doctor_service, "list_verified_doctors_with_names"):
+                    doctors = await self.doctor_service.list_verified_doctors_with_names(limit=5, specialization=target_specialty)
+                else:
+                    doctors = await self.doctor_service.search_verified_doctors(specialty=target_specialty)
                 if doctors:
                     resolved["doctors"] = doctors
             except Exception as e:
-                logger.error(f"Resolver failed to fetch appointments/doctors: {e}")
+                logger.error(f"Resolver failed to fetch doctors: {e}")
+
+        elif is_appointment_query:
+            try:
+                is_active_explicit = any(kw in msg_lower for kw in ["active", "future", "upcoming", "scheduled", "open", "pending"])
+                is_history_explicit = any(kw in msg_lower for kw in ["past", "history", "completed", "previous"])
+
+                if is_active_explicit:
+                    filter_active = True
+                elif is_history_explicit:
+                    filter_active = False
+                else:
+                    filter_active = True
+
+                appointments = await self.appointment_service.list_appointments_by_patient(
+                    patient_id, limit=5, active_only=filter_active
+                )
+                if appointments:
+                    resolved["appointments"] = appointments
+            except Exception as e:
+                logger.error(f"Resolver failed to fetch appointments: {e}")
 
         # 5. Lab values & Risks detection
         if any(kw in msg_lower for kw in ["lab", "value", "result", "cholesterol", "diabetes", "blood test", "sugar", "risk", "finding", "recommendation"]):

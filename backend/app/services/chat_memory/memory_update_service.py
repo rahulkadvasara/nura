@@ -50,18 +50,27 @@ class MemoryUpdateService:
         an AI summary and updates Qdrant vector memory and MongoDB patient memory.
         """
         # 1. Evaluate conversation
-        eval_result = await self.evaluator.evaluate_session(session_id)
-        
-        should_store_chat = eval_result["should_store_chat_memory"]
-        should_store_patient = eval_result["should_update_patient_memory"]
+        try:
+            eval_result = await self.evaluator.evaluate_session(session_id)
+        except Exception as eval_err:
+            logger.warning(f"Session memory evaluation failed for session {session_id}: {eval_err}")
+            return {
+                "success": False,
+                "status": "evaluation_failed",
+                "error": str(eval_err)
+            }
+
+        should_store_chat = eval_result.get("should_store_chat_memory", False)
+        should_store_patient = eval_result.get("should_update_patient_memory", False)
 
         if not should_store_chat and not should_store_patient:
-            logger.info(f"Session {session_id} skipped for memory sync (Score: {eval_result['memory_score']})")
+            logger.info(f"Session {session_id} skipped for memory sync (Score: {eval_result.get('memory_score', 0)})")
             return {
                 "success": True,
                 "status": "skipped",
                 "evaluation": eval_result
             }
+
 
         # 2. Get session messages
         from app.core.dependencies import get_chat_message_repository

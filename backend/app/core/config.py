@@ -48,7 +48,7 @@ class Settings:
         
         # Groq AI
         self.GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-        self.DEFAULT_LLM = os.getenv("DEFAULT_LLM", "llama-3.3-70b-versatile")
+        self.DEFAULT_LLM = os.getenv("DEFAULT_LLM", "openai/gpt-oss-120b")
         
         # Embedding Model
         self.EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")

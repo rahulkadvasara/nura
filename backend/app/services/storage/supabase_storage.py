@@ -144,3 +144,15 @@ class SupabaseStorage(StorageProvider):
         except Exception as e:
             logger.error(f"Failed to generate signed URL for {object_key} in {bucket}: {e}")
             return self.get_public_url(bucket, object_key)
+
+    async def download_file(self, bucket: str, object_key: str) -> Optional[bytes]:
+        bucket = bucket.lower().replace("_", "-")
+        try:
+            res = self.client.storage.from_(bucket).download(object_key)
+            if isinstance(res, bytes):
+                return res
+            return None
+        except Exception as e:
+            logger.error(f"Failed to download file {object_key} from bucket {bucket}: {e}")
+            return None
+

@@ -6,7 +6,9 @@ Exposes MedicalKnowledgeAgent, SymptomAgent, and MemoryAgent production interfac
 from app.agents.core.schemas import (
     MedicalKnowledgeAgentResponse,
     SymptomAgentResponse,
-    MemoryAgentResponse
+    MemoryAgentResponse,
+    GreetingAgentResponse,
+    GeneralChatAgentResponse
 )
 from app.agents.core.telemetry import (
     CoreAgentsTelemetryTracker,
@@ -15,14 +17,21 @@ from app.agents.core.telemetry import (
 from app.agents.core.medical_knowledge_agent import MedicalKnowledgeAgent
 from app.agents.core.symptom_agent import SymptomAgent
 from app.agents.core.memory_agent import MemoryAgent
+from app.agents.core.greeting_agent import GreetingAgent
+from app.agents.core.general_chat_agent import GeneralChatAgent
 
 __all__ = [
     "MedicalKnowledgeAgentResponse",
     "SymptomAgentResponse",
     "MemoryAgentResponse",
+    "GreetingAgentResponse",
+    "GeneralChatAgentResponse",
     "CoreAgentsTelemetryTracker",
     "get_core_agents_telemetry",
     "MedicalKnowledgeAgent",
     "SymptomAgent",
-    "MemoryAgent"
+    "MemoryAgent",
+    "GreetingAgent",
+    "GeneralChatAgent"
 ]
+

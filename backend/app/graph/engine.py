@@ -277,6 +277,12 @@ def get_graph_engine() -> LangGraphEngine:
         if "AppointmentAgent" not in registered_nodes:
             from app.graph.nodes import AppointmentAgentNode
             builder.add_node("AppointmentAgent", AppointmentAgentNode())
+        if "GreetingAgent" not in registered_nodes:
+            from app.graph.nodes import GreetingAgentNode
+            builder.add_node("GreetingAgent", GreetingAgentNode())
+        if "GeneralChatAgent" not in registered_nodes:
+            from app.graph.nodes import GeneralChatAgentNode
+            builder.add_node("GeneralChatAgent", GeneralChatAgentNode())
         if "UnknownAgent" not in registered_nodes:
             from app.graph.nodes import UnknownAgentNode
             builder.add_node("UnknownAgent", UnknownAgentNode())
@@ -302,6 +308,8 @@ def get_graph_engine() -> LangGraphEngine:
                 "DoctorRecommendationAgent": "DoctorRecommendationAgent",
                 "ReminderAgent": "ReminderAgent",
                 "AppointmentAgent": "AppointmentAgent",
+                "GreetingAgent": "GreetingAgent",
+                "GeneralChatAgent": "GeneralChatAgent",
                 "UnknownAgent": "UnknownAgent"
             }
         )
@@ -315,12 +323,15 @@ def get_graph_engine() -> LangGraphEngine:
         builder.add_transition("DoctorRecommendationAgent", RESPONSE_VALIDATION_NODE)
         builder.add_transition("ReminderAgent", RESPONSE_VALIDATION_NODE)
         builder.add_transition("AppointmentAgent", RESPONSE_VALIDATION_NODE)
+        builder.add_transition("GreetingAgent", RESPONSE_VALIDATION_NODE)
+        builder.add_transition("GeneralChatAgent", RESPONSE_VALIDATION_NODE)
         builder.add_transition("UnknownAgent", RESPONSE_VALIDATION_NODE)
         
         # Connect validation output to memory update, telemetry node, and finish
         builder.add_transition(RESPONSE_VALIDATION_NODE, MEMORY_UPDATE_NODE)
         builder.add_transition(MEMORY_UPDATE_NODE, TELEMETRY_NODE)
         builder.add_transition(TELEMETRY_NODE, FINISH_NODE)
+
         
         # Compile engine
         _engine_instance = builder.compile()

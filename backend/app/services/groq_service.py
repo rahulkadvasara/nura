@@ -54,15 +54,25 @@ class GroqService:
     def __init__(self, settings: AISettings = ai_settings):
         self.settings = settings
         # Validate configuration before initializing client
-        self.settings.validate_config()
-        
+        try:
+            self.settings.validate_config()
+        except AIConfigurationError as e:
+            logger.warning(f"Groq API Key configuration missing/unvalidated: {e}")
+
         # Initialize client with timeout and max retries from config
+        api_key = self.settings.GROQ_API_KEY if (self.settings.GROQ_API_KEY and self.settings.GROQ_API_KEY.strip()) else "dummy_key_for_testing"
+        import httpx
+        custom_http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(self.settings.TIMEOUT_SECONDS),
+            follow_redirects=True
+        )
         self.client = AsyncGroq(
-            api_key=self.settings.GROQ_API_KEY,
-            timeout=self.settings.TIMEOUT_SECONDS,
+            api_key=api_key,
+            http_client=custom_http_client,
             max_retries=self.settings.MAX_RETRIES
         )
         logger.info("GroqService initialized successfully")
+
 
     async def generate(
         self,
@@ -108,7 +118,12 @@ class GroqService:
         cb = get_circuit_breaker("groq_service", fallback_func=fallback_groq)
 
         async def do_generate():
+            if not self.settings.GROQ_API_KEY or "dummy_key" in self.settings.GROQ_API_KEY:
+                logger.info("GROQ_API_KEY not configured or dummy key detected. Returning fallback response.")
+                return fallback_groq()
+
             current_model = target_model
+
             for attempt in range(3):
                 try:
                     async with handle_groq_exceptions():
@@ -178,7 +193,12 @@ class GroqService:
         cb = get_circuit_breaker("groq_service_json", fallback_func=fallback_groq_json)
 
         async def do_generate_json():
+            if not self.settings.GROQ_API_KEY or "dummy_key" in self.settings.GROQ_API_KEY:
+                logger.info("GROQ_API_KEY not configured or dummy key detected. Returning fallback JSON response.")
+                return fallback_groq_json()
+
             current_model = target_model
+
             for attempt in range(3):
                 try:
                     async with handle_groq_exceptions():

@@ -994,8 +994,11 @@ async def download_original_report_file(
     report_id: str,
     current_user: UserInDB = Depends(get_current_user),
     report_service = Depends(get_report_service),
+    storage_service: StorageProvider = Depends(get_storage_service),
 ):
-    from fastapi.responses import FileResponse
+    from fastapi.responses import FileResponse, RedirectResponse
+    from app.core.config import settings
+
     report = await report_service.get_report_by_id(report_id)
     if not report:
         raise HTTPException(
@@ -1004,35 +1007,60 @@ async def download_original_report_file(
         )
     await verify_report_access(report, current_user)
     
-    file_path = report.file_url
-    if not file_path:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Original report file URL is empty"
-        )
+    file_path = report.file_url or ""
+    file_metadata = report.file_metadata
 
-    # Normalize relative/absolute file path candidates
-    candidates = [
-        file_path,
-        os.path.join(UPLOAD_DIR, os.path.basename(file_path)),
-        os.path.join("uploads", file_path),
-        os.path.join("uploads/reports", os.path.basename(file_path)),
-    ]
-    
-    resolved_path = None
-    for cand in candidates:
-        if os.path.exists(cand) and os.path.isfile(cand):
-            resolved_path = cand
-            break
+    # Resolve bucket and object_key if available
+    bucket = None
+    object_key = None
 
-    if not resolved_path:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Original report file does not exist on disk"
-        )
-        
-    filename = os.path.basename(resolved_path)
-    return FileResponse(resolved_path, filename=filename)
+    if file_metadata:
+        if isinstance(file_metadata, dict):
+            bucket = file_metadata.get("bucket", "reports")
+            object_key = file_metadata.get("object_key")
+        else:
+            bucket = getattr(file_metadata, "bucket", "reports")
+            object_key = getattr(file_metadata, "object_key", None)
+
+    if not object_key and file_path.startswith("reports/"):
+        bucket = "reports"
+        object_key = file_path.split("reports/", 1)[-1]
+
+    provider_name = settings.STORAGE_PROVIDER.lower().strip()
+
+    # 1. Supabase storage mode -> redirect to signed download URL
+    if provider_name == "supabase" and bucket and object_key:
+        signed_url = storage_service.generate_signed_url(bucket, object_key, expires_in=900)
+        if signed_url:
+            return RedirectResponse(url=signed_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+    # 2. Local storage mode / local disk fallback
+    if file_path:
+        candidates = [
+            file_path,
+            os.path.join(UPLOAD_DIR, os.path.basename(file_path)),
+            os.path.join("uploads", file_path),
+            os.path.join("uploads/reports", os.path.basename(file_path)),
+        ]
+        if object_key:
+            candidates.append(os.path.join("uploads", "reports", object_key))
+
+        for cand in candidates:
+            if os.path.exists(cand) and os.path.isfile(cand):
+                filename = os.path.basename(cand)
+                return FileResponse(cand, filename=filename)
+
+    # 3. Fallback to signed URL redirect if file metadata exists but local file doesn't
+    if bucket and object_key:
+        signed_url = storage_service.generate_signed_url(bucket, object_key, expires_in=900)
+        if signed_url:
+            return RedirectResponse(url=signed_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Original report file does not exist or is unavailable"
+    )
+
 
 
 # ============================================================
