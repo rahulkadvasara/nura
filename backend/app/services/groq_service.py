@@ -61,9 +61,14 @@ class GroqService:
 
         # Initialize client with timeout and max retries from config
         api_key = self.settings.GROQ_API_KEY if (self.settings.GROQ_API_KEY and self.settings.GROQ_API_KEY.strip()) else "dummy_key_for_testing"
+        import httpx
+        custom_http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(self.settings.TIMEOUT_SECONDS),
+            follow_redirects=True
+        )
         self.client = AsyncGroq(
             api_key=api_key,
-            timeout=self.settings.TIMEOUT_SECONDS,
+            http_client=custom_http_client,
             max_retries=self.settings.MAX_RETRIES
         )
         logger.info("GroqService initialized successfully")

@@ -123,17 +123,26 @@ class RichCardService:
         # 5. Doctor Profile Cards
         if "doctors" in resolved_context:
             for doc in resolved_context["doctors"][:2]:
+                doc_id = str(getattr(doc, "id", ""))
+                raw_name = getattr(doc, "full_name", None) or getattr(doc, "name", None) or getattr(doc, "user_id", "Profile")
+                title_str = str(raw_name) if str(raw_name).startswith("Dr.") else f"Dr. {raw_name}"
+                specialization = getattr(doc, "specialization", None) or "General Medicine"
+                fee = getattr(doc, "consultation_fee", 0) or 0
+                avail = getattr(doc, "available_days", None) or getattr(doc, "availability_days", None) or "Weekdays"
+                profile_st = getattr(doc, "profile_status", "ACTIVE")
+                status_str = profile_st.value if hasattr(profile_st, "value") else str(profile_st)
+
                 cards.append(
                     DoctorCard(
                         card_type="doctor",
-                        title=f"Dr. {doc.user_id if hasattr(doc, 'user_id') else 'Profile'}",
-                        subtitle=doc.specialization or "General Medicine",
+                        title=title_str,
+                        subtitle=specialization,
                         icon="UserCheck",
-                        status=doc.profile_status.value if hasattr(doc, "profile_status") else str(doc.profile_status),
-                        summary=f"Consultation Fee: ${doc.consultation_fee}. Availability: {doc.available_days or 'Weekdays'}",
-                        metadata={"doctor_id": doc.id},
+                        status=status_str,
+                        summary=f"Consultation Fee: ${fee}. Availability: {avail}",
+                        metadata={"doctor_id": doc_id},
                         actions=[
-                            ActionBuilder.view_doctor(doc.id),
+                            ActionBuilder.view_doctor(doc_id),
                             ActionBuilder.book_appointment()
                         ]
                     )

@@ -720,8 +720,12 @@ async def get_session_memory(
     except HTTPException as he:
         raise he
     except Exception as e:
-        logger.exception("Failed to fetch session memories from Qdrant")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        logger.warning(f"Failed to fetch session memories from Qdrant: {e}")
+        return SessionMemoryListResponse(
+            success=True,
+            message="Session memory details unavailable",
+            data=[]
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -174,13 +174,32 @@ class VectorService:
         return await self.collection_service.delete_collection(name=collection_name)
 
     async def _handle_missing_collection_or_index(self, collection_name: str, error: Exception) -> bool:
-        err_str = str(error).lower()
+        err_str = str(error)
+        err_lower = err_str.lower()
         target_col = self.collection_service.get_collection_name(collection_name)
-        if "index required" in err_str or ("not found" in err_str and "index" in err_str):
+        
+        # Dynamically extract specific missing field name from Qdrant error message if present
+        import re
+        match = re.search(r'Index required but not found for ["\\]+([^"\\]+)["\\]+', err_str, re.IGNORECASE)
+        if match:
+            missing_field = match.group(1)
+            logger.info(f"Auto-creating missing Qdrant payload index for field '{missing_field}' in collection '{target_col}'")
+            try:
+                from qdrant_client.http import models as qdrant_models
+                self.client.create_payload_index(
+                    collection_name=target_col,
+                    field_name=missing_field,
+                    field_schema=qdrant_models.PayloadSchemaType.KEYWORD
+                )
+            except Exception as ex:
+                logger.warning(f"Failed to create payload index for '{missing_field}': {ex}")
+            self.collection_service.ensure_payload_indexes(collection_name)
+            return True
+        elif "index required" in err_lower or ("not found" in err_lower and "index" in err_lower):
             logger.info(f"Auto-creating payload indexes for Qdrant collection '{target_col}'")
             self.collection_service.ensure_payload_indexes(collection_name)
             return True
-        elif "doesn't exist" in err_str:
+        elif "doesn't exist" in err_lower or ("collection" in err_lower and "not found" in err_lower):
             logger.info(f"Auto-creating missing Qdrant collection '{target_col}'")
             await self.create_collection(collection_name)
             return True
@@ -476,25 +495,29 @@ class VectorService:
             return points_list, next_offset
         except Exception as e:
             if await self._handle_missing_collection_or_index(collection_name, e):
-                points, next_offset = self.client.scroll(
-                    collection_name=target_col,
-                    scroll_filter=qdrant_filter,
-                    limit=limit,
-                    offset=offset,
-                    with_payload=True,
-                    with_vectors=True
-                )
-                points_list = [
-                    {
-                        "id": str(p.id),
-                        "payload": p.payload or {},
-                        "vector": p.vector
-                    }
-                    for p in points
-                ]
-                return points_list, next_offset
-            logger.error(f"Vector scroll query failed in collection '{target_col}': {e}")
-            raise AIConfigurationError(f"Vector scroll failed: {str(e)}") from e
+                try:
+                    points, next_offset = self.client.scroll(
+                        collection_name=target_col,
+                        scroll_filter=qdrant_filter,
+                        limit=limit,
+                        offset=offset,
+                        with_payload=True,
+                        with_vectors=True
+                    )
+                    points_list = [
+                        {
+                            "id": str(p.id),
+                            "payload": p.payload or {},
+                            "vector": p.vector
+                        }
+                        for p in points
+                    ]
+                    return points_list, next_offset
+                except Exception as retry_err:
+                    logger.warning(f"Qdrant scroll retry failed after index creation: {retry_err}")
+                    return [], None
+            logger.warning(f"Qdrant scroll query failed in collection '{target_col}': {e}")
+            return [], None
 
     async def health(self) -> dict:
         """Ping check details of the vector store connection status"""
