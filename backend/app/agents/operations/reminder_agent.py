@@ -287,6 +287,7 @@ class ReminderAgent(BaseAgent):
             return AgentResponse(
                 success=False,
                 message=message,
+                response={"status": "failed", "message": message, "action": action},
                 execution_time=time.perf_counter() - start_time,
                 agent_name=self.name
             )

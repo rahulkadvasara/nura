@@ -150,6 +150,7 @@ class BaseAgent(ABC):
                 delay = min(delay * 2.0, self.settings.RETRY_MAX_DELAY)
 
             # Determine response output shape
+            elapsed_ms = (time.perf_counter() - start_time) * 1000.0
             if isinstance(result, AgentResponse):
                 response_obj = result
             else:
@@ -162,7 +163,6 @@ class BaseAgent(ABC):
                     citations = result.get("citations", citations)
                     metadata = result.get("metadata", metadata)
 
-                latency_ms = (time.perf_counter() - start_time) * 1000.0
                 response_obj = AgentResponse(
                     success=True,
                     message=msg,
@@ -170,7 +170,7 @@ class BaseAgent(ABC):
                     citations=citations,
                     metadata=metadata,
                     usage=usage,
-                    execution_time=latency_ms,
+                    execution_time=elapsed_ms,
                     agent_name=self.name
                 )
 
@@ -179,11 +179,11 @@ class BaseAgent(ABC):
             
             # Record success metrics
             tokens_used = response_obj.usage.get("total_tokens", 0)
-            latency_ms = (time.perf_counter() - start_time) * 1000.0
-            response_obj.execution_time = latency_ms
+            elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+            response_obj.execution_time = elapsed_ms
 
             agent_metrics.record_execution(
-                latency_ms=latency_ms,
+                latency_ms=elapsed_ms,
                 success=True,
                 tokens=tokens_used,
                 retries=retry_count,
@@ -198,7 +198,7 @@ class BaseAgent(ABC):
                     "user_id": ctx.user_id,
                     "session_id": ctx.session_id,
                     "request_id": ctx.request_id,
-                    "execution_time_ms": latency_ms,
+                    "execution_time_ms": elapsed_ms,
                     "retry_count": retry_count,
                     "status": "success"
                 }
@@ -209,11 +209,11 @@ class BaseAgent(ABC):
         except Exception as err:
             # 5. Handle Error Hook
             response_obj = self.handle_error(err, ctx)
-            latency_ms = (time.perf_counter() - start_time) * 1000.0
-            response_obj.execution_time = latency_ms
+            elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+            response_obj.execution_time = elapsed_ms
             
             agent_metrics.record_execution(
-                latency_ms=latency_ms,
+                latency_ms=elapsed_ms,
                 success=False,
                 tokens=0,
                 retries=retry_count,
