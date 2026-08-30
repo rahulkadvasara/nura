@@ -417,7 +417,7 @@ export default function ChatPage() {
     }
 
     if (messageRole === 'USER') {
-      // Instantly show optimistic user message bubble in UI before starting stream
+      // Instantly update React Query cache and local state so user message renders in 0ms!
       const tempMsg = {
         id: `temp-user-${Date.now()}`,
         session_id: selectedSessionId,
@@ -430,6 +430,10 @@ export default function ChatPage() {
         token_usage: {},
         deleted: false
       }
+      queryClient.setQueryData(['chat', 'messages', selectedSessionId], (oldData: any) => {
+        const list = Array.isArray(oldData) ? oldData : []
+        return [...list, tempMsg]
+      })
       setOptimisticUserMsg(tempMsg)
     }
 

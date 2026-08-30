@@ -127,7 +127,11 @@ class RichCardService:
                 raw_name = getattr(doc, "name", None) or getattr(doc, "full_name", None)
                 if not raw_name or (isinstance(raw_name, str) and len(raw_name) == 24 and all(c in "0123456789abcdefABCDEF" for c in raw_name)):
                     raw_name = getattr(doc, "specialization", None) or "Medical Specialist"
-                title_str = str(raw_name) if str(raw_name).startswith("Dr.") else f"Dr. {raw_name}"
+                title_raw = str(raw_name).strip()
+                if title_raw.startswith("Dr.") or title_raw.startswith("Doctor"):
+                    title_str = title_raw
+                else:
+                    title_str = f"Dr. {title_raw}"
                 specialization = getattr(doc, "specialization", None) or "General Medicine"
                 fee = getattr(doc, "consultation_fee", 0) or 0
                 avail = getattr(doc, "available_days", None) or getattr(doc, "availability_days", None) or "Weekdays"
@@ -141,7 +145,7 @@ class RichCardService:
                         subtitle=specialization,
                         icon="UserCheck",
                         status=status_str,
-                        summary=f"Consultation Fee: ${fee}. Availability: {avail}",
+                        summary=f"Consultation Fee: ₹{fee}. Availability: {avail}",
                         metadata={"doctor_id": doc_id},
                         actions=[
                             ActionBuilder.view_doctor(doc_id),

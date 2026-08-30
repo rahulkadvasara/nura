@@ -98,6 +98,13 @@ async def run_verification():
     intent_service = get_intent_detection_service()
     engine = get_graph_engine()
 
+    # Pre-warm sentence-transformers model to avoid cold-start timeouts
+    try:
+        from app.ai.embeddings import get_embeddings_service
+        get_embeddings_service().embed_text("warmup query")
+    except Exception as e:
+        logger.warning(f"Embeddings pre-warm skipped: {e}")
+
     passed_count = 0
     failed_count = 0
 
