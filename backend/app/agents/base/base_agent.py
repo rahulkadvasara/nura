@@ -228,7 +228,7 @@ class BaseAgent(ABC):
                     "user_id": ctx.user_id,
                     "session_id": ctx.session_id,
                     "request_id": ctx.request_id,
-                    "execution_time_ms": latency_ms,
+                    "execution_time_ms": elapsed_ms,
                     "retry_count": retry_count,
                     "status": "failed"
                 }

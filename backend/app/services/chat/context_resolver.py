@@ -74,18 +74,28 @@ class HealthcareContextResolver:
             except Exception as e:
                 logger.error(f"Resolver failed to fetch reminders: {e}")
 
-        # 4. Appointments & Doctors detection
-        if any(kw in msg_lower for kw in ["appointment", "visit", "consult", "book", "doctor", "specialty", "physician"]):
+        # 4. Appointments & Doctors detection (Separate Doctor Discovery vs Booked Appointments)
+        is_doctor_discovery = any(kw in msg_lower for kw in ["suggest", "recommend", "find", "list", "who", "which", "available", "specialist", "cardiologist", "dermatologist", "neurologist", "pediatrician", "physician"])
+        is_appointment_query = any(kw in msg_lower for kw in ["my appointment", "my booked", "appointment history", "scheduled appointment", "upcoming appointment", "cancel appointment", "reschedule appointment"])
+
+        if is_doctor_discovery or ("doctor" in msg_lower and not is_appointment_query):
+            try:
+                if hasattr(self.doctor_service, "list_verified_doctors_with_names"):
+                    doctors = await self.doctor_service.list_verified_doctors_with_names(limit=5)
+                else:
+                    doctors = await self.doctor_service.search_verified_doctors()
+                if doctors:
+                    resolved["doctors"] = doctors
+            except Exception as e:
+                logger.error(f"Resolver failed to fetch doctors: {e}")
+
+        if is_appointment_query or ("appointment" in msg_lower and not is_doctor_discovery):
             try:
                 appointments = await self.appointment_service.list_appointments_by_patient(patient_id, limit=5)
                 if appointments:
                     resolved["appointments"] = appointments
-                
-                doctors = await self.doctor_service.list_verified_doctors(limit=5)
-                if doctors:
-                    resolved["doctors"] = doctors
             except Exception as e:
-                logger.error(f"Resolver failed to fetch appointments/doctors: {e}")
+                logger.error(f"Resolver failed to fetch appointments: {e}")
 
         # 5. Lab values & Risks detection
         if any(kw in msg_lower for kw in ["lab", "value", "result", "cholesterol", "diabetes", "blood test", "sugar", "risk", "finding", "recommendation"]):

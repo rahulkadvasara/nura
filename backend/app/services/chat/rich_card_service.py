@@ -124,7 +124,9 @@ class RichCardService:
         if "doctors" in resolved_context:
             for doc in resolved_context["doctors"][:2]:
                 doc_id = str(getattr(doc, "id", ""))
-                raw_name = getattr(doc, "full_name", None) or getattr(doc, "name", None) or getattr(doc, "user_id", "Profile")
+                raw_name = getattr(doc, "name", None) or getattr(doc, "full_name", None)
+                if not raw_name or (isinstance(raw_name, str) and len(raw_name) == 24 and all(c in "0123456789abcdefABCDEF" for c in raw_name)):
+                    raw_name = getattr(doc, "specialization", None) or "Medical Specialist"
                 title_str = str(raw_name) if str(raw_name).startswith("Dr.") else f"Dr. {raw_name}"
                 specialization = getattr(doc, "specialization", None) or "General Medicine"
                 fee = getattr(doc, "consultation_fee", 0) or 0
