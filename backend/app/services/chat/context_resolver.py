@@ -144,8 +144,15 @@ class HealthcareContextResolver:
 
         elif is_appointment_query:
             try:
-                is_history_or_all = any(kw in msg_lower for kw in ["all", "past", "history", "completed", "previous"])
-                filter_active = not is_history_or_all
+                is_active_explicit = any(kw in msg_lower for kw in ["active", "future", "upcoming", "scheduled", "open", "pending"])
+                is_history_explicit = any(kw in msg_lower for kw in ["past", "history", "completed", "previous"])
+
+                if is_active_explicit:
+                    filter_active = True
+                elif is_history_explicit:
+                    filter_active = False
+                else:
+                    filter_active = True
 
                 appointments = await self.appointment_service.list_appointments_by_patient(
                     patient_id, limit=5, active_only=filter_active

@@ -21,8 +21,9 @@ from app.services.chat.action_builder import ActionBuilder
 class RichCardService:
     """Builds list of rich healthcare cards from context structures"""
 
-    def build_cards(self, resolved_context: Dict[str, Any]) -> List[RichCardResponse]:
+    def build_cards(self, resolved_context: Dict[str, Any], user_query: str = "") -> List[RichCardResponse]:
         cards: List[RichCardResponse] = []
+        query_str = (user_query or str(resolved_context.get("query", ""))).lower()
 
         # 1. Report Cards
         if "reports" in resolved_context:
@@ -83,7 +84,19 @@ class RichCardService:
 
         # 3. Appointment Cards
         if "appointments" in resolved_context:
-            for appt in resolved_context["appointments"][:2]:
+            is_active_query = any(kw in query_str for kw in ["active", "upcoming", "future", "scheduled", "open", "pending"])
+            is_history_query = any(kw in query_str for kw in ["past", "history", "completed", "previous"])
+
+            all_appts = resolved_context["appointments"]
+            valid_appts = []
+            for appt in all_appts:
+                st_obj = getattr(appt, "status", "")
+                st_val = (st_obj.value if hasattr(st_obj, "value") else str(st_obj)).lower()
+                if (is_active_query or not is_history_query) and st_val not in ["approved", "pending", "scheduled", "in_progress"]:
+                    continue
+                valid_appts.append(appt)
+
+            for appt in valid_appts[:5]:
                 cards.append(
                     AppointmentCard(
                         card_type="appointment",
@@ -195,3 +208,10 @@ class RichCardService:
                 )
 
         return cards
+
+    async def resolve_and_build_cards(self, patient_id: str, message: str) -> List[RichCardResponse]:
+        """Resolves context and builds rich cards list for patient and message query"""
+        from app.core.dependencies import get_context_resolver
+        resolver = get_context_resolver()
+        resolved = await resolver.resolve_context(patient_id, message)
+        return self.build_cards(resolved, user_query=message)
