@@ -190,8 +190,19 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
         patient_id: str,
         limit: int = 100,
         skip: int = 0,
+        active_only: bool = False,
     ) -> List[AppointmentInDB]:
-        """Fetch all appointments for a patient"""
+        """Fetch appointments for a patient, optionally filtered to active ones."""
+        if active_only:
+            query = {
+                "patient_id": patient_id,
+                "status": {"$in": [
+                    AppointmentStatus.PENDING.value if hasattr(AppointmentStatus.PENDING, 'value') else AppointmentStatus.PENDING,
+                    AppointmentStatus.APPROVED.value if hasattr(AppointmentStatus.APPROVED, 'value') else AppointmentStatus.APPROVED,
+                    AppointmentStatus.IN_PROGRESS.value if hasattr(AppointmentStatus.IN_PROGRESS, 'value') else AppointmentStatus.IN_PROGRESS
+                ]}
+            }
+            return await self.appointment_repository.get_many(query, limit=limit, skip=skip)
         return await self.appointment_repository.get_by_patient_id(patient_id, limit=limit, skip=skip)
 
     async def list_appointments_by_doctor(

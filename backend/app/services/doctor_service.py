@@ -190,11 +190,27 @@ class DoctorProfileService(BaseService[DoctorProfileInDB, DoctorProfileCreate, D
         """List only verified doctor profiles."""
         return await self.profile_repository.get_verified_doctors(limit=limit, skip=skip)
 
-    async def list_verified_doctors_with_names(self, limit: int = 100, skip: int = 0) -> List[DoctorDiscoveryResponse]:
-        """List verified doctor profiles populated with full user names from UserRepository."""
-        verified = await self.profile_repository.get_verified_doctors(limit=limit, skip=skip)
+    async def list_verified_doctors_with_names(
+        self, 
+        limit: int = 100, 
+        skip: int = 0,
+        specialization: Optional[str] = None
+    ) -> List[DoctorDiscoveryResponse]:
+        """List verified doctor profiles populated with full user names from UserRepository, optionally filtered by specialization."""
+        verified = await self.profile_repository.get_verified_doctors(limit=100, skip=skip)
         if not verified:
             return []
+        
+        if specialization:
+            spec_lower = specialization.lower().strip()
+            spec_filtered = [
+                p for p in verified 
+                if p.specialization and (spec_lower in p.specialization.lower() or p.specialization.lower() in spec_lower)
+            ]
+            if spec_filtered:
+                verified = spec_filtered
+
+        verified = verified[:limit]
         
         if not self.user_repository:
             from app.core.dependencies import get_user_repository

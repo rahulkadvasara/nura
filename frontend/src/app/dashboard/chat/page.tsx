@@ -21,6 +21,7 @@ import {
   useBookmarkMessage,
   useRemoveBookmark,
   useBookmarks,
+  useFollowupQuestions,
 } from '@/hooks/use-chat'
 import {
   Plus,
@@ -103,6 +104,7 @@ export default function ChatPage() {
   // Message input state
   const [messageText, setMessageText] = useState('')
   const [messageRole, setMessageRole] = useState<'USER' | 'ASSISTANT' | 'SYSTEM'>('USER')
+  const [optimisticUserMsg, setOptimisticUserMsg] = useState<any | null>(null)
 
   // Streaming State
   const [isStreaming, setIsStreaming] = useState(false)
@@ -407,29 +409,48 @@ export default function ChatPage() {
   // Handle message post
   const handleSendMessage = async (e: React.FormEvent, customText?: string) => {
     if (e) e.preventDefault()
-    const textToSend = customText || messageText
-    if (!textToSend.trim() || !selectedSessionId) return
+    const textToSend = (customText || messageText).trim()
+    if (!textToSend || !selectedSessionId) return
 
     if (!customText) {
       setMessageText('')
     }
 
+    if (messageRole === 'USER') {
+      // Instantly show optimistic user message bubble in UI before starting stream
+      const tempMsg = {
+        id: `temp-user-${Date.now()}`,
+        session_id: selectedSessionId,
+        patient_id: patientId,
+        role: 'USER',
+        content: textToSend,
+        created_at: new Date().toISOString(),
+        metadata: {},
+        citations: [],
+        token_usage: {},
+        deleted: false
+      }
+      setOptimisticUserMsg(tempMsg)
+    }
+
     try {
       if (messageRole === 'USER') {
         // Run AI pipeline with Streaming SSE
-        await handleStartMessageStream(textToSend.trim())
+        await handleStartMessageStream(textToSend)
       } else {
         // Manual simulation fallback
         await createMessageMutation.mutateAsync({
           session_id: selectedSessionId,
           patient_id: patientId,
           role: messageRole,
-          content: textToSend.trim(),
+          content: textToSend,
         })
         toast.success('Manual message stored')
       }
     } catch (err: any) {
       toast.error(err.message || 'Execution crashed')
+    } finally {
+      setOptimisticUserMsg(null)
     }
   }
 
@@ -1027,7 +1048,7 @@ export default function ChatPage() {
                 <div className="flex items-center justify-center h-full">
                   <span className="text-xs text-slate-400 animate-pulse">Loading conversation...</span>
                 </div>
-              ) : history.messages.length === 0 && !isStreaming ? (
+              ) : history.messages.length === 0 && !isStreaming && !optimisticUserMsg ? (
                 <div className="flex flex-col items-center justify-center h-full text-center max-w-sm mx-auto p-4 space-y-4">
                   <div className="h-10 w-10 rounded-full bg-teal-50 flex items-center justify-center">
                     <Sparkles className="h-5 w-5 text-teal-600 animate-pulse" />
@@ -1043,10 +1064,10 @@ export default function ChatPage() {
                     <span className="text-[10px] text-slate-450 font-bold uppercase tracking-wider">Suggested Queries:</span>
                     <div className="flex flex-wrap justify-center gap-1.5 w-full">
                       {[
-                        "Explain my lab report details",
-                        "Check medication safety constraints",
-                        "Summarize my overall health profile",
-                        "What key questions should I ask my doctor?"
+                        "What are my active appointments?",
+                        "Suggest a doctor for consultation",
+                        "Explain my blood test report details",
+                        "Check if my medications interact"
                       ].map((promptText, pIdx) => (
                         <button
                           key={pIdx}
@@ -1062,7 +1083,12 @@ export default function ChatPage() {
                 </div>
               ) : (
                 <>
-                  {history.messages.map((message) => {
+                  {(() => {
+                    const allMsgs = [...history.messages]
+                    if (optimisticUserMsg && !allMsgs.some(m => m.id === optimisticUserMsg.id || (m.role === 'USER' && m.content === optimisticUserMsg.content))) {
+                      allMsgs.push(optimisticUserMsg)
+                    }
+                    return allMsgs.map((message) => {
                     const isUser = message.role === 'USER'
                     const isSystem = message.role === 'SYSTEM'
 
@@ -1355,7 +1381,7 @@ export default function ChatPage() {
                         </div>
                       </div>
                     )
-                  })}
+                  })})()}
                 </>
               )}
 
@@ -1697,7 +1723,6 @@ function FollowUpQuestionsSection({
   messageId: string
   onQuestionClick: (q: string) => void
 }) {
-  const { useFollowupQuestions } = require('@/hooks/use-chat')
   const { data: questions = [], isLoading } = useFollowupQuestions(messageId)
 
   if (isLoading || questions.length === 0) return null
