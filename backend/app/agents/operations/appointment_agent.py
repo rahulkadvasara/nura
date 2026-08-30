@@ -14,7 +14,9 @@ from app.agents.operations.schemas import AppointmentAgentResponse
 from app.agents.operations.telemetry import get_operations_telemetry
 from app.agents.operations.utils import parse_llm_json_response
 from app.core.ai_config import ai_settings
+from app.services.ai_service import AIService
 from app.services.appointment_service import AppointmentService
+
 from app.services.doctor_service import DoctorProfileService, DoctorAvailabilityService
 from app.schemas.appointment import AppointmentCreateSchema, AppointmentUpdateSchema
 from app.schemas.doctor import DoctorAvailabilityUpdateSchema
@@ -32,6 +34,7 @@ class AppointmentAgent(BaseAgent):
         doctor_service: DoctorProfileService,
         availability_service: DoctorAvailabilityService,
         prompt_loader: Optional[PromptLoader] = None,
+        ai_service: Optional[AIService] = None,
         settings=None
     ):
         super().__init__(name="AppointmentAgent", settings=settings or ai_settings)
@@ -39,7 +42,13 @@ class AppointmentAgent(BaseAgent):
         self.doctor_service = doctor_service
         self.availability_service = availability_service
         self.prompt_loader = prompt_loader or PromptLoader()
+        if ai_service is None:
+            from app.core.dependencies import get_ai_service
+            self.ai_service = get_ai_service()
+        else:
+            self.ai_service = ai_service
         self.telemetry = get_operations_telemetry()
+
 
     async def execute(self, input_data: Any, context: Optional[AgentContext] = None) -> Any:
         """

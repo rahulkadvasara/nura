@@ -14,6 +14,7 @@ from app.agents.operations.schemas import ReminderAgentResponse
 from app.agents.operations.telemetry import get_operations_telemetry
 from app.agents.operations.utils import parse_llm_json_response
 from app.core.ai_config import ai_settings
+from app.services.ai_service import AIService
 from app.services.reminder_service import ReminderService
 from app.schemas.reminder import ReminderCreateSchema, ReminderUpdateSchema
 from app.models.reminder import ReminderType, ReminderStatus, ReminderSourceType
@@ -29,12 +30,19 @@ class ReminderAgent(BaseAgent):
         self,
         reminder_service: ReminderService,
         prompt_loader: Optional[PromptLoader] = None,
+        ai_service: Optional[AIService] = None,
         settings=None
     ):
         super().__init__(name="ReminderAgent", settings=settings or ai_settings)
         self.reminder_service = reminder_service
         self.prompt_loader = prompt_loader or PromptLoader()
+        if ai_service is None:
+            from app.core.dependencies import get_ai_service
+            self.ai_service = get_ai_service()
+        else:
+            self.ai_service = ai_service
         self.telemetry = get_operations_telemetry()
+
 
     async def execute(self, input_data: Any, context: Optional[AgentContext] = None) -> Any:
         """

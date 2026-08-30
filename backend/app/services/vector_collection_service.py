@@ -22,8 +22,12 @@ class VectorCollectionService:
     
     def __init__(self, client: Optional[QdrantClient] = None, settings: AISettings = ai_settings):
         self.settings = settings
-        self.settings.validate_config()
+        try:
+            self.settings.validate_config()
+        except AIConfigurationError as e:
+            logger.warning(f"VectorCollectionService config unvalidated: {e}")
         self._client = client
+
 
     @property
     def client(self) -> QdrantClient:

@@ -73,6 +73,8 @@ class BaseAgent(ABC):
         start_time = time.perf_counter()
         latency_ms = 0.0
         
+        ctx = context or AgentContext()
+
         # Standardized logging on execution start
         self.logger.info(
             f"Agent {self.name} starting execution",
@@ -84,6 +86,7 @@ class BaseAgent(ABC):
                 "status": "started"
             }
         )
+
 
         retry_count = 0
         max_retries = self.settings.MAX_RETRIES

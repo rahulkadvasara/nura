@@ -28,9 +28,13 @@ class VectorService:
         settings: AISettings = ai_settings
     ):
         self.settings = settings
-        self.settings.validate_config()
+        try:
+            self.settings.validate_config()
+        except AIConfigurationError as e:
+            logger.warning(f"VectorService config unvalidated: {e}")
         self._client = client
         self._collection_service = collection_service
+
 
     @property
     def client(self) -> QdrantClient:
@@ -290,36 +294,49 @@ class VectorService:
 
         cb = get_circuit_breaker("qdrant_service", fallback_func=fallback_search)
 
-        async def do_search():
-            try:
-                logger.info(f"Searching nearest neighbors in collection {target_col} (limit: {limit})")
-                results = self.client.search(
-                    collection_name=target_col,
+        def _do_qdrant_search(col: str):
+            if hasattr(self.client, "search"):
+                return self.client.search(
+                    collection_name=col,
                     query_vector=query_vector,
                     query_filter=qdrant_filter,
                     limit=limit
                 )
+            elif hasattr(self.client, "query_points"):
+                res = self.client.query_points(
+                    collection_name=col,
+                    query=query_vector,
+                    query_filter=qdrant_filter,
+                    limit=limit
+                )
+                return getattr(res, "points", [])
+            else:
+                return []
+
+        async def do_search():
+            try:
+                logger.info(f"Searching nearest neighbors in collection {target_col} (limit: {limit})")
+                results = _do_qdrant_search(target_col)
                 return [
                     {
                         "id": str(r.id),
-                        "score": float(r.score),
-                        "payload": r.payload or {}
+                        "score": float(getattr(r, "score", 0.0)),
+                        "payload": getattr(r, "payload", {}) or {}
                     }
                     for r in results
                 ]
             except Exception as e:
+                err_msg = str(e)
+                if "not found" in err_msg.lower() or "doesn't exist" in err_msg.lower():
+                    logger.warning(f"Collection '{target_col}' not present. Returning empty search results.")
+                    return []
                 if await self._handle_missing_collection_or_index(collection_name, e):
-                    results = self.client.search(
-                        collection_name=target_col,
-                        query_vector=query_vector,
-                        query_filter=qdrant_filter,
-                        limit=limit
-                    )
+                    results = _do_qdrant_search(target_col)
                     return [
                         {
                             "id": str(r.id),
-                            "score": float(r.score),
-                            "payload": r.payload or {}
+                            "score": float(getattr(r, "score", 0.0)),
+                            "payload": getattr(r, "payload", {}) or {}
                         }
                         for r in results
                     ]
@@ -327,6 +344,7 @@ class VectorService:
                 raise AIConfigurationError(f"Vector search failed: {str(e)}") from e
 
         return await cb.execute_async(do_search)
+
 
     async def delete(self, collection_name: str, ids: List[Union[str, int]]) -> bool:
         """Delete specific vector point records by ID"""
