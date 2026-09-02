@@ -56,7 +56,7 @@ class ConversationIntelligenceService:
             "3. 2-3 tags representing the main medical/operational specialties involved (e.g. Cardiology, Medication Safety, General).\n"
             "4. A 2-3 word description of the last topic discussed.\n"
             "5. A single-word category from: ['Prescription', 'Symptoms', 'Appointment', 'Safety', 'General'].\n"
-            "6. 3 suggested follow-up questions for the patient.\n"
+            "6. 3 suggested follow-up queries written strictly from the PATIENT's first-person perspective (e.g. 'What should I do for my symptoms?', 'Schedule an appointment for me', 'Check my medication safety precautions'). Do NOT ask questions from the AI/assistant perspective.\n"
             "7. A float quality score (0.0 to 1.0) representing the clarity and completeness of the response.\n\n"
             "Respond ONLY with a JSON object containing keys: 'title', 'summary', 'tags', 'last_topic', 'category', 'suggested_questions', 'quality_score'."
         )
@@ -64,16 +64,16 @@ class ConversationIntelligenceService:
         try:
             result = await self.groq_service.generate_json(
                 prompt=prompt,
-                system_prompt="You are a clinical intelligence agent. You must output a JSON object containing the keys: 'title' (string), 'summary' (string), 'tags' (list of strings), 'last_topic' (string), 'category' (string), 'suggested_questions' (list of strings), and 'quality_score' (float)."
+                system_prompt="You are a clinical intelligence agent. You must output a JSON object containing the keys: 'title' (string), 'summary' (string), 'tags' (list of strings), 'last_topic' (string), 'category' (string), 'suggested_questions' (list of strings written strictly from the patient's perspective), and 'quality_score' (float)."
             )
             raw_content = result.choices[0].message.content or "{}"
             parsed = json.loads(raw_content)
             
             return {
                 "suggested_questions": parsed.get("suggested_questions", [
-                    "Can you tell me more about my diagnostics?",
-                    "Are there any drug safety concerns?",
-                    "When is my next clinical appointment?"
+                    "What should I do for my symptoms?",
+                    "Schedule an appointment for me",
+                    "Show my active medications and safety precautions"
                 ])[:5],
                 "title": parsed.get("title", "Clinical Consultation").strip(),
                 "summary": parsed.get("summary", "Clinical discussion").strip(),
@@ -87,9 +87,9 @@ class ConversationIntelligenceService:
             # Fallback values
             return {
                 "suggested_questions": [
-                    "Can you tell me more about my diagnostics?",
-                    "Are there any drug safety concerns?",
-                    "When is my next clinical appointment?"
+                    "What should I do for my symptoms?",
+                    "Schedule an appointment for me",
+                    "Show my active medications and safety precautions"
                 ],
                 "title": "Clinical Consultation",
                 "summary": "Clinical discussion",

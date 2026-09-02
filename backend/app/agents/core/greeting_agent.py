@@ -62,35 +62,16 @@ class GreetingAgent(BaseAgent):
             except Exception as e:
                 self.logger.warning(f"GreetingAgent failed to fetch patient profile: {e}")
 
-        system_prompt = (
-            "You are Nura, an intelligent and empathetic AI healthcare assistant. "
-            "Respond warmly, politely, and concisely to the patient's greeting. "
-            "Ask how you can assist them with their health, medical reports, or appointments today. "
-            "Keep your greeting friendly and within 2-3 sentences."
-        )
-        user_prompt = f"Patient greeting: '{query}'. Patient's first name: {patient_name}."
+        if patient_name and patient_name.lower() != "there":
+            response_text = f"Hello {patient_name}! I am Nura, your AI healthcare assistant. How can I assist you with your health, medical reports, symptoms, or appointments today?"
+        else:
+            response_text = "Hello! I am Nura, your AI healthcare assistant. How can I assist you with your health, medical reports, symptoms, or appointments today?"
 
-        try:
-            groq_start = time.perf_counter()
-            ai_res = await self.ai_service.generate(
-                prompt=user_prompt,
-                system_prompt=system_prompt,
-                request_id=context.request_id if context else None
-            )
-            groq_latency = (time.perf_counter() - groq_start) * 1000.0
-            response_text = ai_res.response
-            prompt_tokens = ai_res.prompt_tokens
-            completion_tokens = ai_res.completion_tokens
-            total_tokens = ai_res.total_tokens
-            cost = ai_res.estimated_cost
-        except Exception as e:
-            self.logger.error(f"GreetingAgent LLM generation failed: {e}", exc_info=True)
-            response_text = f"Hello {patient_name}! I am Nura, your personal healthcare assistant. How can I help you today?"
-            groq_latency = 0.0
-            prompt_tokens = 0
-            completion_tokens = 0
-            total_tokens = 0
-            cost = 0.0
+        groq_latency = 0.0
+        prompt_tokens = 0
+        completion_tokens = 0
+        total_tokens = 0
+        cost = 0.0
 
         total_latency = (time.perf_counter() - start_time) * 1000.0
 

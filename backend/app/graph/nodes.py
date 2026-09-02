@@ -298,62 +298,34 @@ class GreetingAgentNode:
 
 
 class GeneralChatAgentNode:
-    """Executes GeneralChatAgent to answer queries about assistant identity and capabilities"""
+    """Delegates general chat queries to MedicalKnowledgeAgent for unified medical/general answering"""
 
     async def __call__(self, state: GraphState) -> Dict[str, Any]:
-        from app.core.dependencies import get_general_chat_agent
-        from app.agents.base.context import AgentContext
-        
-        agent = get_general_chat_agent()
-        ctx = AgentContext(
-            request_id=state.request_id,
-            session_id=state.session_id,
-            conversation_id=state.conversation_id,
-            patient_id=state.patient_id,
-            doctor_id=state.doctor_id,
-            user_id=state.user_id,
-            role=state.role,
-            metadata=dict(state.metadata or {})
-        )
-        
-        res = await agent.run(state.query, ctx)
-        trace = list(state.execution_trace) if state.execution_trace else []
-        trace.append("GeneralChatAgent")
-        
-        if not res.success:
-            return {
-                "current_node": "GeneralChatAgent",
-                "previous_node": state.current_node,
-                "execution_trace": trace,
-                "error": res.message
-            }
-            
-        meta = dict(state.metadata or {})
-        meta.update(res.metadata or {})
-        chat_data = res.response
-        chat_text = chat_data.answer if hasattr(chat_data, "answer") else str(chat_data)
-        
-        return {
-            "current_node": "GeneralChatAgent",
-            "previous_node": state.current_node,
-            "execution_trace": trace,
-            "response": chat_text,
-            "metadata": meta,
-            "token_usage": getattr(chat_data, "usage", {})
-        }
+        med_node = MedicalKnowledgeAgentNode()
+        return await med_node(state)
 
 
 class UnknownAgentNode:
-    """Fallback agent node handling unrecognized intents"""
+    """Fallback agent node handling unrecognized intents with instant default response (0ms latency, 0 LLM cost)"""
 
     async def __call__(self, state: GraphState) -> Dict[str, Any]:
         trace = list(state.execution_trace) if state.execution_trace else []
         trace.append("UnknownAgent")
+        default_response = (
+            "I'm sorry, I couldn't understand your request. I am Nura, your AI clinical assistant, and I can help you with:\n\n"
+            "• **Symptom Triage & Risk Assessment** — Evaluate symptoms and recommend next steps\n"
+            "• **Medical & Diagnostic Knowledge** — Explain medical terms, tests (e.g. MRI, CT Scans, Blood Tests), and conditions\n"
+            "• **Medical Report Interpretation** — Explain lab findings and diagnostic results\n"
+            "• **Medication & Drug Safety** — Check drug interactions and dosage safety\n"
+            "• **Doctor Discovery & Scheduling** — Find verified specialists and book appointments\n"
+            "• **Medication Reminders** — Configure and view daily health alerts\n\n"
+            "How can I assist you today?"
+        )
         return {
             "current_node": "UnknownAgent",
             "previous_node": state.current_node,
             "execution_trace": trace,
-            "response": "I'm sorry, I could not classify your query's clinical intent. Please try rephrasing your symptoms or question."
+            "response": default_response
         }
 
 
