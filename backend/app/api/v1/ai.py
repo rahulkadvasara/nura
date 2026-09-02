@@ -2040,14 +2040,24 @@ async def get_patient_drug_safety(
         source="api"
     )
 
-    # Execute DrugInteractionAgent
+    # Execute DrugInteractionAgent / Explanation Service
     from app.agents.base.context import AgentContext
     agent_ctx = AgentContext(patient_id=patient_id)
-    med_query = ", ".join(active_meds) if active_meds else "medication"
-    agent_res = await drug_agent.execute(f"Check safety parameters for: {med_query}", context=agent_ctx)
+    
+    explanation_service = Depends(get_drug_explanation_service)
+    
+    detected_inters = val_res.get("detected_interactions", [])
+    patient_explanation_text = "No safety risks detected for active medications."
+    
+    if detected_inters:
+        warnings_list = [inter.description for inter in detected_inters if getattr(inter, "description", None)]
+        if warnings_list:
+            patient_explanation_text = "\n".join([f"• {w}" for w in warnings_list])
+        else:
+            patient_explanation_text = f"Identified {len(detected_inters)} potential interaction(s) among your active medications."
 
     cleaned_interactions = []
-    for inter in val_res.get("detected_interactions", []):
+    for inter in detected_inters:
         cleaned_interactions.append({
             "drug_a": inter.drug_a,
             "drug_b": inter.drug_b,
@@ -2057,16 +2067,10 @@ async def get_patient_drug_safety(
             "description": inter.description
         })
 
-    patient_explanation_text = "No safety risks detected."
-    if hasattr(agent_res, "warnings") and agent_res.warnings:
-        patient_explanation_text = "\n".join([f"• {w}" for w in agent_res.warnings])
-    elif hasattr(agent_res, "interaction_summary"):
-        patient_explanation_text = agent_res.interaction_summary
-
     data = DrugPatientSafetyResponse(
         active_medications=active_meds,
         interactions=cleaned_interactions,
-        severity=agent_res.severity if hasattr(agent_res, "severity") else val_res.get("severity", "NONE"),
+        severity=val_res.get("severity", "NONE"),
         patient_explanation=patient_explanation_text
     )
     return SuccessResponse(success=True, message="Patient drug safety retrieved", data=data.model_dump())
