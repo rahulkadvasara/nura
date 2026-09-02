@@ -83,6 +83,41 @@ export default function PatientSafetyDashboard() {
     })
   }
 
+  // Render multiline markdown text with bullet points, bolding, and line breaks
+  const renderFormattedMarkdown = (text: string) => {
+    if (!text) return null
+    
+    // Split text into lines or bullet points
+    const rawLines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+    
+    return (
+      <div className="space-y-2">
+        {rawLines.map((line, idx) => {
+          // Check if line is a bullet item
+          const isBullet = /^[*\-•]\s+/.test(line)
+          const cleanLine = line.replace(/^[*\-•]\s+/, '')
+          
+          if (isBullet) {
+            return (
+              <div key={idx} className="flex items-start gap-2 text-xs text-slate-800 font-medium">
+                <span className="h-1.5 w-1.5 rounded-full bg-teal-600 shrink-0 mt-1.5" />
+                <div className="flex-1 leading-relaxed">
+                  {parseInlineMarkdown(cleanLine)}
+                </div>
+              </div>
+            )
+          }
+
+          return (
+            <p key={idx} className="text-xs text-slate-800 leading-relaxed font-medium">
+              {parseInlineMarkdown(line)}
+            </p>
+          )
+        })}
+      </div>
+    )
+  }
+
   const handleAddMedicationReminder = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newMedName.trim()) return
@@ -138,7 +173,8 @@ export default function PatientSafetyDashboard() {
     lines.forEach(l => {
       const clean = l.trim()
       if (!clean) return
-      if (clean.toLowerCase().includes('alcohol') || clean.toLowerCase().includes('avoid') || clean.toLowerCase().includes('warning')) {
+      const lower = clean.toLowerCase()
+      if (lower.includes('alcohol') || lower.includes('grapefruit') || lower.includes('tobacco') || lower.includes('dietary')) {
         warningFlags.push(clean.replace(/^[*\-\s•]+/, ''))
       } else {
         adviceLines.push(clean.replace(/^[*\-\s•]+/, ''))
@@ -402,7 +438,7 @@ export default function PatientSafetyDashboard() {
                     AI Patient Safety Guidance
                   </div>
                   <div className="text-slate-700 text-xs leading-relaxed font-medium">
-                    {parseInlineMarkdown(safetyData.patient_explanation)}
+                    {renderFormattedMarkdown(safetyData.patient_explanation)}
                   </div>
                 </div>
               )}

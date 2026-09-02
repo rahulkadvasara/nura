@@ -88,6 +88,8 @@ class ReminderService(BaseService[ReminderInDB, ReminderCreate, ReminderUpdate])
             try:
                 from app.core.dependencies import get_drug_interaction_agent
                 from app.agents.base.context import AgentContext
+                from app.api.v1.ai import _latest_patient_safety_summaries
+                _latest_patient_safety_summaries.pop(schema.patient_id, None)
                 drug_agent = get_drug_interaction_agent()
                 agent_ctx = AgentContext(patient_id=schema.patient_id)
                 await drug_agent.execute(f"Check safety parameters for: {clean_name}", context=agent_ctx)
@@ -235,6 +237,10 @@ class ReminderService(BaseService[ReminderInDB, ReminderCreate, ReminderUpdate])
         success = await self.reminder_repository.delete(reminder_id)
         if success and existing:
             try:
+                from app.api.v1.ai import _latest_patient_safety_summaries
+                _latest_patient_safety_summaries.pop(existing.patient_id, None)
+                from app.services.drug_cache.drug_cache_service import get_drug_cache_service
+                get_drug_cache_service().invalidate_patient(existing.patient_id)
                 from app.core.dependencies import get_medication_validation_service
                 validation_service = get_medication_validation_service()
                 await validation_service.validate_and_update_patient_memory(existing.patient_id)

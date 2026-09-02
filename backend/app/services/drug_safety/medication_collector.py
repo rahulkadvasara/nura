@@ -52,7 +52,7 @@ class MedicationCollector:
         except Exception as e:
             logger.error(f"Error collecting medications from reminders for patient {patient_id}: {e}")
 
-        # 2. Active Prescriptions
+        # 2. Active Prescriptions (Only add if not already present in active reminders)
         try:
             prescriptions = await self.prescription_repository.get_by_patient_id(patient_id)
             for pres in prescriptions:
@@ -60,13 +60,13 @@ class MedicationCollector:
                     name = getattr(med, "drug_name", None) or getattr(med, "medicine", None)
                     if name:
                         norm = self.normalizer.normalize(name)
-                        if norm:
+                        if norm and norm not in seen_primary_norms:
                             collected_normalized.append(norm)
                             seen_primary_norms.add(norm)
         except Exception as e:
             logger.error(f"Error collecting medications from prescriptions for patient {patient_id}: {e}")
 
-        # 3. Report Extracted Medications
+        # 3. Report Extracted Medications (Only add if not already present in reminders/prescriptions)
         try:
             reports = await self.report_repository.get_by_patient_id(patient_id)
             for rep in reports:
@@ -80,7 +80,7 @@ class MedicationCollector:
         except Exception as e:
             logger.error(f"Error collecting medications from reports for patient {patient_id}: {e}")
 
-        # 4. Patient Memory (Only add if not already present in reminders/prescriptions)
+        # 4. Patient Memory (Only add if not already present in reminders/prescriptions/reports)
         try:
             memory = await self.patient_memory_repository.get_by_patient_id(patient_id)
             if memory:

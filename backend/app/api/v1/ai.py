@@ -2016,6 +2016,8 @@ async def get_drug_ai_statistics(
         )
 
 
+_latest_patient_safety_summaries: Dict[str, Dict[str, Any]] = {}
+
 @router.get(
     "/drug/patient/{patient_id}",
     response_model=SuccessResponse,
@@ -2038,31 +2040,48 @@ async def get_patient_drug_safety(
     if rerun:
         try:
             cache_service.invalidate_patient(patient_id)
+            _latest_patient_safety_summaries.pop(patient_id, None)
         except Exception as cache_err:
             logger.warning(f"Failed to invalidate patient cache on rerun: {cache_err}")
 
     active_meds_raw = await validation_service.collector.collect(patient_id)
     display_active_meds = sorted(list(dict.fromkeys([m.title() for m in active_meds_raw])))
     
+    if not display_active_meds:
+        data = DrugPatientSafetyResponse(
+            active_medications=[],
+            interactions=[],
+            severity="NONE",
+            patient_explanation="No safety risks detected. No active medications scheduled."
+        )
+        result_dict = data.model_dump()
+        _latest_patient_safety_summaries[patient_id] = result_dict
+        return SuccessResponse(success=True, message="Patient drug safety retrieved", data=result_dict)
+
+    # Return latest cached summary if available and active medications have not changed
+    cached_summary = _latest_patient_safety_summaries.get(patient_id)
+    if not rerun and cached_summary and cached_summary.get("active_medications") == display_active_meds:
+        return SuccessResponse(success=True, message="Patient drug safety retrieved", data=cached_summary)
+
     val_res = await validation_service.validate_medications(
         patient_id=patient_id,
         incoming_medications=[],
         source="api"
     )
 
-    # Execute DrugInteractionAgent
+    # Execute DrugInteractionAgent to get fresh concise narrative guidance
     from app.agents.base.context import AgentContext
     agent_ctx = AgentContext(patient_id=patient_id)
     
     agent_explanation = None
-    if rerun and display_active_meds:
+    if display_active_meds:
         try:
             med_query = ", ".join(display_active_meds)
             agent_res = await drug_agent.execute(f"Check safety parameters for: {med_query}", context=agent_ctx)
             if hasattr(agent_res, "interaction_summary") and agent_res.interaction_summary:
                 agent_explanation = agent_res.interaction_summary
         except Exception as agent_err:
-            logger.error(f"Error running DrugInteractionAgent on manual rerun: {agent_err}")
+            logger.error(f"Error running DrugInteractionAgent: {agent_err}")
 
     detected_inters = val_res.get("detected_interactions", [])
     patient_explanation_text = agent_explanation or "No safety risks detected for active medications."
@@ -2091,7 +2110,10 @@ async def get_patient_drug_safety(
         severity=val_res.get("severity", "NONE"),
         patient_explanation=patient_explanation_text
     )
-    return SuccessResponse(success=True, message="Patient drug safety retrieved", data=data.model_dump())
+    result_dict = data.model_dump()
+    _latest_patient_safety_summaries[patient_id] = result_dict
+    
+    return SuccessResponse(success=True, message="Patient drug safety retrieved", data=result_dict)
 
 
 @router.get(
