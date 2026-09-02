@@ -238,10 +238,9 @@ export default function ChatPage() {
     }
   }
 
-  // Handle session creation
-  const handleCreateSession = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newSessionTitle.trim()) return
+  // Handle instant session creation without prompt
+  const handleCreateSession = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
     if (!patientId) {
       toast.error('Patient identity not loaded. Please log in again.')
       return
@@ -250,12 +249,12 @@ export default function ChatPage() {
     try {
       const newSession = await createSessionMutation.mutateAsync({
         patientId,
-        title: newSessionTitle.trim(),
+        title: 'New Chat',
       })
       setSelectedSessionId(newSession.id)
       setNewSessionTitle('')
       setIsCreating(false)
-      toast.success('Chat session created')
+      toast.success('New chat session created')
     } catch (err: any) {
       toast.error(err.message || 'Failed to create session')
     }
@@ -557,6 +556,25 @@ export default function ChatPage() {
 
   const lastAssistant = getLastAssistantMessage()
 
+  // Inline markdown parser for **bold**, *italic*, and `code`
+  const parseInlineMarkdown = (content: string): (string | React.JSX.Element)[] => {
+    if (!content) return ['']
+    const regex = /(\*\*.*?\*\*|\*.*?\*|_.*?_|`.*?`)/g
+    const parts = content.split(regex)
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
+        return <strong key={i} className="font-bold text-slate-900">{parseInlineMarkdown(part.slice(2, -2))}</strong>
+      }
+      if ((part.startsWith('*') && part.endsWith('*') && part.length >= 2) || (part.startsWith('_') && part.endsWith('_') && part.length >= 2)) {
+        return <em key={i} className="italic text-slate-700">{parseInlineMarkdown(part.slice(1, -1))}</em>
+      }
+      if (part.startsWith('`') && part.endsWith('`') && part.length >= 2) {
+        return <code key={i} className="px-1.5 py-0.5 rounded bg-slate-100 text-teal-750 font-mono text-[11px] border border-slate-200/60">{part.slice(1, -1)}</code>
+      }
+      return part
+    })
+  }
+
   // Standalone premium markdown rendering with code highlighting, tables, headers, and lists
   const renderMarkdown = (text: string) => {
     const lines = text.split('\n')
@@ -602,7 +620,7 @@ export default function ChatPage() {
         renderedElements.push(
           <div key={`table-row-${index}`} className="flex border-b border-slate-100 py-2 px-3 bg-slate-50/50 text-[11px] font-medium text-slate-600 gap-4 hover:bg-slate-100/50 transition-all">
             {cells.map((cell, cidx) => (
-              <div key={cidx} className="flex-1 min-w-0 truncate">{cell}</div>
+              <div key={cidx} className="flex-1 min-w-0">{parseInlineMarkdown(cell)}</div>
             ))}
           </div>
         )
@@ -611,19 +629,19 @@ export default function ChatPage() {
 
       // Custom headers
       if (line.startsWith('### ')) {
-        renderedElements.push(<h4 key={index} className="text-xs font-bold text-slate-800 mt-3 mb-1.5 flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-teal-500" />{line.replace('### ', '')}</h4>)
+        renderedElements.push(<h4 key={index} className="text-xs font-bold text-slate-900 mt-3 mb-1.5 flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-teal-500" />{parseInlineMarkdown(line.replace('### ', ''))}</h4>)
         return
       }
       if (line.startsWith('## ')) {
-        renderedElements.push(<h3 key={index} className="text-sm font-extrabold text-slate-800 mt-4 mb-2">{line.replace('## ', '')}</h3>)
+        renderedElements.push(<h3 key={index} className="text-sm font-extrabold text-slate-900 mt-4 mb-2">{parseInlineMarkdown(line.replace('## ', ''))}</h3>)
         return
       }
 
       // Lists
       if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
         renderedElements.push(
-          <li key={index} className="ml-4 list-disc text-slate-600 my-1 leading-relaxed">
-            {line.trim().replace(/^[-*]\s+/, '')}
+          <li key={index} className="ml-4 list-disc text-slate-700 my-1 leading-relaxed">
+            {parseInlineMarkdown(line.trim().replace(/^[-*]\s+/, ''))}
           </li>
         )
         return
@@ -631,7 +649,7 @@ export default function ChatPage() {
 
       // Standard paragraphs
       if (line.trim() !== '') {
-        renderedElements.push(<p key={index} className="my-1.5 text-slate-600 leading-relaxed">{line}</p>)
+        renderedElements.push(<p key={index} className="my-1.5 text-slate-700 leading-relaxed">{parseInlineMarkdown(line)}</p>)
       }
     })
 
@@ -639,9 +657,9 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+    <div className="flex h-[calc(100vh-6.5rem)] min-h-[500px] w-full max-w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
       {/* 1. Left Sidebar: Chat Sessions / Bookmarks list */}
-      <div className="flex w-80 flex-col border-r border-slate-100 bg-slate-50/50">
+      <div className="flex w-64 md:w-72 lg:w-80 flex-shrink-0 flex-col border-r border-slate-100 bg-slate-50/50">
         {/* Sidebar Header */}
         <div className="p-4 border-b border-slate-100 bg-white">
           <div className="flex items-center justify-between mb-3">
@@ -650,35 +668,13 @@ export default function ChatPage() {
               <span>Conversations</span>
             </h2>
             <button
-              onClick={() => setIsCreating(!isCreating)}
+              onClick={() => handleCreateSession()}
               className="p-1.5 rounded-full bg-teal-50 text-teal-700 hover:bg-teal-100 hover:text-teal-800 transition-colors"
               title="New Session"
             >
               <Plus className="h-4 w-4" />
             </button>
           </div>
-
-          {/* New Session form */}
-          {isCreating && (
-            <form onSubmit={handleCreateSession} className="mb-3 animate-in fade-in slide-in-from-top duration-200">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="New session title..."
-                  value={newSessionTitle}
-                  onChange={(e) => setNewSessionTitle(e.target.value)}
-                  className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500 bg-slate-50"
-                  autoFocus
-                />
-                <button
-                  type="submit"
-                  className="px-3 py-1 text-xs font-semibold rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition-colors"
-                >
-                  Create
-                </button>
-              </div>
-            </form>
-          )}
 
           {/* Sidebar Tabs */}
           <div className="flex border-b border-slate-200 mb-3">
@@ -942,30 +938,30 @@ export default function ChatPage() {
         {selectedSessionId && activeSession ? (
           <>
             {/* Header section with Stats Bar */}
-            <div className="flex flex-col p-4 border-b border-slate-100 bg-white">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                    <span>{activeSession.title}</span>
-                    {activeSession.pinned && <Pin className="h-3 w-3 text-amber-500 fill-amber-500" />}
+            <div className="flex flex-col p-3 md:p-4 border-b border-slate-100 bg-white gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <h1 className="text-sm font-bold text-slate-800 flex items-center gap-2 truncate">
+                    <span className="truncate">{activeSession.title}</span>
+                    {activeSession.pinned && <Pin className="h-3 w-3 flex-shrink-0 text-amber-500 fill-amber-500" />}
                   </h1>
-                  <p className="text-[10px] text-slate-400 mt-0.5 font-semibold">
+                  <p className="text-[10px] text-slate-400 mt-0.5 font-semibold truncate">
                     Patient: <span className="font-mono text-slate-500">{activeSession.patient_id}</span>
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                   <button
                     type="button"
                     onClick={() => setDeveloperMode(!developerMode)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                    className={`flex items-center gap-1.5 px-2 py-1 text-[11px] sm:px-2.5 sm:py-1.5 sm:text-xs font-semibold rounded-lg border transition-all ${
                       developerMode
                         ? 'border-teal-500 bg-teal-50 text-teal-700'
                         : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                     }`}
                   >
                     <Code className="h-3.5 w-3.5" />
-                    <span>Dev Mode: {developerMode ? 'On' : 'Off'}</span>
+                    <span>Dev: {developerMode ? 'On' : 'Off'}</span>
                   </button>
 
                   {/* Regenerate Action */}
@@ -973,7 +969,7 @@ export default function ChatPage() {
                     type="button"
                     onClick={handleRegenerate}
                     disabled={regenerateMutation.isPending || isStreaming}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-all"
+                    className="flex items-center gap-1.5 px-2 py-1 text-[11px] sm:px-2.5 sm:py-1.5 sm:text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-all"
                     title="Regenerate last assistant message"
                   >
                     <RotateCcw className={`h-3.5 w-3.5 ${regenerateMutation.isPending ? 'animate-spin' : ''}`} />
@@ -983,11 +979,12 @@ export default function ChatPage() {
                   <button
                     type="button"
                     onClick={() => handleTogglePin(activeSession)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                    className={`flex items-center gap-1.5 px-2 py-1 text-[11px] sm:px-2.5 sm:py-1.5 sm:text-xs font-semibold rounded-lg border transition-all ${
                       activeSession.pinned
                         ? 'border-amber-200 bg-amber-50 text-amber-700'
                         : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                     }`}
+                    title="Pin Session"
                   >
                     <Pin className="h-3.5 w-3.5" />
                   </button>
@@ -995,11 +992,12 @@ export default function ChatPage() {
                   <button
                     type="button"
                     onClick={() => handleToggleArchive(activeSession)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                    className={`flex items-center gap-1.5 px-2 py-1 text-[11px] sm:px-2.5 sm:py-1.5 sm:text-xs font-semibold rounded-lg border transition-all ${
                       activeSession.archived
                         ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
                         : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                     }`}
+                    title="Archive Session"
                   >
                     <Archive className="h-3.5 w-3.5" />
                   </button>
@@ -1015,18 +1013,18 @@ export default function ChatPage() {
                       navigator.clipboard.writeText(transcript)
                       toast.success('Conversation copied!')
                     }}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all"
+                    className="flex items-center gap-1.5 px-2 py-1 text-[11px] sm:px-2.5 sm:py-1.5 sm:text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all"
                     title="Copy full conversation transcript"
                   >
                     <Copy className="h-3.5 w-3.5" />
-                    <span>Copy Chats</span>
+                    <span>Copy</span>
                   </button>
 
                   {/* Export Menu Dropdown */}
                   <div className="relative group/export">
                     <button
                       type="button"
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-teal-600 bg-teal-600 text-white hover:bg-teal-700 transition-all shadow-md shadow-teal-600/10"
+                      className="flex items-center gap-1.5 px-2 py-1 text-[11px] sm:px-2.5 sm:py-1.5 sm:text-xs font-semibold rounded-lg border border-teal-600 bg-teal-600 text-white hover:bg-teal-700 transition-all shadow-md shadow-teal-600/10"
                     >
                       <Download className="h-3.5 w-3.5" />
                       <span>Export</span>
@@ -1057,7 +1055,7 @@ export default function ChatPage() {
 
               {/* Statistics info-bar */}
               {stats && (
-                <div className="flex items-center gap-4 text-[10px] text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 mt-2.5">
+                <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 mt-1">
                   <span className="flex items-center gap-1">
                     <MessageSquare className="h-3.5 w-3.5 text-teal-600" />
                     Messages: <strong className="text-slate-700">{stats.message_count}</strong>
