@@ -41,10 +41,54 @@ export default function PatientSafetyDashboard() {
 
   // Component states
   const [newMedName, setNewMedName] = useState('')
-  const [scheduledTime, setScheduledTime] = useState('08:00')
+  const [hour12, setHour12] = useState('08')
+  const [minute12, setMinute12] = useState('00')
+  const [ampm, setAmpm] = useState('AM')
   const [recurrence, setRecurrence] = useState('daily')
   const [validationError, setValidationError] = useState<string | null>(null)
   const [expandedInteractions, setExpandedInteractions] = useState<Record<number, boolean>>({})
+
+  // Convert 12-hour selection to 24-hour HH:MM format for API
+  const get24HourTime = (h12: string, m12: string, period: string) => {
+    let hour = parseInt(h12, 10) || 8
+    if (period === 'PM' && hour < 12) hour += 12
+    if (period === 'AM' && hour === 12) hour = 0
+    const hh = String(hour).padStart(2, '0')
+    const mm = String(m12).padStart(2, '0')
+    return `${hh}:${mm}`
+  }
+
+  // Format 24-hour HH:MM string to 12-hour display (e.g. "8:00 PM")
+  const format12HourDisplay = (timeStr: string) => {
+    if (!timeStr) return ''
+    const parts = timeStr.split(':')
+    if (parts.length < 2) return timeStr
+    let hour = parseInt(parts[0], 10)
+    const minute = parts[1].padStart(2, '0')
+    if (isNaN(hour)) return timeStr
+    const period = hour >= 12 ? 'PM' : 'AM'
+    hour = hour % 12 || 12
+    return `${hour}:${minute} ${period}`
+  }
+
+  // Inline markdown parser for **bold**, *italic*, and `code`
+  const parseInlineMarkdown = (content: string): (string | React.JSX.Element)[] => {
+    if (!content) return ['']
+    const regex = /(\*\*.*?\*\*|\*.*?\*|_.*?_|`.*?`)/g
+    const parts = content.split(regex)
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
+        return <strong key={i} className="font-bold text-slate-900">{parseInlineMarkdown(part.slice(2, -2))}</strong>
+      }
+      if ((part.startsWith('*') && part.endsWith('*') && part.length >= 2) || (part.startsWith('_') && part.endsWith('_') && part.length >= 2)) {
+        return <em key={i} className="italic text-slate-700">{parseInlineMarkdown(part.slice(1, -1))}</em>
+      }
+      if (part.startsWith('`') && part.endsWith('`') && part.length >= 2) {
+        return <code key={i} className="px-1.5 py-0.5 rounded bg-slate-100 text-teal-800 font-mono text-[11px] border border-slate-200/60">{part.slice(1, -1)}</code>
+      }
+      return part
+    })
+  }
 
   const toggleExpand = (index: number) => {
     setExpandedInteractions(prev => ({
@@ -58,13 +102,14 @@ export default function PatientSafetyDashboard() {
     if (!newMedName.trim()) return
 
     setValidationError(null)
+    const final24HrTime = get24HourTime(hour12, minute12, ampm)
     try {
       await createReminderMutation.mutateAsync({
         patient_id: patientId,
         reminder_type: 'medication',
         title: `Take ${newMedName.trim()}`,
         description: `Scheduled dosage of ${newMedName.trim()}`,
-        scheduled_time: scheduledTime,
+        scheduled_time: final24HrTime,
         recurrence: recurrence,
         status: 'active'
       })
@@ -218,7 +263,7 @@ export default function PatientSafetyDashboard() {
                         AI Patient Safety Guidance
                       </div>
                       <p className="text-slate-700 text-xs leading-relaxed font-medium">
-                        {safetyData.patient_explanation}
+                        {parseInlineMarkdown(safetyData.patient_explanation)}
                       </p>
                     </div>
                   )}
@@ -231,7 +276,7 @@ export default function PatientSafetyDashboard() {
                           <Droplet className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                           <div>
                             <strong className="block text-[10px] uppercase font-bold text-amber-800">Diet & Lifestyle Warning</strong>
-                            <p className="text-[11px] text-slate-700 mt-0.5">{flag}</p>
+                            <p className="text-[11px] text-slate-700 mt-0.5">{parseInlineMarkdown(flag)}</p>
                           </div>
                         </div>
                       ))}
@@ -294,9 +339,9 @@ export default function PatientSafetyDashboard() {
                           <div className="mt-4 pt-3 border-t border-dashed border-slate-200 text-xs text-slate-700 space-y-3">
                             <div>
                               <strong className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Severity Description</strong>
-                              <p className="leading-relaxed text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-                                {inter.description || 'Consult physician regarding concurrent usage of these active compounds.'}
-                              </p>
+                              <div className="leading-relaxed text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                {parseInlineMarkdown(inter.description || 'Consult physician regarding concurrent usage of these active compounds.')}
+                              </div>
                             </div>
                           </div>
                         )}
@@ -354,7 +399,7 @@ export default function PatientSafetyDashboard() {
                         <div className="flex items-center gap-2 text-[10px] text-slate-500 font-semibold">
                           <span className="bg-slate-100 px-1.5 py-0.5 rounded uppercase">{rem.reminder_type}</span>
                           <span>•</span>
-                          <span>Time: {rem.scheduled_time}</span>
+                          <span>Time: {format12HourDisplay(rem.scheduled_time)}</span>
                         </div>
                       </div>
                       <Button
@@ -387,15 +432,42 @@ export default function PatientSafetyDashboard() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-semibold text-slate-500 uppercase">Schedule Time</label>
-                    <Input
-                      type="time"
-                      value={scheduledTime}
-                      onChange={e => setScheduledTime(e.target.value)}
-                      className="text-xs"
-                    />
+                    <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                      {/* Hour Dropdown */}
+                      <select
+                        value={hour12}
+                        onChange={e => setHour12(e.target.value)}
+                        className="flex-1 min-w-[60px] text-xs border border-slate-300 rounded-lg px-2 py-1.5 bg-white font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500 shadow-2xs"
+                      >
+                        {Array.from({ length: 12 }, (_, i) => {
+                          const val = String(i + 1).padStart(2, '0')
+                          return <option key={val} value={val}>{val}</option>
+                        })}
+                      </select>
+                      {/* Minute Dropdown (Every 5 mins: 00, 05, 10 ... 55) */}
+                      <select
+                        value={minute12}
+                        onChange={e => setMinute12(e.target.value)}
+                        className="flex-1 min-w-[60px] text-xs border border-slate-300 rounded-lg px-2 py-1.5 bg-white font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500 shadow-2xs"
+                      >
+                        {Array.from({ length: 12 }, (_, i) => {
+                          const val = String(i * 5).padStart(2, '0')
+                          return <option key={val} value={val}>{val}</option>
+                        })}
+                      </select>
+                      {/* AM/PM Dropdown */}
+                      <select
+                        value={ampm}
+                        onChange={e => setAmpm(e.target.value)}
+                        className="flex-1 min-w-[56px] text-xs border border-teal-200 rounded-lg px-2 py-1.5 bg-teal-50 font-extrabold text-teal-800 focus:outline-none focus:ring-1 focus:ring-teal-500 shadow-2xs"
+                      >
+                        <option value="AM">AM</option>
+                        <option value="PM">PM</option>
+                      </select>
+                    </div>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-semibold text-slate-500 uppercase">Recurrence</label>
@@ -414,7 +486,7 @@ export default function PatientSafetyDashboard() {
                 {validationError && (
                   <div className="p-3 rounded-lg border border-red-200 bg-red-50 text-red-800 text-[10px] font-semibold flex items-start gap-1.5">
                     <AlertCircle className="h-4 w-4 shrink-0 text-red-600 mt-0.5" />
-                    <span>{validationError}</span>
+                    <div>{parseInlineMarkdown(validationError)}</div>
                   </div>
                 )}
 
@@ -471,9 +543,9 @@ export default function PatientSafetyDashboard() {
                         </Badge>
                       </div>
                       {item.override_reason && (
-                        <p className="text-[9px] bg-amber-50 text-amber-800 p-2.5 rounded-lg border border-amber-100 leading-relaxed font-mono">
-                          Override: {item.override_reason}
-                        </p>
+                        <div className="text-[9px] bg-amber-50 text-amber-800 p-2.5 rounded-lg border border-amber-100 leading-relaxed font-mono">
+                          Override: {parseInlineMarkdown(item.override_reason)}
+                        </div>
                       )}
                     </div>
                   ))}
