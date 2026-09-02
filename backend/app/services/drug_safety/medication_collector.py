@@ -30,19 +30,18 @@ class MedicationCollector:
     async def collect(self, patient_id: str) -> List[str]:
         """
         Collect all medications for a patient from active prescriptions, active reminders,
-        report extractions, and patient memory. Returns a list of unique normalized drug names.
+        report extractions, and patient memory. Returns a list of normalized drug names (including duplicates across reminders).
         """
-        raw_meds: Set[str] = set()
+        raw_meds: List[str] = []
 
         # 1. Active Prescriptions
         try:
             prescriptions = await self.prescription_repository.get_by_patient_id(patient_id)
             for pres in prescriptions:
                 for med in getattr(pres, "medications", []) or []:
-                    # med is of type Medication model
                     name = getattr(med, "drug_name", None) or getattr(med, "medicine", None)
                     if name:
-                        raw_meds.add(name)
+                        raw_meds.append(name)
         except Exception as e:
             logger.error(f"Error collecting medications from prescriptions for patient {patient_id}: {e}")
 
@@ -57,7 +56,7 @@ class MedicationCollector:
                     if clean_name.lower().startswith("take "):
                         clean_name = clean_name[5:].strip()
                     if clean_name:
-                        raw_meds.add(clean_name)
+                        raw_meds.append(clean_name)
         except Exception as e:
             logger.error(f"Error collecting medications from reminders for patient {patient_id}: {e}")
 
@@ -65,11 +64,10 @@ class MedicationCollector:
         try:
             reports = await self.report_repository.get_by_patient_id(patient_id)
             for rep in reports:
-                # rep.medications is List[Dict]
                 for med in getattr(rep, "medications", []) or []:
                     name = med.get("drug_name") or med.get("medicine")
                     if name:
-                        raw_meds.add(name)
+                        raw_meds.append(name)
         except Exception as e:
             logger.error(f"Error collecting medications from reports for patient {patient_id}: {e}")
 
@@ -79,21 +77,19 @@ class MedicationCollector:
             if memory:
                 for med in getattr(memory, "medications", []) or []:
                     if med:
-                        raw_meds.add(med)
-                # Also collect from medication_history
+                        raw_meds.append(med)
                 for med_hist in getattr(memory, "medication_history", []) or []:
                     name = med_hist.get("medicine") or med_hist.get("drug_name")
                     if name:
-                        raw_meds.add(name)
+                        raw_meds.append(name)
         except Exception as e:
             logger.error(f"Error collecting medications from patient memory for patient {patient_id}: {e}")
 
-        # Normalize and deduplicate
-        normalized_meds: Set[str] = set()
+        # Normalize preserving list entries
+        normalized_meds: List[str] = []
         for raw in raw_meds:
             norm = self.normalizer.normalize(raw)
             if norm:
-                normalized_meds.add(norm)
+                normalized_meds.append(norm)
 
-        # Return sorted list for determinism
-        return sorted(list(normalized_meds))
+        return normalized_meds

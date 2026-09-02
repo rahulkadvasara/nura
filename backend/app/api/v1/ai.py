@@ -2033,7 +2033,9 @@ async def get_patient_drug_safety(
             detail="Access denied: patients can only access their own drug safety data."
         )
 
-    active_meds = await validation_service.collector.collect(patient_id)
+    active_meds_raw = await validation_service.collector.collect(patient_id)
+    display_active_meds = sorted(list(dict.fromkeys([m.title() for m in active_meds_raw])))
+    
     val_res = await validation_service.validate_medications(
         patient_id=patient_id,
         incoming_medications=[],
@@ -2043,8 +2045,6 @@ async def get_patient_drug_safety(
     # Execute DrugInteractionAgent / Explanation Service
     from app.agents.base.context import AgentContext
     agent_ctx = AgentContext(patient_id=patient_id)
-    
-    explanation_service = Depends(get_drug_explanation_service)
     
     detected_inters = val_res.get("detected_interactions", [])
     patient_explanation_text = "No safety risks detected for active medications."
@@ -2068,7 +2068,7 @@ async def get_patient_drug_safety(
         })
 
     data = DrugPatientSafetyResponse(
-        active_medications=active_meds,
+        active_medications=display_active_meds,
         interactions=cleaned_interactions,
         severity=val_res.get("severity", "NONE"),
         patient_explanation=patient_explanation_text
