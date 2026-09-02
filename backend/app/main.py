@@ -99,6 +99,11 @@ async def lifespan(app: FastAPI):
         drug_scheduler = get_drug_worker_scheduler()
         await drug_scheduler.start()
 
+        # Start medication reminder email dispatch background service
+        from app.services.reminder_dispatch_service import get_reminder_dispatch_service
+        reminder_dispatcher = get_reminder_dispatch_service()
+        await reminder_dispatcher.start()
+
     except Exception as e:
         import logging
         logging.getLogger("nura.main").error(f"Failed to start EventQueue background worker or drug scheduler: {e}")
@@ -122,6 +127,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         import logging
         logging.getLogger("nura.main").error(f"Failed to stop drug worker scheduler: {e}")
+
+    # Stop medication reminder email dispatch background service
+    try:
+        from app.services.reminder_dispatch_service import get_reminder_dispatch_service
+        reminder_dispatcher = get_reminder_dispatch_service()
+        await reminder_dispatcher.stop()
+    except Exception as e:
+        import logging
+        logging.getLogger("nura.main").error(f"Failed to stop reminder dispatch service: {e}")
     
     # Shutdown
     await close_mongodb_connection()

@@ -31,7 +31,9 @@ class MedicationValidationService:
         self,
         patient_id: str,
         incoming_medications: List[str],
-        source: str = "api"
+        source: str = "api",
+        override_reason: Optional[str] = None,
+        overridden_by: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Validate incoming medications against a patient's existing medication profile.
@@ -57,6 +59,10 @@ class MedicationValidationService:
 
             result["latency_ms"] = round(latency_ms, 2)
             result["collected_medications"] = current_normalized
+            if override_reason:
+                result["override_reason"] = override_reason
+            if overridden_by:
+                result["overridden_by"] = overridden_by
             return result
 
         except Exception as e:

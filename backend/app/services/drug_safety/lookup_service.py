@@ -81,6 +81,15 @@ class DrugLookupService:
                 "aliases": doc.get("aliases", []),
                 "source_dataset": doc.get("source_dataset", "ddinter")
             }
+        elif normalized_name:
+            matched_drug = {
+                "id": f"synthetic_{normalized_name}",
+                "drug_name": drug_name.strip().title(),
+                "normalized_name": normalized_name,
+                "aliases": [],
+                "source_dataset": "synthetic"
+            }
+            confidence = 0.8
             
         # 4. Update Cache
         cache_entry = {
@@ -91,14 +100,14 @@ class DrugLookupService:
             
         # 5. Record Telemetry
         latency = (time.perf_counter() - start_time) * 1000.0
-        is_unknown = (matched_drug is None)
+        is_unknown = (doc is None)
         drug_safety_telemetry.record_lookup(cache_hit=False, latency_ms=latency, is_unknown=is_unknown)
         
         return {
             "exists": matched_drug is not None,
             "matched_drug": matched_drug,
             "normalized_name": normalized_name,
-            "lookup_source": "database",
+            "lookup_source": "database" if doc else "synthetic",
             "confidence": confidence,
             "latency_ms": round(latency, 2)
         }

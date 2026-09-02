@@ -31,17 +31,20 @@ class DrugExplanationService:
         severity: str,
         recommendations: List[str],
         interactions: List[Dict[str, Any]],
-        patient_id: Optional[str] = None
+        patient_id: Optional[str] = None,
+        force_refresh: bool = False
     ) -> Dict[str, Any]:
         """Runs parallel generation of patient and doctor explanations, precautions, and summaries"""
         start_time = time.perf_counter()
         
-        # 1. Check cache first
-        cached_val = self.cache_service.get_explanation(interactions, patient_id)
-        if cached_val is not None:
-            res = copy.deepcopy(cached_val)
-            latency_ms = (time.perf_counter() - start_time) * 1000.0
-            res["latency_ms"] = round(latency_ms, 2)
+        # 1. Check cache first (unless force_refresh is True)
+        if not force_refresh:
+            cached_val = self.cache_service.get_explanation(interactions, patient_id)
+            if cached_val is not None:
+                res = copy.deepcopy(cached_val)
+                latency_ms = (time.perf_counter() - start_time) * 1000.0
+                res["latency_ms"] = round(latency_ms, 2)
+                return res
             
             # Record telemetry
             self.telemetry.record_request()
@@ -60,22 +63,39 @@ class DrugExplanationService:
             )
             return res
 
-        # 2. Build prompts
-        patient_prompt = self.builder.build_patient_explanation(medications, severity, recommendations, interactions)
-        doctor_prompt = self.builder.build_doctor_explanation(medications, severity, recommendations, interactions)
-        summary_prompt = self.builder.build_interaction_summary(medications, severity, recommendations, interactions)
-        precautions_prompt = self.builder.build_medication_precautions(medications, severity, recommendations, interactions)
+        # Fast path: If no interactions were detected, return concise safe response without firing LLM queries
+        if not interactions or severity == "NONE":
+            safe_text = "No safety risks detected for active medications."
+            if medications:
+                safe_text = f"Safety check complete. No known drug interactions or safety risks detected for: {', '.join(medications)}."
+            res = {
+                "patient_explanation": safe_text,
+                "doctor_explanation": f"Clinical Evaluation: No active drug interactions or duplicate ingredient hazards detected for {', '.join(medications)}.",
+                "summary": f"No safety risks detected for {', '.join(medications)}.",
+                "precautions": "Continue medications as prescribed. Maintain regular hydration and consult a clinician if new symptoms develop.",
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "model_used": "fast-path",
+                "estimated_cost": 0.0,
+                "fallback_used": False,
+                "latency_ms": round((time.perf_counter() - start_time) * 1000.0, 2)
+            }
+            if not force_refresh:
+                self.cache_service.set_explanation(interactions, res, patient_id)
+            return res
 
+        # 2. Build patient explanation prompt (Single efficient LLM call)
+        patient_prompt = self.builder.build_patient_explanation(medications, severity, recommendations, interactions)
         system_prompt = self.loader.get_template("drug_system", is_system=True)
 
         fallback_used = False
         model_used = "groq-default"
 
-        async def run_gen(prompt: str, fallback_func) -> Tuple[str, int, int, str]:
+        async def generate_patient_narrative() -> Tuple[str, int, int, str]:
             nonlocal fallback_used, model_used
             try:
                 res = await self.groq_service.generate(
-                    prompt=prompt,
+                    prompt=patient_prompt,
                     system_prompt=system_prompt,
                     temperature=0.2
                 )
@@ -86,7 +106,7 @@ class DrugExplanationService:
                 if not content_str or "Service temporarily unavailable" in content_str:
                     logger.warning("GroqService returned fallback response. Triggering local fallback.")
                     fallback_used = True
-                    return fallback_func(), 0, 0, "fallback-local"
+                    return DrugExplanationFallbackService.generate_patient_explanation(severity, recommendations), 0, 0, "fallback-local"
 
                 usage = getattr(res, "usage", None)
                 p_tok = getattr(usage, "prompt_tokens", 0) if usage else 0
@@ -98,44 +118,24 @@ class DrugExplanationService:
             except Exception as e:
                 logger.error(f"Groq explanation generation failed: {e}. Executing local fallback.")
                 fallback_used = True
-                return fallback_func(), 0, 0, "fallback-local"
+                return DrugExplanationFallbackService.generate_patient_explanation(severity, recommendations), 0, 0, "fallback-local"
 
-        async def generate_narratives():
-            # Parallel executions
-            tasks = [
-                run_gen(patient_prompt, lambda: DrugExplanationFallbackService.generate_patient_explanation(severity, recommendations)),
-                run_gen(doctor_prompt, lambda: DrugExplanationFallbackService.generate_doctor_explanation(severity, recommendations, interactions)),
-                run_gen(summary_prompt, lambda: DrugExplanationFallbackService.generate_summary(severity, medications, interactions)),
-                run_gen(precautions_prompt, lambda: DrugExplanationFallbackService.generate_precautions(severity))
-            ]
-            return await asyncio.gather(*tasks)
-
-        # 3. Execute narrative generation wrapped in Circuit Breaker
+        # 3. Execute single LLM call wrapped in Circuit Breaker
         try:
-            results = await self.ai_explanation_breaker.execute_async(generate_narratives)
+            patient_explanation, prompt_tokens, completion_tokens, model_used = await self.ai_explanation_breaker.execute_async(generate_patient_narrative)
         except Exception as e:
             logger.error(f"Circuit breaker AI generation call failed: {e}. Triggering offline local fallback.")
             fallback_used = True
-            results = [
-                (DrugExplanationFallbackService.generate_patient_explanation(severity, recommendations), 0, 0, "fallback-local"),
-                (DrugExplanationFallbackService.generate_doctor_explanation(severity, recommendations, interactions), 0, 0, "fallback-local"),
-                (DrugExplanationFallbackService.generate_summary(severity, medications, interactions), 0, 0, "fallback-local"),
-                (DrugExplanationFallbackService.generate_precautions(severity), 0, 0, "fallback-local")
-            ]
+            patient_explanation = DrugExplanationFallbackService.generate_patient_explanation(severity, recommendations)
+            prompt_tokens = 0
+            completion_tokens = 0
+            model_used = "fallback-local"
 
-        patient_explanation, p_p_tok, p_c_tok, p_m = results[0]
-        doctor_explanation, d_p_tok, d_c_tok, d_m = results[1]
-        summary, s_p_tok, s_c_tok, s_m = results[2]
-        precautions, pr_p_tok, pr_c_tok, pr_m = results[3]
-
-        prompt_tokens = p_p_tok + d_p_tok + s_p_tok + pr_p_tok
-        completion_tokens = p_c_tok + d_c_tok + s_c_tok + pr_c_tok
+        doctor_explanation = DrugExplanationFallbackService.generate_doctor_explanation(severity, recommendations, interactions)
+        summary = DrugExplanationFallbackService.generate_summary(severity, medications, interactions)
+        precautions = DrugExplanationFallbackService.generate_precautions(severity)
         
-        # Determine model used
-        for m in (p_m, d_m, s_m, pr_m):
-            if m and m != "fallback-local":
-                model_used = m
-                break
+        # Calculate latency and cost
 
         latency_ms = (time.perf_counter() - start_time) * 1000.0
 

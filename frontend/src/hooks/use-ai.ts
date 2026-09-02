@@ -844,6 +844,24 @@ export function usePatientDrugSafety(patientId: string) {
 }
 
 /**
+ * Mutation hook to rerun drug safety check freshly for a patient.
+ */
+export function useRerunPatientDrugSafety() {
+  const queryClient = useQueryClient()
+  return useMutation<any, Error, string>({
+    mutationFn: async (patientId: string) => {
+      const res = await aiService.getPatientDrugSafety(patientId, true)
+      if (res.success && res.data) return res.data
+      throw new Error(res.message || 'Failed to rerun safety check')
+    },
+    onSuccess: (data, patientId) => {
+      queryClient.setQueryData(['patient', 'drug-safety', patientId], data)
+      queryClient.invalidateQueries({ queryKey: ['ai', 'drug'] })
+    }
+  })
+}
+
+/**
  * Hook to retrieve doctor-clinical drug safety and interaction status.
  */
 export function useDoctorDrugSafety(patientId: string) {
