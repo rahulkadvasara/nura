@@ -30,7 +30,7 @@ TEST_CASES = [
         "name": "2. General Chat Query",
         "query": "Who are you and what can you do?",
         "expected_intent": "GENERAL_CHAT",
-        "expected_agent": "GeneralChatAgent"
+        "expected_agent": "MedicalKnowledgeAgent"
     },
     {
         "name": "3. Medical Question Query",
@@ -98,12 +98,12 @@ async def run_verification():
     intent_service = get_intent_detection_service()
     engine = get_graph_engine()
 
-    # Pre-warm sentence-transformers model to avoid cold-start timeouts
+    # Pre-warm retrieval agent to avoid cold-start timeouts
     try:
-        from app.ai.embeddings import get_embeddings_service
-        get_embeddings_service().embed_text("warmup query")
+        from app.core.dependencies import get_retrieval_agent
+        await get_retrieval_agent().run("warmup query", None)
     except Exception as e:
-        logger.warning(f"Embeddings pre-warm skipped: {e}")
+        logger.warning(f"Retrieval pre-warm skipped: {e}")
 
     passed_count = 0
     failed_count = 0

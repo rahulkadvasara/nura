@@ -19,6 +19,7 @@ class MedicalKnowledgeAgentResponse(BaseModel):
 
 class SymptomAgentResponse(BaseModel):
     """Output schema for SymptomAgent"""
+    risk_level: str = Field(default="MODERATE", description="Clinical risk level assessment (LOW, MODERATE, HIGH, CRITICAL)")
     summary: str = Field(..., description="Brief symptom analysis summary text containing informational safety notices")
     possible_causes: List[str] = Field(default_factory=list, description="List of potential clinical causes")
     red_flags: List[str] = Field(default_factory=list, description="List of clinical red flags detected")

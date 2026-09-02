@@ -122,25 +122,51 @@ class SymptomAgent(BaseAgent):
         # Parse structured output variables
         parsed_json = clean_json_response(ai_res.response) or {}
         
-        summary = parsed_json.get("summary", "Symptom check completed.")
+        emergency = bool(parsed_json.get("emergency", False))
+        risk_level = str(parsed_json.get("risk_level", "CRITICAL" if emergency else "MODERATE")).upper().strip()
+        if risk_level not in ["LOW", "MODERATE", "HIGH", "CRITICAL"]:
+            risk_level = "CRITICAL" if emergency else "MODERATE"
+
+        assessment = parsed_json.get("summary", "Symptom check completed.")
         possible_causes = parsed_json.get("possible_causes", [])
         red_flags = parsed_json.get("red_flags", [])
         recommended_action = parsed_json.get("recommended_action", "Consult a doctor if symptoms persist.")
-        emergency = bool(parsed_json.get("emergency", False))
 
-        # Enforce regulatory notices if missing
-        notice = "This symptom summary is for informational purposes only and is not a substitute for professional medical advice, diagnosis, or treatment."
-        if notice.lower() not in summary.lower():
-            summary = f"{summary}\n\nDisclaimer: {notice}"
+        # Risk Level Header Badge
+        risk_badges = {
+            "LOW": "[LOW RISK]",
+            "MODERATE": "[MODERATE RISK]",
+            "HIGH": "[HIGH RISK]",
+            "CRITICAL": "[CRITICAL / EMERGENCY RISK]"
+        }
+        risk_header = risk_badges.get(risk_level, f"[{risk_level} RISK]")
 
-        # Enforce emergency escalation notice if emergency flag is true
-        if emergency:
-            emergency_warning = "CRITICAL WARNING: Life-threatening indicators detected. Please seek immediate medical care or visit the nearest emergency room."
-            if emergency_warning.lower() not in recommended_action.lower():
-                recommended_action = f"{emergency_warning}\n\n{recommended_action}"
+        # Format Doctor-Like Structured Response
+        response_parts = [
+            f"**Clinical Assessment**: {risk_header}",
+            f"\n{assessment}"
+        ]
+
+        if possible_causes:
+            response_parts.append("\n**Possible Clinical Causes**:")
+            for cause in possible_causes:
+                response_parts.append(f"• {cause}")
+
+        response_parts.append(f"\n**Recommended Action**:\n{recommended_action}")
+
+        if red_flags:
+            response_parts.append("\n**Warning Signs & Red Flags**:")
+            for flag in red_flags:
+                response_parts.append(f"• [!] {flag}")
+
+        notice = "This symptom evaluation is for clinical informational guidance only and does not replace a direct physical examination or diagnosis by a licensed physician."
+        response_parts.append(f"\n*Disclaimer: {notice}*")
+
+        formatted_summary = "\n".join(response_parts)
 
         agent_res = SymptomAgentResponse(
-            summary=summary,
+            risk_level=risk_level,
+            summary=formatted_summary,
             possible_causes=possible_causes,
             red_flags=red_flags,
             recommended_action=recommended_action,
