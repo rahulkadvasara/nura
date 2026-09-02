@@ -50,10 +50,10 @@ class ReminderBase(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     patient_id: str = Field(..., description="Reference to the patient user ID")
-    reminder_type: ReminderType = Field(..., description="Type of reminder")
+    reminder_type: ReminderType = Field(default=ReminderType.MEDICATION, description="Type of reminder")
     title: str = Field(..., min_length=1, max_length=200, description="Title of the reminder")
     description: Optional[str] = Field(None, max_length=2000, description="Optional description of the reminder")
-    scheduled_time: str = Field(..., description="Scheduled time/date (HH:MM or datetime string)")
+    scheduled_time: str = Field(default="08:00", description="Scheduled time/date (HH:MM or datetime string)")
     recurrence: Optional[str] = Field(None, max_length=100, description="Recurrence rule (e.g. daily, weekly, none)")
     status: ReminderStatus = Field(default=ReminderStatus.ACTIVE, description="Status of the reminder")
     source_type: ReminderSourceType = Field(default=ReminderSourceType.MANUAL, description="Source type")
@@ -93,4 +93,8 @@ class ReminderInDB(ReminderBase):
         for field in ("patient_id", "source_id"):
             if field in doc and doc[field] is not None and not isinstance(doc[field], str):
                 doc[field] = str(doc[field])
+        if "reminder_type" not in doc or not doc["reminder_type"]:
+            doc["reminder_type"] = ReminderType.MEDICATION
+        if "scheduled_time" not in doc or not doc["scheduled_time"]:
+            doc["scheduled_time"] = doc.get("time", "08:00")
         return cls(**doc)
