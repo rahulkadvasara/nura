@@ -28,6 +28,7 @@ export function useCreateReminder() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['patient', 'reminders'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard', 'patient'] })
+      queryClient.invalidateQueries({ queryKey: ['ai', 'drug'] })
     },
   })
 }
@@ -45,6 +46,7 @@ export function useUpdateReminder() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['patient', 'reminders'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard', 'patient'] })
+      queryClient.invalidateQueries({ queryKey: ['ai', 'drug'] })
     },
   })
 }
@@ -61,6 +63,7 @@ export function useDeleteReminder() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['patient', 'reminders'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard', 'patient'] })
+      queryClient.invalidateQueries({ queryKey: ['ai', 'drug'] })
     },
   })
 }

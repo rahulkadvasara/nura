@@ -78,37 +78,22 @@ class ReminderService(BaseService[ReminderInDB, ReminderCreate, ReminderUpdate])
         if not patient:
             raise ValueError(f"Patient user with ID {schema.patient_id} does not exist")
 
-        # Drug Safety checks for medication reminder
+        # Drug Safety checks for medication reminder using DrugInteractionAgent (non-blocking)
         if schema.reminder_type == ReminderType.MEDICATION:
-            from app.core.dependencies import get_medication_validation_service
-            validation_service = get_medication_validation_service()
-            
-            # Clean title
             title = schema.title or ""
             clean_name = title.strip()
             if clean_name.lower().startswith("take "):
                 clean_name = clean_name[5:].strip()
                 
-            # Perform validation
-            val_res = await validation_service.validate_medications(
-                patient_id=schema.patient_id,
-                incoming_medications=[clean_name],
-                source="reminder",
-                override_reason=schema.override_reason if schema.override else None,
-                overridden_by=schema.user_role if schema.override else None
-            )
-            
-            if val_res.get("decision") == "BLOCK":
-                is_override_authorized = schema.override and schema.user_role in ("doctor", "admin")
-                if not is_override_authorized:
-                    raise ValueError(
-                        f"Medication reminder creation blocked due to critical interaction: "
-                        f"{val_res.get('recommendations', ['Critical risk interaction'])[0]}. "
-                        f"Requires authorized doctor/admin override."
-                    )
-            
-            # Re-evaluate the patient's full active list and update validation_summary inside patient_memory
-            await validation_service.validate_and_update_patient_memory(schema.patient_id)
+            try:
+                from app.core.dependencies import get_drug_interaction_agent
+                from app.agents.base.context import AgentContext
+                drug_agent = get_drug_interaction_agent()
+                agent_ctx = AgentContext(patient_id=schema.patient_id)
+                await drug_agent.execute(f"Check safety parameters for: {clean_name}", context=agent_ctx)
+            except Exception as agent_err:
+                import logging
+                logging.getLogger("nura.services.reminder").error(f"DrugInteractionAgent check failed: {agent_err}")
 
         now = utc_now()
         reminder_create = ReminderCreate(
@@ -146,6 +131,16 @@ class ReminderService(BaseService[ReminderInDB, ReminderCreate, ReminderUpdate])
             except Exception as e:
                 import logging
                 logging.getLogger("nura.services.reminder").error(f"Failed to dispatch ReminderCreatedEvent: {e}")
+
+        # Re-evaluate patient memory with new medication list
+        if schema.reminder_type == ReminderType.MEDICATION:
+            try:
+                from app.core.dependencies import get_medication_validation_service
+                validation_service = get_medication_validation_service()
+                await validation_service.validate_and_update_patient_memory(reminder_obj.patient_id)
+            except Exception as mem_err:
+                import logging
+                logging.getLogger("nura.services.reminder").error(f"Failed to update patient memory validation summary: {mem_err}")
 
         return reminder_obj
 
