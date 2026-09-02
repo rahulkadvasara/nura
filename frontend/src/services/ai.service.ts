@@ -488,8 +488,9 @@ export const aiService = {
     return response.data
   },
 
-  getPatientDrugSafety: async (patientId: string): Promise<any> => {
-    const response = await apiClient.get<any>(`/ai/drug/patient/${patientId}`)
+  getPatientDrugSafety: async (patientId: string, rerun: boolean = false): Promise<any> => {
+    const url = rerun ? `/ai/drug/patient/${patientId}?rerun=true` : `/ai/drug/patient/${patientId}`
+    const response = await apiClient.get<any>(url)
     return response.data
   },
 

@@ -2023,15 +2023,23 @@ async def get_drug_ai_statistics(
 )
 async def get_patient_drug_safety(
     patient_id: str,
+    rerun: bool = False,
     current_user: UserInDB = Depends(require_active_user),
     validation_service = Depends(get_medication_validation_service),
     drug_agent = Depends(get_drug_interaction_agent),
+    cache_service = Depends(get_drug_cache_service),
 ):
     if current_user.role == UserRole.PATIENT and str(current_user.id) != patient_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: patients can only access their own drug safety data."
         )
+
+    if rerun:
+        try:
+            cache_service.invalidate_patient(patient_id)
+        except Exception as cache_err:
+            logger.warning(f"Failed to invalidate patient cache on rerun: {cache_err}")
 
     active_meds_raw = await validation_service.collector.collect(patient_id)
     display_active_meds = sorted(list(dict.fromkeys([m.title() for m in active_meds_raw])))
@@ -2042,14 +2050,24 @@ async def get_patient_drug_safety(
         source="api"
     )
 
-    # Execute DrugInteractionAgent / Explanation Service
+    # Execute DrugInteractionAgent
     from app.agents.base.context import AgentContext
     agent_ctx = AgentContext(patient_id=patient_id)
     
+    agent_explanation = None
+    if rerun and display_active_meds:
+        try:
+            med_query = ", ".join(display_active_meds)
+            agent_res = await drug_agent.execute(f"Check safety parameters for: {med_query}", context=agent_ctx)
+            if hasattr(agent_res, "interaction_summary") and agent_res.interaction_summary:
+                agent_explanation = agent_res.interaction_summary
+        except Exception as agent_err:
+            logger.error(f"Error running DrugInteractionAgent on manual rerun: {agent_err}")
+
     detected_inters = val_res.get("detected_interactions", [])
-    patient_explanation_text = "No safety risks detected for active medications."
+    patient_explanation_text = agent_explanation or "No safety risks detected for active medications."
     
-    if detected_inters:
+    if not agent_explanation and detected_inters:
         warnings_list = [inter.description for inter in detected_inters if getattr(inter, "description", None)]
         if warnings_list:
             patient_explanation_text = "\n".join([f"• {w}" for w in warnings_list])

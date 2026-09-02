@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useAuthStore } from '@/stores/auth'
-import { usePatientDrugSafety } from '@/hooks/use-ai'
+import { usePatientDrugSafety, useRerunPatientDrugSafety } from '@/hooks/use-ai'
 import { usePatientReminders, useCreateReminder, useDeleteReminder } from '@/hooks/use-reminder'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -26,7 +26,8 @@ export default function PatientSafetyDashboard() {
   const patientId = user?.id || ''
 
   // API hooks
-  const { data: safetyData, isLoading: safetyLoading, refetch: refetchSafety } = usePatientDrugSafety(patientId)
+  const { data: safetyData, isLoading: safetyLoading } = usePatientDrugSafety(patientId)
+  const rerunSafetyMutation = useRerunPatientDrugSafety()
   const { data: reminders, isLoading: remindersLoading } = usePatientReminders()
 
   const createReminderMutation = useCreateReminder()
@@ -164,11 +165,13 @@ export default function PatientSafetyDashboard() {
           </p>
         </div>
         <Button
-          onClick={() => refetchSafety()}
+          onClick={() => rerunSafetyMutation.mutate(patientId)}
+          disabled={rerunSafetyMutation.isPending || safetyLoading}
           variant="outline"
-          className="border-slate-300 hover:bg-slate-100 flex items-center gap-2 self-start md:self-auto font-semibold text-xs"
+          className="border-teal-200 bg-teal-50/50 hover:bg-teal-100/80 text-teal-800 flex items-center gap-2 self-start md:self-auto font-bold text-xs shadow-2xs transition-all"
         >
-          <RefreshCw className="h-4 w-4" /> Refetch Safety Summary
+          <RefreshCw className={rerunSafetyMutation.isPending ? "h-4 w-4 animate-spin text-teal-600" : "h-4 w-4 text-teal-600"} />
+          {rerunSafetyMutation.isPending ? "Running Drug Safety Check..." : "Rerun Drug Safety Check"}
         </Button>
       </div>
 
@@ -354,7 +357,7 @@ export default function PatientSafetyDashboard() {
             </div>
           </div>
           <div>
-            {safetyLoading ? (
+            {safetyLoading || rerunSafetyMutation.isPending ? (
               <RefreshCw className="h-6 w-6 animate-spin text-teal-400" />
             ) : safetyData ? (
               getSafetyStatusBadge(safetyData.severity)
@@ -365,10 +368,11 @@ export default function PatientSafetyDashboard() {
         </div>
 
         <CardContent className="p-6 space-y-6">
-          {safetyLoading ? (
+          {safetyLoading || rerunSafetyMutation.isPending ? (
             <div className="flex flex-col items-center justify-center py-10 space-y-2">
-              <RefreshCw className="h-8 w-8 animate-spin text-teal-600" />
-              <p className="text-sm font-semibold text-slate-600">Evaluating active medications interactions...</p>
+              <RefreshCw className="h-8 w-8 animate-spin text-teal-600 mb-1" />
+              <p className="text-sm font-bold text-slate-800">Running AI Drug Safety Agent across active medications...</p>
+              <p className="text-xs text-slate-400">Evaluating interaction risks and clinical guidance</p>
             </div>
           ) : safetyData ? (
             <div className="space-y-5">
