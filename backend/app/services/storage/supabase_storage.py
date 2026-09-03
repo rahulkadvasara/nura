@@ -2,7 +2,6 @@ import io
 import os
 import logging
 from typing import BinaryIO, Optional, Dict, Any
-from supabase import create_client, Client
 from app.services.storage.storage_provider import StorageProvider
 from app.core.config import settings
 
@@ -12,6 +11,11 @@ class SupabaseStorage(StorageProvider):
     """Supabase Storage implementation using the official supabase Python SDK."""
 
     def __init__(self):
+        try:
+            from supabase import create_client
+        except ImportError as e:
+            raise RuntimeError("supabase-py library is not installed") from e
+
         url = settings.SUPABASE_URL
         # Prioritize service role key for admin upload/delete capabilities, fallback to anon
         key = settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY
@@ -26,7 +30,8 @@ class SupabaseStorage(StorageProvider):
             url = url.split("/rest/v1")[0]
         url = url.rstrip("/")
 
-        self.client: Client = create_client(url, key)
+        self.client = create_client(url, key)
+
 
     def _ensure_bucket(self, bucket_name: str) -> None:
         """Helper to ensure target bucket exists and has correct visibility."""

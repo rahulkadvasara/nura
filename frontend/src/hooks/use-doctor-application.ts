@@ -58,3 +58,16 @@ export function useUpdateDoctorApplication() {
     },
   })
 }
+
+export function useUploadDoctorDocument() {
+  return useMutation({
+    mutationFn: async ({ file, documentType }: { file: File; documentType: string }) => {
+      const response = await doctorApplicationService.uploadDocument(file, documentType)
+      if (response.success && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to upload verification document')
+    },
+  })
+}
+
