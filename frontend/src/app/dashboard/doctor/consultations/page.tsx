@@ -11,7 +11,19 @@ import { toast } from 'sonner'
 
 type TabType = 'in_progress' | 'completed'
 
+function formatTime(timeStr?: string): string {
+  if (!timeStr) return ''
+  const parts = timeStr.split(':')
+  if (parts.length < 2) return timeStr
+  const hour = parseInt(parts[0], 10)
+  const minute = parts[1]
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const displayHour = hour % 12 || 12
+  return `${displayHour}:${minute} ${ampm}`
+}
+
 function DoctorConsultationsContent() {
+
   const [activeTab, setActiveTab] = useState<TabType>('in_progress')
   
   // Fetch in-progress from appointments list
@@ -172,8 +184,9 @@ function DoctorConsultationsContent() {
                     </div>
                     <div className="flex items-center gap-1">
                       <Clock className="h-3.5 w-3.5 text-slate-400" />
-                      <span>{appt.appointment_time}</span>
+                      <span>{formatTime(appt.appointment_time)}</span>
                     </div>
+
                   </div>
                   {appt.reason && (
                     <p className="text-xs text-slate-600 bg-slate-50 border border-slate-100 rounded px-2.5 py-1.5 leading-relaxed max-w-2xl">

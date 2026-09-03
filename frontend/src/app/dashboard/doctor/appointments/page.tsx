@@ -12,7 +12,19 @@ import { toast } from 'sonner'
 
 type TabType = 'pending' | 'approved' | 'rejected'
 
+function formatTime(timeStr?: string): string {
+  if (!timeStr) return ''
+  const parts = timeStr.split(':')
+  if (parts.length < 2) return timeStr
+  const hour = parseInt(parts[0], 10)
+  const minute = parts[1]
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const displayHour = hour % 12 || 12
+  return `${displayHour}:${minute} ${ampm}`
+}
+
 function DoctorAppointmentsContent() {
+
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<TabType>('pending')
   const { data: appointments = [], isLoading, isError, error, refetch } = useDoctorAppointments()
@@ -212,8 +224,9 @@ function DoctorAppointmentsContent() {
                     </div>
                     <div className="flex items-center gap-1">
                       <Clock className="h-3.5 w-3.5 text-slate-400" />
-                      <span>{appt.appointment_time}</span>
+                      <span>{formatTime(appt.appointment_time)}</span>
                     </div>
+
                   </div>
 
                   {appt.reason && (

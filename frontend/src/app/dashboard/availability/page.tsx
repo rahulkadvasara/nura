@@ -69,6 +69,78 @@ function formatDate(dateStr: string) {
   })
 }
 
+interface TimePicker12hProps {
+  value: string
+  onChange: (val: string) => void
+  label: string
+}
+
+function TimePicker12h({ value, onChange, label }: TimePicker12hProps) {
+  const parse24h = (val: string) => {
+    if (!val) return { hour: '09', min: '00', ampm: 'AM' }
+    const [hStr, mStr] = val.split(':')
+    let h = parseInt(hStr || '9', 10)
+    const ampm = h >= 12 ? 'PM' : 'AM'
+    h = h % 12 || 12
+    const hour = h < 10 ? `0${h}` : `${h}`
+    return { hour, min: mStr || '00', ampm }
+  }
+
+  const { hour, min, ampm } = parse24h(value)
+
+  const handleChange = (newHour: string, newMin: string, newAmpm: string) => {
+    let h = parseInt(newHour, 10)
+    if (newAmpm === 'PM' && h < 12) h += 12
+    if (newAmpm === 'AM' && h === 12) h = 0
+    const h24 = h < 10 ? `0${h}` : `${h}`
+    onChange(`${h24}:${newMin}`)
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs font-bold text-slate-700">{label}</Label>
+      <div className="flex items-center gap-1.5">
+        <select
+          value={hour}
+          onChange={(e) => handleChange(e.target.value, min, ampm)}
+          className="h-9 border border-slate-300 rounded-lg text-xs font-semibold px-2 py-1 bg-white focus:ring-1 focus:ring-teal-600 focus:outline-none"
+        >
+          {['01','02','03','04','05','06','07','08','09','10','11','12'].map((h) => (
+            <option key={h} value={h}>{h}</option>
+          ))}
+        </select>
+        <span className="font-bold text-slate-400 text-xs">:</span>
+        <select
+          value={min}
+          onChange={(e) => handleChange(hour, e.target.value, ampm)}
+          className="h-9 border border-slate-300 rounded-lg text-xs font-semibold px-2 py-1 bg-white focus:ring-1 focus:ring-teal-600 focus:outline-none"
+        >
+          {['00','15','30','45'].map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+        <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 ml-1">
+          <button
+            type="button"
+            onClick={() => handleChange(hour, min, 'AM')}
+            className={`px-2 py-1 text-xs font-bold rounded-md transition-colors ${ampm === 'AM' ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+          >
+            AM
+          </button>
+          <button
+            type="button"
+            onClick={() => handleChange(hour, min, 'PM')}
+            className={`px-2 py-1 text-xs font-bold rounded-md transition-colors ${ampm === 'PM' ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+          >
+            PM
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
 function AvailabilityContent() {
   const { data: slots, isLoading, isError, error, refetch } = useDoctorAvailability()
   const createMutation = useCreateAvailabilitySlot()
@@ -82,12 +154,17 @@ function AvailabilityContent() {
   const {
     register: registerAdd,
     handleSubmit: handleSubmitAdd,
+    setValue: setValueAdd,
+    watch: watchAdd,
     reset: resetAdd,
     formState: { errors: errorsAdd, isValid: isValidAdd }
   } = useForm<SlotFormValues>({
     resolver: zodResolver(slotSchema),
     mode: 'onChange',
     defaultValues: {
+      date: new Date().toISOString().split('T')[0],
+      start_time: '13:00',
+      end_time: '17:00',
       slot_duration: 30,
       is_available: true
     }
@@ -98,12 +175,20 @@ function AvailabilityContent() {
     register: registerEdit,
     handleSubmit: handleSubmitEdit,
     setValue: setValueEdit,
+    watch: watchEdit,
     reset: resetEdit,
     formState: { errors: errorsEdit, isValid: isValidEdit }
   } = useForm<SlotFormValues>({
     resolver: zodResolver(slotSchema),
     mode: 'onChange'
   })
+
+  const watchAddStart = watchAdd('start_time') || '13:00'
+  const watchAddEnd = watchAdd('end_time') || '17:00'
+
+  const watchEditStart = watchEdit('start_time') || '09:00'
+  const watchEditEnd = watchEdit('end_time') || '17:00'
+
 
   // Populate Edit form values when editingSlot changes
   useEffect(() => {
@@ -340,25 +425,19 @@ function AvailabilityContent() {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="add-start">Start Time</Label>
-                  <Input 
-                    id="add-start"
-                    type="time"
-                    {...registerAdd('start_time')} 
-                  />
-                  {errorsAdd.start_time && <p className="text-xs text-red-500">{errorsAdd.start_time.message}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="add-end">End Time</Label>
-                  <Input 
-                    id="add-end"
-                    type="time"
-                    {...registerAdd('end_time')} 
-                  />
-                  {errorsAdd.end_time && <p className="text-xs text-red-500">{errorsAdd.end_time.message}</p>}
-                </div>
+                <TimePicker12h
+                  label="Start Time"
+                  value={watchAddStart}
+                  onChange={(val) => setValueAdd('start_time', val, { shouldValidate: true })}
+                />
+                <TimePicker12h
+                  label="End Time"
+                  value={watchAddEnd}
+                  onChange={(val) => setValueAdd('end_time', val, { shouldValidate: true })}
+                />
               </div>
+              {errorsAdd.start_time && <p className="text-xs text-red-500">{errorsAdd.start_time.message}</p>}
+              {errorsAdd.end_time && <p className="text-xs text-red-500">{errorsAdd.end_time.message}</p>}
 
               <div className="space-y-2">
                 <Label htmlFor="add-duration">Slot Duration (Minutes)</Label>
@@ -448,25 +527,20 @@ function AvailabilityContent() {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-start">Start Time</Label>
-                  <Input 
-                    id="edit-start"
-                    type="time"
-                    {...registerEdit('start_time')} 
-                  />
-                  {errorsEdit.start_time && <p className="text-xs text-red-500">{errorsEdit.start_time.message}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-end">End Time</Label>
-                  <Input 
-                    id="edit-end"
-                    type="time"
-                    {...registerEdit('end_time')} 
-                  />
-                  {errorsEdit.end_time && <p className="text-xs text-red-500">{errorsEdit.end_time.message}</p>}
-                </div>
+                <TimePicker12h
+                  label="Start Time"
+                  value={watchEditStart}
+                  onChange={(val) => setValueEdit('start_time', val, { shouldValidate: true })}
+                />
+                <TimePicker12h
+                  label="End Time"
+                  value={watchEditEnd}
+                  onChange={(val) => setValueEdit('end_time', val, { shouldValidate: true })}
+                />
               </div>
+              {errorsEdit.start_time && <p className="text-xs text-red-500">{errorsEdit.start_time.message}</p>}
+              {errorsEdit.end_time && <p className="text-xs text-red-500">{errorsEdit.end_time.message}</p>}
+
 
               <div className="space-y-2">
                 <Label htmlFor="edit-duration">Slot Duration (Minutes)</Label>
