@@ -783,9 +783,10 @@ def test_google_login_existing_user(client, auth_mocks):
     mock_user_service.get_user_by_email.return_value = user
     
     # Setup updated user mocks
-    mock_user_service.verify_user_email.return_value = user
-    mock_user_service.update_user.return_value = user
-    mock_user_service.get_user_by_id.return_value = user
+    updated_user = _make_user(email="google_user@example.com", email_verified=True, is_active=True)
+    mock_user_service.verify_user_email.return_value = updated_user
+    mock_user_service.update_user.return_value = updated_user
+    mock_user_service.get_user_by_id.return_value = updated_user
     
     token_response = TokenResponse(
         access_token="google_access_token",
