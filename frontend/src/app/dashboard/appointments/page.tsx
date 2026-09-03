@@ -391,16 +391,30 @@ function AppointmentsContent() {
 
                 <div className="flex gap-2 shrink-0">
                   {appt.meeting_link && (appt.status === 'approved' || appt.status === 'in_progress') && (
-                    <a
-                      href={appt.meeting_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 px-3 rounded-lg font-semibold shadow-sm transition-colors"
-                    >
-                      <Video className="h-3.5 w-3.5" />
-                      Join Google Meet
-                    </a>
+                    isPaid(appt) ? (
+                      <a
+                        href={appt.meeting_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 px-3 rounded-lg font-semibold shadow-sm transition-colors"
+                      >
+                        <Video className="h-3.5 w-3.5" />
+                        Join Google Meet
+                      </a>
+                    ) : (
+                      <Button
+                        disabled
+                        variant="outline"
+                        size="sm"
+                        title="Complete payment to join meeting"
+                        className="opacity-60 cursor-not-allowed bg-slate-100 border-slate-200 text-slate-500 text-xs shrink-0 flex items-center gap-1.5 h-9 px-3 rounded-lg font-semibold"
+                      >
+                        <Video className="h-3.5 w-3.5 text-slate-400" />
+                        Join Google Meet
+                      </Button>
+                    )
                   )}
+
 
                   {appt.status === 'pending' && (
 

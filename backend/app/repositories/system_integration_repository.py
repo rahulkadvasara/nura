@@ -30,6 +30,8 @@ class SystemIntegrationRepository:
         data_to_save = dict(data)
         data_to_save["name"] = name
         data_to_save["updated_at"] = now
+        # Remove created_at from $set dictionary to prevent conflict with $setOnInsert
+        data_to_save.pop("created_at", None)
 
         await self.collection.update_one(
             {"name": name},
@@ -41,3 +43,4 @@ class SystemIntegrationRepository:
         )
         updated = await self.get_integration(name)
         return updated or data_to_save
+
