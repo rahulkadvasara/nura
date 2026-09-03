@@ -74,6 +74,7 @@ class PatientAppointmentHistoryItem(BaseModel):
     doctor_id: str
     doctor_name: str
     specialization: str
+    doctor_profile_picture: Optional[str] = None
     appointment_date: str
     appointment_time: str
     status: AppointmentStatus
@@ -94,6 +95,7 @@ class DoctorAppointmentItem(BaseModel):
     id: str
     patient_id: str
     patient_name: str
+    patient_profile_picture: Optional[str] = None
     appointment_date: str
     appointment_time: str
     reason: str

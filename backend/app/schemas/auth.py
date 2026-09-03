@@ -75,6 +75,8 @@ class TokenUser(BaseModel):
     email: EmailStr = Field(..., description="User email address")
     full_name: str = Field(..., description="Full name")
     email_verified: bool = Field(..., description="Email verification status")
+    profile_picture: Optional[str] = Field(None, description="Profile picture URL")
+    phone: Optional[str] = Field(None, description="Phone number")
 
 
 class TokenResponse(BaseModel):
