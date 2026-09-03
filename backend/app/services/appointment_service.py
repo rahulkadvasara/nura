@@ -240,17 +240,20 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
             doctor_profile = await self.doctor_profile_repository.get(appt.doctor_id)
             doctor_name = "Unknown Doctor"
             specialization = "General Medicine"
+            doctor_profile_picture = None
             if doctor_profile:
                 specialization = doctor_profile.specialization
                 doctor_user = await self.user_repository.get(doctor_profile.user_id)
                 if doctor_user:
                     doctor_name = doctor_user.full_name
+                    doctor_profile_picture = doctor_user.profile_picture
 
             history.append({
                 "id": appt.id,
                 "doctor_id": appt.doctor_id,
                 "doctor_name": doctor_name,
                 "specialization": specialization,
+                "doctor_profile_picture": doctor_profile_picture,
                 "appointment_date": appt.slot_date,
                 "appointment_time": appt.slot_time,
                 "status": appt.status.value if hasattr(appt.status, "value") else appt.status,
@@ -323,13 +326,16 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
         for appt in appts:
             patient = await self.user_repository.get(appt.patient_id)
             patient_name = "Unknown Patient"
+            patient_profile_picture = None
             if patient:
                 patient_name = patient.full_name
+                patient_profile_picture = patient.profile_picture
 
             queue.append({
                 "id": appt.id,
                 "patient_id": appt.patient_id,
                 "patient_name": patient_name,
+                "patient_profile_picture": patient_profile_picture,
                 "appointment_date": appt.slot_date,
                 "appointment_time": appt.slot_time,
                 "reason": appt.reason or appt.notes or "General Consultation",

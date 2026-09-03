@@ -89,7 +89,7 @@ def _make_otp(
 def test_register_success(client, mocks):
     """Test successful user registration"""
     mock_user_service, mock_otp_service, mock_email_service = mocks
-    mock_user_service.user_exists.return_value = False
+    mock_user_service.get_user_by_email.return_value = None
     mock_user_service.create_user.return_value = _make_user()
     mock_otp_service.send_otp.return_value = "123456"
     mock_email_service.send_otp_email.return_value = True
@@ -108,7 +108,7 @@ def test_register_success(client, mocks):
     assert data["success"] is True
     assert data["message"] == "OTP sent successfully"
 
-    mock_user_service.user_exists.assert_called_once_with("rahul@example.com")
+    mock_user_service.get_user_by_email.assert_called_once_with("rahul@example.com")
     mock_user_service.create_user.assert_called_once()
     mock_otp_service.send_otp.assert_called_once_with("rahul@example.com", OTPPurpose.REGISTRATION)
     mock_email_service.send_otp_email.assert_called_once_with("rahul@example.com", "123456", "registration")

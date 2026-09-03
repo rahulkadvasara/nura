@@ -327,13 +327,24 @@ function AppointmentsContent() {
             <Card key={appt.id} className="border-slate-200 hover:shadow-sm transition-shadow bg-white overflow-hidden">
               <CardContent className="p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Stethoscope className="h-4 w-4 text-teal-600 shrink-0" />
-                    <h3 className="font-bold text-slate-900">
-                      {appt.doctor_name.toLowerCase().startsWith('dr.') ? appt.doctor_name : `Dr. ${appt.doctor_name}`}
-                    </h3>
-                    <span className="text-xs text-slate-400">•</span>
-                    <span className="text-xs text-slate-500 font-medium">{appt.specialization}</span>
+                  <div className="flex items-center gap-3">
+                    {appt.doctor_profile_picture ? (
+                      <img
+                        src={appt.doctor_profile_picture}
+                        alt={appt.doctor_name}
+                        className="h-10 w-10 rounded-full object-cover border border-slate-200 shrink-0"
+                      />
+                    ) : (
+                      <div className="h-10 w-10 rounded-full bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600 shrink-0">
+                        <Stethoscope className="h-5 w-5" />
+                      </div>
+                    )}
+                    <div>
+                      <h3 className="font-bold text-slate-900 leading-tight">
+                        {appt.doctor_name.toLowerCase().startsWith('dr.') ? appt.doctor_name : `Dr. ${appt.doctor_name}`}
+                      </h3>
+                      <span className="text-xs text-slate-500 font-medium">{appt.specialization}</span>
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500 font-medium">

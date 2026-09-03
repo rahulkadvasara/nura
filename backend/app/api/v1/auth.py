@@ -284,6 +284,8 @@ async def login(
                 "email": token_response.user.email,
                 "full_name": token_response.user.full_name,
                 "email_verified": token_response.user.email_verified,
+                "profile_picture": token_response.user.profile_picture,
+                "phone": token_response.user.phone,
             }
         }
     )
@@ -676,6 +678,8 @@ async def google_login(
                 "email": token_response.user.email,
                 "full_name": token_response.user.full_name,
                 "email_verified": token_response.user.email_verified,
+                "profile_picture": token_response.user.profile_picture,
+                "phone": token_response.user.phone,
             }
         }
     )
