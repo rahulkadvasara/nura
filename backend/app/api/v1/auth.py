@@ -21,6 +21,7 @@ from app.models import UserCreate, UserRole, AuthProvider, OTPPurpose, UserInDB,
 from app.schemas.auth import (
     SuccessResponse,
     OTPVerify,
+    ResendOTPRequest,
     UserLogin,
     RefreshTokenRequest,
     ForgotPasswordRequest,
@@ -49,11 +50,22 @@ async def register(
     """
     email = user_in.email.lower().strip()
 
-    # Check email uniqueness
-    if await user_service.user_exists(email):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User with this email already exists",
+    # Check if user exists
+    existing_user = await user_service.get_user_by_email(email)
+    if existing_user:
+        if existing_user.email_verified:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User with this email already exists",
+            )
+
+        # Unverified user trying to re-register: issue a fresh OTP
+        otp = await otp_service.send_otp(email, OTPPurpose.REGISTRATION)
+        if otp:
+            await email_service.send_otp_email(email, otp, "registration")
+        return SuccessResponse(
+            success=True,
+            message="Verification OTP sent to unverified email address",
         )
 
     # Force inactive status until email is verified
@@ -87,6 +99,48 @@ async def register(
     return SuccessResponse(
         success=True,
         message="OTP sent successfully",
+    )
+
+
+@router.post("/resend-otp", response_model=SuccessResponse)
+async def resend_otp(
+    resend_in: ResendOTPRequest,
+    user_service: UserService = Depends(get_user_service),
+    otp_service: OTPService = Depends(get_otp_service),
+    email_service: EmailService = Depends(get_email_service),
+):
+    """
+    Resend verification OTP for unverified user account
+    """
+    email = resend_in.email.lower().strip()
+
+    user = await user_service.get_user_by_email(email)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    if user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Account already verified",
+        )
+
+    otp = await otp_service.send_otp(email, OTPPurpose.REGISTRATION)
+    if not otp:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to generate verification OTP",
+        )
+
+    email_sent = await email_service.send_otp_email(email, otp, "registration")
+    if not email_sent:
+        logger.warning(f"Could not send OTP email to {email}")
+
+    return SuccessResponse(
+        success=True,
+        message="A new OTP has been sent to your email",
     )
 
 
