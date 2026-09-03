@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Calendar, Clock, User, AlertCircle, CheckCircle, XCircle, FileText, Stethoscope } from 'lucide-react'
+import { Calendar, Clock, User, AlertCircle, CheckCircle, XCircle, FileText, Stethoscope, Video } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Button } from '@/components/ui/button'
@@ -254,6 +254,17 @@ function DoctorAppointmentsContent() {
 
                 {appt.status === 'approved' && (
                   <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                    {appt.meeting_link && (
+                      <a
+                        href={appt.meeting_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 px-3 rounded-lg font-semibold shadow-sm transition-colors"
+                      >
+                        <Video className="h-3.5 w-3.5" />
+                        Join Google Meet
+                      </a>
+                    )}
                     <Button
                       size="sm"
                       onClick={() => handleStartConsultation(appt.id)}
@@ -265,6 +276,7 @@ function DoctorAppointmentsContent() {
                     </Button>
                   </div>
                 )}
+
               </CardContent>
             </Card>
           ))}

@@ -59,6 +59,9 @@ class AppointmentResponse(BaseModel):
     rejection_reason: Optional[str] = Field(None, description="Reason for rejection")
     consultation_started_at: Optional[datetime] = Field(None, description="Timestamp of when the consultation started")
     consultation_completed_at: Optional[datetime] = Field(None, description="Timestamp of when the consultation completed")
+    meeting_link: Optional[str] = Field(None, description="Google Meet or video meeting URL")
+    meeting_provider: Optional[str] = Field(None, description="Provider identifier (e.g. google_meet)")
+    meeting_created_at: Optional[datetime] = Field(None, description="Timestamp when meeting link was created")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
@@ -74,8 +77,13 @@ class PatientAppointmentHistoryItem(BaseModel):
     appointment_date: str
     appointment_time: str
     status: AppointmentStatus
+    payment_status: Optional[PaymentStatus] = None
+    consultation_fee: Optional[float] = None
     reason: Optional[str] = None
     rejection_reason: Optional[str] = None
+    meeting_link: Optional[str] = None
+    meeting_provider: Optional[str] = None
+    meeting_created_at: Optional[datetime] = None
     created_at: datetime
 
 
@@ -91,7 +99,11 @@ class DoctorAppointmentItem(BaseModel):
     reason: str
     status: AppointmentStatus
     rejection_reason: Optional[str] = None
+    meeting_link: Optional[str] = None
+    meeting_provider: Optional[str] = None
+    meeting_created_at: Optional[datetime] = None
     created_at: datetime
+
 
 
 class AppointmentRejectSchema(BaseModel):
