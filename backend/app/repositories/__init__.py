@@ -26,10 +26,14 @@ from app.repositories.doctor_wallet_repository import DoctorWalletRepository
 from app.repositories.agent_log_repository import AgentLogRepository
 from app.repositories.audit_log_repository import AuditLogRepository
 from app.repositories.patient_memory_repository import PatientMemoryRepository
+from app.repositories.system_integration_repository import SystemIntegrationRepository
 
 __all__ = [
     # Base repository
     "BaseRepository",
+
+    # System repositories
+    "SystemIntegrationRepository",
 
     # Specific repositories
     "UserRepository",
@@ -68,4 +72,5 @@ __all__ = [
 
     # Patient memory repositories
     "PatientMemoryRepository",
-]
+]
+

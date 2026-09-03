@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Calendar, Clock, User, AlertCircle, CheckCircle, XCircle, FileText, Stethoscope } from 'lucide-react'
+import { Calendar, Clock, User, AlertCircle, CheckCircle, XCircle, FileText, Stethoscope, Video } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,19 @@ import { toast } from 'sonner'
 
 type TabType = 'pending' | 'approved' | 'rejected'
 
+function formatTime(timeStr?: string): string {
+  if (!timeStr) return ''
+  const parts = timeStr.split(':')
+  if (parts.length < 2) return timeStr
+  const hour = parseInt(parts[0], 10)
+  const minute = parts[1]
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const displayHour = hour % 12 || 12
+  return `${displayHour}:${minute} ${ampm}`
+}
+
 function DoctorAppointmentsContent() {
+
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<TabType>('pending')
   const { data: appointments = [], isLoading, isError, error, refetch } = useDoctorAppointments()
@@ -212,8 +224,9 @@ function DoctorAppointmentsContent() {
                     </div>
                     <div className="flex items-center gap-1">
                       <Clock className="h-3.5 w-3.5 text-slate-400" />
-                      <span>{appt.appointment_time}</span>
+                      <span>{formatTime(appt.appointment_time)}</span>
                     </div>
+
                   </div>
 
                   {appt.reason && (
@@ -254,6 +267,17 @@ function DoctorAppointmentsContent() {
 
                 {appt.status === 'approved' && (
                   <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                    {appt.meeting_link && (
+                      <a
+                        href={appt.meeting_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 px-3 rounded-lg font-semibold shadow-sm transition-colors"
+                      >
+                        <Video className="h-3.5 w-3.5" />
+                        Join Google Meet
+                      </a>
+                    )}
                     <Button
                       size="sm"
                       onClick={() => handleStartConsultation(appt.id)}
@@ -265,6 +289,7 @@ function DoctorAppointmentsContent() {
                     </Button>
                   </div>
                 )}
+
               </CardContent>
             </Card>
           ))}

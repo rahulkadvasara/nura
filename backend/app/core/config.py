@@ -57,6 +57,11 @@ class Settings:
         self.GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
         self.GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
         
+        # Google Meet OAuth
+        self.GOOGLE_MEET_CLIENT_ID = os.getenv("GOOGLE_MEET_CLIENT_ID", os.getenv("GOOGLE_CLIENT_ID", ""))
+        self.GOOGLE_MEET_CLIENT_SECRET = os.getenv("GOOGLE_MEET_CLIENT_SECRET", os.getenv("GOOGLE_CLIENT_SECRET", ""))
+        self.GOOGLE_MEET_REDIRECT_URI = os.getenv("GOOGLE_MEET_REDIRECT_URI", "http://localhost:8000/api/v1/integrations/google/callback")
+        
         # Email Service (SMTP)
         self.SMTP_HOST = os.getenv("SMTP_HOST", "")
         self.SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))

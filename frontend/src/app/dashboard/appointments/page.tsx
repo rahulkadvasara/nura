@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Calendar, Clock, Stethoscope, AlertCircle, XCircle } from 'lucide-react'
+import { Calendar, Clock, Stethoscope, AlertCircle, XCircle, Video } from 'lucide-react'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -45,7 +45,19 @@ const loadRazorpayScript = () => {
   })
 }
 
+function formatTime(timeStr?: string): string {
+  if (!timeStr) return ''
+  const parts = timeStr.split(':')
+  if (parts.length < 2) return timeStr
+  const hour = parseInt(parts[0], 10)
+  const minute = parts[1]
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const displayHour = hour % 12 || 12
+  return `${displayHour}:${minute} ${ampm}`
+}
+
 function AppointmentsContent() {
+
   const [activeTab, setActiveTab] = useState<TabType>('pending')
   const { data: appointments = [], isLoading, isError, error, refetch } = useAppointments()
   const { mutateAsync: cancelAppointment, isPending: isCancelling } = useCancelAppointment()
@@ -331,8 +343,9 @@ function AppointmentsContent() {
                     </div>
                     <div className="flex items-center gap-1">
                       <Clock className="h-3.5 w-3.5 text-slate-400" />
-                      <span>{appt.appointment_time}</span>
+                      <span>{formatTime(appt.appointment_time)}</span>
                     </div>
+
                     {getStatusBadge(appt.status)}
                     
                     {isPaid(appt) && (
@@ -377,7 +390,34 @@ function AppointmentsContent() {
                 </div>
 
                 <div className="flex gap-2 shrink-0">
+                  {appt.meeting_link && (appt.status === 'approved' || appt.status === 'in_progress') && (
+                    isPaid(appt) ? (
+                      <a
+                        href={appt.meeting_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 px-3 rounded-lg font-semibold shadow-sm transition-colors"
+                      >
+                        <Video className="h-3.5 w-3.5" />
+                        Join Google Meet
+                      </a>
+                    ) : (
+                      <Button
+                        disabled
+                        variant="outline"
+                        size="sm"
+                        title="Complete payment to join meeting"
+                        className="opacity-60 cursor-not-allowed bg-slate-100 border-slate-200 text-slate-500 text-xs shrink-0 flex items-center gap-1.5 h-9 px-3 rounded-lg font-semibold"
+                      >
+                        <Video className="h-3.5 w-3.5 text-slate-400" />
+                        Join Google Meet
+                      </Button>
+                    )
+                  )}
+
+
                   {appt.status === 'pending' && (
+
                     <Button
                       variant="outline"
                       size="sm"

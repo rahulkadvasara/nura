@@ -612,35 +612,68 @@ class DoctorAvailabilityService(
         doctor_id: str,
         schema: DoctorAvailabilityCreateSchema,
     ) -> DoctorAvailabilityInDB:
-        """Create a new availability slot for a doctor.
+        """Create new availability slot(s) for a doctor. If start_time to end_time spans multiple
+
+        intervals of slot_duration, automatically generates individual bookable sub-slots.
 
         Raises:
             ValueError: If the time range is invalid or overlaps with an existing slot.
         """
         self._validate_time_range(schema.start_time, schema.end_time)
-        await self._check_overlaps(doctor_id, schema.date, schema.start_time, schema.end_time)
+
+        start_h, start_m = map(int, schema.start_time.split(":"))
+        end_h, end_m = map(int, schema.end_time.split(":"))
+        start_mins = start_h * 60 + start_m
+        end_mins = end_h * 60 + end_m
+        duration = schema.slot_duration if schema.slot_duration > 0 else 30
+
+        intervals = []
+        curr = start_mins
+        while curr + duration <= end_mins:
+            s_h, s_m = divmod(curr, 60)
+            e_h, e_m = divmod(curr + duration, 60)
+            intervals.append((f"{s_h:02d}:{s_m:02d}", f"{e_h:02d}:{e_m:02d}"))
+            curr += duration
+
+        if not intervals:
+            intervals = [(schema.start_time, schema.end_time)]
 
         now = datetime.now(timezone.utc)
-        avail_create = DoctorAvailabilityCreate(
-            doctor_id=doctor_id,
-            date=schema.date,
-            day_of_week=schema.day_of_week or DayOfWeek(datetime.strptime(schema.date, "%Y-%m-%d").strftime("%A").lower()),
-            start_time=schema.start_time,
-            end_time=schema.end_time,
-            slot_duration=schema.slot_duration,
-            is_available=schema.is_available,
-            active=schema.active,
-        )
+        day_of_week = schema.day_of_week or DayOfWeek(datetime.strptime(schema.date, "%Y-%m-%d").strftime("%A").lower())
 
-        doc_dict = avail_create.model_dump()
-        doc_dict["created_at"] = now
-        doc_dict["updated_at"] = now
+        created_slots = []
+        for sub_start, sub_end in intervals:
+            # Check overlap for each interval, skipping if overlapping
+            try:
+                await self._check_overlaps(doctor_id, schema.date, sub_start, sub_end)
+            except ValueError:
+                continue
 
-        result = await self.availability_repository.collection.insert_one(doc_dict)
-        created = await self.availability_repository.collection.find_one({"_id": result.inserted_id})
-        if created is None:
-            raise RuntimeError("Doctor availability was inserted but could not be retrieved")
-        return DoctorAvailabilityInDB.from_mongo(created)
+            avail_create = DoctorAvailabilityCreate(
+                doctor_id=doctor_id,
+                date=schema.date,
+                day_of_week=day_of_week,
+                start_time=sub_start,
+                end_time=sub_end,
+                slot_duration=duration,
+                is_available=schema.is_available,
+                active=schema.active,
+            )
+
+            doc_dict = avail_create.model_dump()
+            doc_dict["created_at"] = now
+            doc_dict["updated_at"] = now
+
+            result = await self.availability_repository.collection.insert_one(doc_dict)
+            created = await self.availability_repository.collection.find_one({"_id": result.inserted_id})
+            if created:
+                created_slots.append(DoctorAvailabilityInDB.from_mongo(created))
+
+        if not created_slots:
+            raise ValueError("All time slots in the specified range overlap with existing availability.")
+
+        return created_slots[0]
+
 
     # ---- Read --------------------------------------------------------------
 
