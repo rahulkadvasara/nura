@@ -20,8 +20,8 @@ export function useDoctorApplication() {
       }
     },
     retry: false, // If it returns 404, we don't need to retry
-    staleTime: 30_000,
-    refetchOnWindowFocus: true,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
   })
 }
 
