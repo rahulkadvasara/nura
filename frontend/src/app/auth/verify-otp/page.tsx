@@ -62,16 +62,29 @@ export default function VerifyOtpPage() {
     }
   })
 
+  const resendMutation = useMutation({
+    mutationFn: authService.resendOTP,
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success(data.message || 'A new OTP has been sent to your email')
+        setCountdown(60)
+      } else {
+        toast.error(data.message || 'Failed to resend OTP')
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Failed to resend OTP. Please try again.')
+    }
+  })
+
   const onSubmit = (data: VerifyOtpPayload) => {
     setIsSubmitting(true)
     verifyMutation.mutate(data)
   }
 
   const handleResend = () => {
-    if (countdown === 0) {
-      setCountdown(60)
-      toast.success('A new OTP has been sent to your email')
-      // In a real app, this would call authService.resendOTP(emailQuery)
+    if (countdown === 0 && emailQuery) {
+      resendMutation.mutate({ email: emailQuery })
     }
   }
 
