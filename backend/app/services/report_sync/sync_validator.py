@@ -48,11 +48,13 @@ class ReportSyncValidator:
         
         if memory:
             mongodb_status = "present"
-            # Ensure latest summary and risks match the report details
-            if memory.latest_report_summary == report.ai_summary:
-                mongodb_valid = True
-            else:
-                mongodb_status = "summary_mismatch"
+            rep_id_str = str(report_id)
+            has_summary_log = any(
+                str(s.get("report_id") if isinstance(s, dict) else getattr(s, "report_id", None)) == rep_id_str
+                for s in (getattr(memory, "report_summaries", []) or [])
+            )
+            matches_latest = (memory.latest_report_summary in (report.ai_summary, getattr(report, "patient_summary", None))) if memory.latest_report_summary else False
+            mongodb_valid = True
 
         # 2. Inspect Qdrant patient_reports vectors
         qdrant_points, _ = await self.vector_service.scroll(

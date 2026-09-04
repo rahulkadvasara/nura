@@ -98,7 +98,9 @@ class DrugInteractionAgent(BaseAgent):
             medications=incoming_meds,
             severity=severity,
             recommendations=recommendations,
-            interactions=detected_interactions
+            interactions=detected_interactions,
+            patient_id=patient_id,
+            force_refresh=True
         )
 
         patient_explanation = explain_res.get("patient_explanation", "")
@@ -122,16 +124,13 @@ class DrugInteractionAgent(BaseAgent):
                 "score": 1.0
             })
 
-        # Combine descriptions into interaction_summary
-        notice = "This drug safety check is for informational purposes only. It is not a substitute for professional medical advice, diagnosis, or treatment. Always consult your physician before starting, stopping, or changing any medication."
-        
-        interaction_summary = (
-            f"Summary: {summary}\n\n"
-            f"Patient Advice:\n{patient_explanation}\n\n"
-            f"Precautions:\n{precautions}\n\n"
-            f"Clinical Details (for Clinicians):\n{doctor_explanation}\n\n"
-            f"Disclaimer: {notice}"
-        )
+        # Use clean patient explanation as interaction_summary
+        if patient_explanation and patient_explanation.strip():
+            interaction_summary = patient_explanation.strip()
+        elif summary and summary.strip():
+            interaction_summary = summary.strip()
+        else:
+            interaction_summary = "No safety risks detected for active medications."
 
         # Standardize severity formatting for legacy agent schemas
         if severity == "NONE":

@@ -8,7 +8,8 @@ import * as z from 'zod'
 import { 
   useDoctorApplication, 
   useApplyAsDoctor, 
-  useUpdateDoctorApplication 
+  useUpdateDoctorApplication,
+  useUploadDoctorDocument
 } from '@/hooks/use-doctor-application'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
@@ -32,7 +33,10 @@ import {
   ArrowLeft,
   ChevronRight,
   PenTool,
-  Check
+  Check,
+  UploadCloud,
+  ExternalLink,
+  RefreshCw
 } from 'lucide-react'
 
 // Zod validation schema
@@ -46,10 +50,10 @@ const applicationSchema = z.object({
   hospital: z.string().max(300, 'Hospital name is too long').optional(),
   license_number: z.string().min(1, 'License number is required').max(100),
   
-  // Document URLs
-  degree_certificate_url: z.string().url('Must be a valid document URL'),
-  medical_license_url: z.string().url('Must be a valid document URL'),
-  identity_proof_url: z.string().url('Must be a valid document URL'),
+  // Document URLs (obtained after file upload)
+  degree_certificate_url: z.string().min(1, 'Degree certificate document is required'),
+  medical_license_url: z.string().min(1, 'Medical license document is required'),
+  identity_proof_url: z.string().min(1, 'Identity proof document is required'),
 })
 
 type ApplicationFormValues = z.infer<typeof applicationSchema>
@@ -60,11 +64,16 @@ export default function DoctorApplicationPage() {
   const { data: application, isLoading, error, refetch } = useDoctorApplication()
   const applyMutation = useApplyAsDoctor()
   const updateMutation = useUpdateDoctorApplication()
+  const uploadMutation = useUploadDoctorDocument()
   
   const [isEditing, setIsEditing] = useState(false)
   const [currentStep, setCurrentStep] = useState(1)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitSuccess, setSubmitSuccess] = useState(false)
+
+  const [uploadingDoc, setUploadingDoc] = useState<'degree' | 'license' | 'id_proof' | null>(null)
+  const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({})
+  const [uploadedFileNames, setUploadedFileNames] = useState<Record<string, string>>({})
 
   // Redirect non-patients
   useEffect(() => {
@@ -77,6 +86,7 @@ export default function DoctorApplicationPage() {
     register,
     handleSubmit,
     setValue,
+    watch,
     reset,
     trigger,
     formState: { errors, isValid }
@@ -125,6 +135,41 @@ export default function DoctorApplicationPage() {
         <div className="h-[400px] bg-white border border-slate-200 rounded-lg animate-pulse" />
       </div>
     )
+  }
+
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+    docType: 'degree' | 'license' | 'id_proof',
+    formKey: 'degree_certificate_url' | 'medical_license_url' | 'identity_proof_url'
+  ) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadErrors(prev => ({ ...prev, [docType]: 'File size exceeds maximum limit of 5MB' }))
+      return
+    }
+
+    // Validate extension
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    if (!['pdf', 'jpg', 'jpeg', 'png'].includes(ext || '')) {
+      setUploadErrors(prev => ({ ...prev, [docType]: 'Invalid file format. Allowed: PDF, JPG, JPEG, PNG' }))
+      return
+    }
+
+    setUploadErrors(prev => ({ ...prev, [docType]: '' }))
+    setUploadingDoc(docType)
+
+    try {
+      const res = await uploadMutation.mutateAsync({ file, documentType: docType })
+      setValue(formKey, res.url, { shouldValidate: true, shouldDirty: true })
+      setUploadedFileNames(prev => ({ ...prev, [docType]: file.name }))
+    } catch (err: any) {
+      setUploadErrors(prev => ({ ...prev, [docType]: err.message || 'Failed to upload file' }))
+    } finally {
+      setUploadingDoc(null)
+    }
   }
 
   const handleNextStep = async () => {
@@ -190,6 +235,86 @@ export default function DoctorApplicationPage() {
       default:
         return <Clock className="h-10 w-10 text-amber-500" />
     }
+  }
+
+  const renderDocUploadCard = (
+    title: string,
+    docType: 'degree' | 'license' | 'id_proof',
+    formKey: 'degree_certificate_url' | 'medical_license_url' | 'identity_proof_url',
+    description: string
+  ) => {
+    const currentUrl = watch(formKey)
+    const isUploading = uploadingDoc === docType
+    const errorMsg = uploadErrors[docType] || errors[formKey]?.message
+    const fileName = uploadedFileNames[docType]
+
+    return (
+      <div className="space-y-2 border border-slate-200 rounded-xl p-4 bg-slate-50/50">
+        <div className="flex justify-between items-start">
+          <div>
+            <Label className="font-semibold text-slate-800 text-sm">{title}</Label>
+            <p className="text-xs text-slate-500 mt-0.5">{description}</p>
+          </div>
+          {currentUrl && !isUploading && (
+            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-medium text-xs flex items-center gap-1">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+              Uploaded
+            </Badge>
+          )}
+        </div>
+
+        {isUploading ? (
+          <div className="flex items-center gap-2 p-3 bg-white border border-slate-200 rounded-lg text-xs text-slate-600 animate-pulse">
+            <Loader2 className="h-4 w-4 animate-spin text-teal-600" />
+            <span>Uploading file to secure storage...</span>
+          </div>
+        ) : currentUrl ? (
+          <div className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg text-xs">
+            <div className="flex items-center gap-2 overflow-hidden">
+              <FileText className="h-4 w-4 text-teal-600 flex-shrink-0" />
+              <span className="font-medium text-slate-700 truncate max-w-[200px]">
+                {fileName || 'Uploaded Verification Document'}
+              </span>
+              <a
+                href={currentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-teal-600 hover:underline flex items-center gap-1 font-medium flex-shrink-0"
+              >
+                <ExternalLink className="h-3 w-3" />
+                View
+              </a>
+            </div>
+            <label className="cursor-pointer text-xs font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1 bg-slate-50 hover:bg-slate-100 px-2.5 py-1 rounded border border-slate-200 transition-colors">
+              <RefreshCw className="h-3 w-3" />
+              Replace File
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                className="hidden"
+                onChange={(e) => handleFileUpload(e, docType, formKey)}
+              />
+            </label>
+          </div>
+        ) : (
+          <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-300 hover:border-teal-500 bg-white rounded-lg cursor-pointer transition-colors group">
+            <UploadCloud className="h-7 w-7 text-slate-400 group-hover:text-teal-600 transition-colors mb-1" />
+            <span className="text-xs font-semibold text-slate-700 group-hover:text-teal-600">
+              Click or drag file to upload
+            </span>
+            <span className="text-[10px] text-slate-400 mt-0.5">PDF, JPG, JPEG, PNG (Max 5MB)</span>
+            <input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png"
+              className="hidden"
+              onChange={(e) => handleFileUpload(e, docType, formKey)}
+            />
+          </label>
+        )}
+
+        {errorMsg && <p className="text-xs text-rose-500 mt-1">{errorMsg}</p>}
+      </div>
+    )
   }
 
   // Render Status View if application exists and not in editing mode
@@ -266,7 +391,7 @@ export default function DoctorApplicationPage() {
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
             <h3 className="font-bold text-slate-800 border-b pb-2 flex items-center gap-2">
               <FileText className="h-5 w-5 text-teal-600" />
-              Uploaded Metadata
+              Uploaded Verification Documents
             </h3>
             <div className="space-y-4">
               {documents.map((doc) => (
@@ -275,8 +400,9 @@ export default function DoctorApplicationPage() {
                     <ShieldCheck className="h-5 w-5 text-teal-500" />
                     <div>
                       <span className="font-medium capitalize text-slate-800 block">{doc.document_type.replace('_', ' ')}</span>
-                      <a href={doc.document_url} target="_blank" rel="noopener noreferrer" className="text-xs text-teal-600 hover:underline">
-                        View submitted URL
+                      <a href={doc.document_url} target="_blank" rel="noopener noreferrer" className="text-xs text-teal-600 hover:underline flex items-center gap-1 mt-0.5 font-medium">
+                        View uploaded document
+                        <ExternalLink className="h-3 w-3" />
                       </a>
                     </div>
                   </div>
@@ -369,9 +495,10 @@ export default function DoctorApplicationPage() {
                     id="experience_years" 
                     type="number"
                     placeholder="e.g. 5" 
+                    className="pr-16 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     {...register('experience_years')} 
                   />
-                  <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-medium">Years</span>
+                  <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-medium pointer-events-none">Years</span>
                 </div>
                 {errors.experience_years && <p className="text-xs text-rose-500">{errors.experience_years.message}</p>}
               </div>
@@ -383,9 +510,10 @@ export default function DoctorApplicationPage() {
                     id="consultation_fee" 
                     type="number"
                     placeholder="e.g. 500" 
+                    className="pr-10 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     {...register('consultation_fee')} 
                   />
-                  <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-medium">₹</span>
+                  <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-medium pointer-events-none">₹</span>
                 </div>
                 {errors.consultation_fee && <p className="text-xs text-rose-500">{errors.consultation_fee.message}</p>}
               </div>
@@ -445,47 +573,38 @@ export default function DoctorApplicationPage() {
           </div>
         )}
 
-        {/* STEP 3: Verification Documents URLs */}
+        {/* STEP 3: Verification Documents Upload */}
         {currentStep === 3 && (
           <div className="space-y-4">
             <h2 className="text-lg font-bold text-slate-800 border-b pb-2 flex items-center gap-2">
               <FileText className="h-5 w-5 text-teal-600" />
               Verification Documents
             </h2>
-            <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg">
-              * Store metadata only. Upload verification documents to a secure public storage bucket (e.g. Supabase, Dropbox) and provide the direct download links below.
+            <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg leading-relaxed">
+              * Upload clear scans or digital copies of your credentials. Files are stored securely in storage and accessible only to authorized medical verification officers.
             </p>
 
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label htmlFor="degree_certificate_url">Degree Certificate URL</Label>
-                <Input 
-                  id="degree_certificate_url" 
-                  placeholder="https://example.com/degree.pdf" 
-                  {...register('degree_certificate_url')} 
-                />
-                {errors.degree_certificate_url && <p className="text-xs text-rose-500">{errors.degree_certificate_url.message}</p>}
-              </div>
+            <div className="space-y-4">
+              {renderDocUploadCard(
+                'Degree Certificate',
+                'degree',
+                'degree_certificate_url',
+                'Upload your MBBS, MD, or primary medical degree certificate.'
+              )}
 
-              <div className="space-y-2">
-                <Label htmlFor="medical_license_url">Medical License Document URL</Label>
-                <Input 
-                  id="medical_license_url" 
-                  placeholder="https://example.com/license.pdf" 
-                  {...register('medical_license_url')} 
-                />
-                {errors.medical_license_url && <p className="text-xs text-rose-500">{errors.medical_license_url.message}</p>}
-              </div>
+              {renderDocUploadCard(
+                'Medical License Document',
+                'license',
+                'medical_license_url',
+                'Upload your official state medical council registration certificate.'
+              )}
 
-              <div className="space-y-2">
-                <Label htmlFor="identity_proof_url">Identity Proof URL (Aadhaar, Passport, etc.)</Label>
-                <Input 
-                  id="identity_proof_url" 
-                  placeholder="https://example.com/passport.pdf" 
-                  {...register('identity_proof_url')} 
-                />
-                {errors.identity_proof_url && <p className="text-xs text-rose-500">{errors.identity_proof_url.message}</p>}
-              </div>
+              {renderDocUploadCard(
+                'Identity Proof Document',
+                'id_proof',
+                'identity_proof_url',
+                'Upload a government-issued photo ID (Aadhaar, Passport, Driving License, etc.).'
+              )}
             </div>
           </div>
         )}
@@ -520,7 +639,7 @@ export default function DoctorApplicationPage() {
               )}
               <Button 
                 type="submit" 
-                disabled={applyMutation.isPending || updateMutation.isPending || !isValid} 
+                disabled={applyMutation.isPending || updateMutation.isPending || !isValid || uploadingDoc !== null} 
                 className="bg-teal-600 hover:bg-teal-700 text-white"
               >
                 {(applyMutation.isPending || updateMutation.isPending) && (
@@ -536,3 +655,4 @@ export default function DoctorApplicationPage() {
     </div>
   )
 }
+

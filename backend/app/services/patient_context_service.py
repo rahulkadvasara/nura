@@ -85,42 +85,67 @@ class PatientContextService:
             }
 
         # 2. Fetch patient_memory (highest priority summary info)
-        memory = await self.patient_memory_repository.get_by_patient_id(patient_id)
-        sources_used.add("patient_memory")
+        try:
+            memory = await self.patient_memory_repository.get_by_patient_id(patient_id)
+            if memory:
+                sources_used.add("patient_memory")
+        except Exception as e:
+            logger.warning(f"PatientContextService: patient_memory lookup failed ({e})")
+            memory = None
+
+        def _safe_dt(obj):
+            dt = getattr(obj, "created_at", None)
+            if not dt:
+                return datetime.min.replace(tzinfo=timezone.utc)
+            if isinstance(dt, datetime):
+                return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+            return datetime.min.replace(tzinfo=timezone.utc)
 
         # 3. Base collection queries (gather all documents first)
-        # Reports
-        reports_cursor = await self.report_repository.get_many({"patient_id": patient_id}, limit=100)
-        sources_used.add("reports")
-        reports_cursor.sort(key=lambda x: x.created_at if hasattr(x, "created_at") else datetime.min, reverse=True)
+        reports_cursor = []
+        appointments_cursor = []
+        consultations_cursor = []
+        prescriptions_cursor = []
+        reminders_cursor = []
+        insights_cursor = []
+        chat_sessions_cursor = []
 
-        # Appointments
-        appointments_cursor = await self.appointment_repository.get_many({"patient_id": patient_id}, limit=100)
-        sources_used.add("appointments")
-        appointments_cursor.sort(key=lambda x: (x.slot_date, x.slot_time) if hasattr(x, "slot_date") else ("", ""), reverse=True)
+        try:
+            # Reports
+            reports_cursor = await self.report_repository.get_many({"patient_id": patient_id}, limit=100)
+            sources_used.add("reports")
+            reports_cursor.sort(key=_safe_dt, reverse=True)
 
-        # Consultations
-        consultations_cursor = await self.consultation_repository.get_many({"patient_id": patient_id}, limit=100)
-        sources_used.add("consultations")
-        consultations_cursor.sort(key=lambda x: x.created_at if hasattr(x, "created_at") else datetime.min, reverse=True)
+            # Appointments
+            appointments_cursor = await self.appointment_repository.get_many({"patient_id": patient_id}, limit=100)
+            sources_used.add("appointments")
+            appointments_cursor.sort(key=lambda x: (x.slot_date, x.slot_time) if hasattr(x, "slot_date") else ("", ""), reverse=True)
 
-        # Prescriptions
-        prescriptions_cursor = await self.prescription_repository.get_many({"patient_id": patient_id}, limit=100)
-        sources_used.add("prescriptions")
-        prescriptions_cursor.sort(key=lambda x: x.created_at if hasattr(x, "created_at") else datetime.min, reverse=True)
+            # Consultations
+            consultations_cursor = await self.consultation_repository.get_many({"patient_id": patient_id}, limit=100)
+            sources_used.add("consultations")
+            consultations_cursor.sort(key=_safe_dt, reverse=True)
 
-        # Active Reminders (filter only unresolved reminders)
-        reminders_cursor = await self.reminder_repository.get_many({"patient_id": patient_id, "status": "active"}, limit=100)
-        sources_used.add("reminders")
+            # Prescriptions
+            prescriptions_cursor = await self.prescription_repository.get_many({"patient_id": patient_id}, limit=100)
+            sources_used.add("prescriptions")
+            prescriptions_cursor.sort(key=_safe_dt, reverse=True)
 
-        # Recent Health Insights
-        insights_cursor = await self.health_insight_repository.get_many({"patient_id": patient_id}, limit=100)
-        sources_used.add("health_insights")
-        insights_cursor.sort(key=lambda x: x.created_at if hasattr(x, "created_at") else datetime.min, reverse=True)
+            # Active Reminders (filter only unresolved reminders)
+            reminders_cursor = await self.reminder_repository.get_many({"patient_id": patient_id, "status": "active"}, limit=100)
+            sources_used.add("reminders")
 
-        # Chat Sessions (metadata only)
-        chat_sessions_cursor = await self.chat_session_repository.get_many({"patient_id": patient_id}, limit=100)
-        sources_used.add("chat_sessions")
+            # Recent Health Insights
+            insights_cursor = await self.health_insight_repository.get_many({"patient_id": patient_id}, limit=100)
+            sources_used.add("health_insights")
+            insights_cursor.sort(key=_safe_dt, reverse=True)
+
+            # Chat Sessions (metadata only)
+            chat_sessions_cursor = await self.chat_session_repository.get_many({"patient_id": patient_id}, limit=100)
+            sources_used.add("chat_sessions")
+        except Exception as e:
+            logger.warning(f"PatientContextService: repository collection queries bypassed due to database connection error ({e})")
+
 
         # 4. Try building the context at different compression levels to fit token budget
         limit_options = [5, 3, 1]

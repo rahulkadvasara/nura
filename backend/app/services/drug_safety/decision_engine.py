@@ -38,39 +38,74 @@ class ValidationDecisionEngine:
         # Deduplicate incoming normalized list
         incoming_normalized = list(dict.fromkeys(incoming_normalized))
 
-        # Build list of all unique medication names (both current and incoming)
-        # We need to evaluate interactions for all pairs where at least one medication is incoming.
-        # Why? Because we want to check incoming vs current, and incoming vs incoming!
-        # The easiest way is to combine all medications:
-        all_meds = list(dict.fromkeys(current_normalized + incoming_normalized))
+        relevant_interactions: List[InteractionPairDetail] = []
+        relevant_severities: List[str] = []
+
+        # 1. Check duplicate active drug hazard
+        if incoming_normalized:
+            # Check if an incoming drug was ALREADY in current_normalized before adding this new reminder
+            for norm in incoming_normalized:
+                if norm in current_normalized:
+                    raw_name = incoming_map.get(norm, norm).title()
+                    dup_detail = InteractionPairDetail(
+                        drug_a=raw_name,
+                        drug_a_normalized=norm,
+                        drug_b=f"{raw_name} (Active)",
+                        drug_b_normalized=norm,
+                        severity="HIGH",
+                        description=f"Duplicate active ingredient hazard: **{raw_name}** is already present in your active medication list. Scheduling duplicate doses increases the risk of accidental overdose, excessive active compound accumulation, mucosal bleeding, and stomach ulceration."
+                    )
+                    relevant_interactions.append(dup_detail)
+                    relevant_severities.append("HIGH")
+        else:
+            # Profile overview mode (incoming_raw is empty): Check if any active drug appears multiple times
+            from collections import Counter
+            counts = Counter(current_normalized)
+            for norm, count in counts.items():
+                if count >= 2:
+                    raw_name = norm.title()
+                    dup_detail = InteractionPairDetail(
+                        drug_a=raw_name,
+                        drug_a_normalized=norm,
+                        drug_b=f"{raw_name} (Duplicate)",
+                        drug_b_normalized=norm,
+                        severity="HIGH",
+                        description=f"Duplicate active ingredient hazard: Multiple active doses of **{raw_name}** detected in your profile. Scheduling duplicate doses increases the risk of accidental overdose, excessive active compound accumulation, mucosal bleeding, and stomach ulceration."
+                    )
+                    relevant_interactions.append(dup_detail)
+                    relevant_severities.append("HIGH")
+
+        # 2. Build list of unique medication names
+        # Remove incoming meds from current list to get truly existing active medications
+        existing_normalized = [m for m in current_normalized if m not in incoming_normalized]
+        if incoming_normalized:
+            all_meds = list(dict.fromkeys(existing_normalized + incoming_normalized))
+        else:
+            all_meds = list(dict.fromkeys(current_normalized))
         
-        # Run interaction check on the combined list of medications!
-        # We call the existing DrugInteractionEngine to do this deterministically.
-        # The engine queries the database, groups interactions, handles bidirectionality,
-        # and returns a DrugCheckResponse.
+        # Run interaction check on the combined list of medications
         check_res = await self.interaction_engine.check_interactions(all_meds)
 
-        # Now, we filter detected interactions to only keep those that involve at least one incoming medication.
-        # (This avoids reporting existing interactions that are already present in the patient's current medications,
-        # although checking all is also safe. Filtering to only report interactions caused by the incoming drug is cleaner
-        # and more helpful to show why a drug is blocked/warned).
-        relevant_interactions = []
-        relevant_severities = []
+        # 3. Filter detected interactions
         incoming_set = set(incoming_normalized)
-
         for interaction in check_res.detected_interactions:
-            # check if drug_a_normalized or drug_b_normalized is in incoming_set
-            if interaction.drug_a_normalized in incoming_set or interaction.drug_b_normalized in incoming_set:
-                relevant_interactions.append(interaction)
-                relevant_severities.append(interaction.severity)
+            # If incoming_medications were provided, ONLY keep interactions involving an incoming medication!
+            # If incoming_medications is empty (profile overview), keep ALL active interactions!
+            if not incoming_set or (interaction.drug_a_normalized in incoming_set or interaction.drug_b_normalized in incoming_set):
+                key = tuple(sorted([interaction.drug_a_normalized, interaction.drug_b_normalized]))
+                if not any(tuple(sorted([i.drug_a_normalized, i.drug_b_normalized])) == key for i in relevant_interactions):
+                    relevant_interactions.append(interaction)
+                    relevant_severities.append(interaction.severity)
 
-        # Classify severity of relevant interactions
+        # Classify overall severity of relevant interactions
         highest_severity = SeverityClassifier.classify(relevant_severities)
 
         # Determine decision: ALLOW, WARNING, BLOCK
-        if highest_severity == "HIGH":
+        if highest_severity in ("HIGH", "CRITICAL"):
             decision = "BLOCK"
-        elif highest_severity in ("MEDIUM", "LOW", "UNKNOWN"):
+        elif highest_severity == "MEDIUM":
+            decision = "WARNING"
+        elif highest_severity in ("LOW", "UNKNOWN"):
             decision = "WARNING"
         else:
             decision = "ALLOW"

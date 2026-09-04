@@ -96,14 +96,20 @@ class DrugPromptBuilder:
         }
         return self.loader.render("medication_precautions", vars_dict)
 
-    def _format_interactions(self, interactions: List[Dict[str, Any]]) -> str:
+    def _format_interactions(self, interactions: List[Any]) -> str:
         if not interactions:
             return "No interactions detected."
         lines = []
         for p in interactions:
+            d_a = p.get('drug_a') if isinstance(p, dict) else getattr(p, 'drug_a', '')
+            d_a_norm = p.get('drug_a_normalized') if isinstance(p, dict) else getattr(p, 'drug_a_normalized', '')
+            d_b = p.get('drug_b') if isinstance(p, dict) else getattr(p, 'drug_b', '')
+            d_b_norm = p.get('drug_b_normalized') if isinstance(p, dict) else getattr(p, 'drug_b_normalized', '')
+            sev = p.get('severity') if isinstance(p, dict) else getattr(p, 'severity', '')
+            desc = p.get('description') if isinstance(p, dict) else getattr(p, 'description', '')
             lines.append(
-                f"- Drug A: {p.get('drug_a')} ({p.get('drug_a_normalized')}), "
-                f"Drug B: {p.get('drug_b')} ({p.get('drug_b_normalized')}), "
-                f"Severity: {p.get('severity')}. Description: {p.get('description')}"
+                f"- Drug A: {d_a} ({d_a_norm}), "
+                f"Drug B: {d_b} ({d_b_norm}), "
+                f"Severity: {sev}. Description: {desc}"
             )
         return "\n".join(lines)

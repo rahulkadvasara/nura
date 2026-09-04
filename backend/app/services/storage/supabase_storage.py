@@ -2,7 +2,6 @@ import io
 import os
 import logging
 from typing import BinaryIO, Optional, Dict, Any
-from supabase import create_client, Client
 from app.services.storage.storage_provider import StorageProvider
 from app.core.config import settings
 
@@ -12,6 +11,11 @@ class SupabaseStorage(StorageProvider):
     """Supabase Storage implementation using the official supabase Python SDK."""
 
     def __init__(self):
+        try:
+            from supabase import create_client
+        except ImportError as e:
+            raise RuntimeError("supabase-py library is not installed") from e
+
         url = settings.SUPABASE_URL
         # Prioritize service role key for admin upload/delete capabilities, fallback to anon
         key = settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY
@@ -26,7 +30,8 @@ class SupabaseStorage(StorageProvider):
             url = url.split("/rest/v1")[0]
         url = url.rstrip("/")
 
-        self.client: Client = create_client(url, key)
+        self.client = create_client(url, key)
+
 
     def _ensure_bucket(self, bucket_name: str) -> None:
         """Helper to ensure target bucket exists and has correct visibility."""
@@ -144,3 +149,15 @@ class SupabaseStorage(StorageProvider):
         except Exception as e:
             logger.error(f"Failed to generate signed URL for {object_key} in {bucket}: {e}")
             return self.get_public_url(bucket, object_key)
+
+    async def download_file(self, bucket: str, object_key: str) -> Optional[bytes]:
+        bucket = bucket.lower().replace("_", "-")
+        try:
+            res = self.client.storage.from_(bucket).download(object_key)
+            if isinstance(res, bytes):
+                return res
+            return None
+        except Exception as e:
+            logger.error(f"Failed to download file {object_key} from bucket {bucket}: {e}")
+            return None
+

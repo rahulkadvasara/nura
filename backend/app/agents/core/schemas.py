@@ -19,6 +19,7 @@ class MedicalKnowledgeAgentResponse(BaseModel):
 
 class SymptomAgentResponse(BaseModel):
     """Output schema for SymptomAgent"""
+    risk_level: str = Field(default="MODERATE", description="Clinical risk level assessment (LOW, MODERATE, HIGH, CRITICAL)")
     summary: str = Field(..., description="Brief symptom analysis summary text containing informational safety notices")
     possible_causes: List[str] = Field(default_factory=list, description="List of potential clinical causes")
     red_flags: List[str] = Field(default_factory=list, description="List of clinical red flags detected")
@@ -36,3 +37,18 @@ class MemoryAgentResponse(BaseModel):
     patient_summary: str = Field(..., description="Deterministic aggregated patient summary text from builder")
     relevant_context: List[Dict[str, Any]] = Field(default_factory=list, description="Semantic memories retrieved from Qdrant")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Metadata dictionary context")
+
+
+class GreetingAgentResponse(BaseModel):
+    """Output schema for GreetingAgent"""
+    greeting: str = Field(..., description="Warm, personalized greeting text")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Metadata dictionary context")
+    usage: Dict[str, int] = Field(default_factory=dict, description="LLM execution tokens mapping")
+
+
+class GeneralChatAgentResponse(BaseModel):
+    """Output schema for GeneralChatAgent"""
+    answer: str = Field(..., description="Conversational assistant answer text")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Metadata dictionary context")
+    usage: Dict[str, int] = Field(default_factory=dict, description="LLM execution tokens mapping")
+

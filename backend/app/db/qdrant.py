@@ -78,10 +78,43 @@ class QdrantConnection:
             return False
     
     def get_client(self) -> QdrantClient:
-        """Get Qdrant client instance"""
+        """Get Qdrant client instance. Lazy-initializes in-memory database if server offline."""
         if not self.client:
-            raise RuntimeError("Qdrant not connected")
+            from app.core.ai_config import ai_settings
+            url_str = ai_settings.QDRANT_URL or "http://localhost:6333"
+            
+            # Fast socket check to prevent 25s timeout delay when Qdrant port is closed
+            server_available = False
+            try:
+                import socket
+                from urllib.parse import urlparse
+                parsed = urlparse(url_str)
+                host = parsed.hostname or "localhost"
+                port = parsed.port or 6333
+                with socket.create_connection((host, port), timeout=0.1):
+                    server_available = True
+            except Exception:
+                server_available = False
+
+            if server_available:
+                try:
+                    api_key = ai_settings.QDRANT_API_KEY if ai_settings.QDRANT_API_KEY else None
+                    remote_client = QdrantClient(
+                        url=url_str,
+                        api_key=api_key,
+                        timeout=1.0,
+                        check_compatibility=False
+                    )
+                    self.client = remote_client
+                except Exception as e:
+                    logger.warning(f"Qdrant server error ({e}). Falling back to in-memory Qdrant client.")
+                    self.client = QdrantClient(location=":memory:")
+            else:
+                logger.info("Qdrant server port offline. Initializing in-memory Qdrant client.")
+                self.client = QdrantClient(location=":memory:")
         return self.client
+
+
 
 
 # Global Qdrant connection instance

@@ -4,7 +4,7 @@ Pydantic v2 schemas for authentication API requests and responses
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Any
 from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
 
 from app.models import UserRole, AuthProvider
@@ -55,6 +55,17 @@ class OTPVerify(BaseModel):
         return v.lower().strip()
 
 
+class ResendOTPRequest(BaseModel):
+    """Resend OTP request schema"""
+    email: EmailStr = Field(..., description="Email address to resend OTP")
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        """Normalize email to lowercase"""
+        return v.lower().strip()
+
+
 class TokenUser(BaseModel):
     """User information embedded in a token response"""
     model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
@@ -64,6 +75,8 @@ class TokenUser(BaseModel):
     email: EmailStr = Field(..., description="User email address")
     full_name: str = Field(..., description="Full name")
     email_verified: bool = Field(..., description="Email verification status")
+    profile_picture: Optional[str] = Field(None, description="Profile picture URL")
+    phone: Optional[str] = Field(None, description="Phone number")
 
 
 class TokenResponse(BaseModel):
@@ -86,7 +99,7 @@ class SuccessResponse(BaseModel):
     """Generic success response schema"""
     success: bool = Field(default=True, description="Success status")
     message: str = Field(..., description="Success message")
-    data: Optional[dict] = Field(None, description="Response data")
+    data: Optional[Any] = Field(None, description="Response data")
 
 
 class ErrorResponse(BaseModel):

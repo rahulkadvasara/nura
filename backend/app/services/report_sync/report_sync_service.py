@@ -10,6 +10,7 @@ import json
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 
+from bson import ObjectId
 from app.models.report import ReportInDB
 from app.repositories.report_repository import ReportRepository
 from app.repositories.patient_memory_repository import PatientMemoryRepository
@@ -55,6 +56,11 @@ class ReportSyncService:
         serialized = json.dumps(sorted(texts))
         return hashlib.md5(serialized.encode("utf-8")).hexdigest()
 
+    def _get_report_id_filter(self, report_id: str) -> dict:
+        if ObjectId.is_valid(report_id):
+            return {"_id": ObjectId(report_id)}
+        return {"_id": report_id}
+
     async def synchronize_report(self, report_id: str) -> Dict[str, Any]:
         """Runs the medical report synchronization pipeline:
         - Updates patient_memory MongoDB collection
@@ -74,8 +80,8 @@ class ReportSyncService:
             patient_id = report.patient_id
             
             # Ensure report is sufficiently processed to permit sync
-            if report.processing_status != "completed":
-                raise ValueError(f"Report {report_id} status is {report.processing_status}. Must be 'completed' to synchronize.")
+            if report.processing_status not in ("completed", "processing", "uploaded"):
+                raise ValueError(f"Report {report_id} status is {report.processing_status}. Must be active or completed to synchronize.")
 
             # 2. Update patient_memory in MongoDB
             updated_mem = await self.memory_builder.build_incremental_memory(patient_id, report)
@@ -123,7 +129,7 @@ class ReportSyncService:
                     
                     # Save interaction findings directly to the report document
                     await self.report_repository.collection.update_one(
-                        {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id},
+                        self._get_report_id_filter(report_id),
                         {"$set": {
                             "interaction_findings": findings,
                             "overall_severity": val_res.get("severity", "NONE"),
@@ -211,7 +217,7 @@ class ReportSyncService:
 
             # 5. Save sync completion state on the report document
             await self.report_repository.collection.update_one(
-                {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id},
+                self._get_report_id_filter(report_id),
                 {"$set": {
                     "is_synchronized": True,
                     "synchronized_at": datetime.now(timezone.utc)

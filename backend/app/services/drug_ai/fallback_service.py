@@ -16,12 +16,18 @@ class DrugExplanationFallbackService:
         )
 
     @staticmethod
-    def generate_doctor_explanation(severity: str, recommendations: List[str], interactions: List[Dict[str, Any]]) -> str:
+    def _get_attr(item: Any, attr: str) -> Any:
+        if isinstance(item, dict):
+            return item.get(attr, "")
+        return getattr(item, attr, "")
+
+    @classmethod
+    def generate_doctor_explanation(cls, severity: str, recommendations: List[str], interactions: List[Any]) -> str:
         rec_str = " ".join(recommendations)
         pairs_str = ""
         if interactions:
             pairs_str = "\n".join([
-                f"- {p.get('drug_a')} and {p.get('drug_b')} ({p.get('severity')}): {p.get('description')}"
+                f"- {cls._get_attr(p, 'drug_a')} and {cls._get_attr(p, 'drug_b')} ({cls._get_attr(p, 'severity')}): {cls._get_attr(p, 'description')}"
                 for p in interactions
             ])
         else:
@@ -38,11 +44,11 @@ class DrugExplanationFallbackService:
             f"or changing any medication."
         )
 
-    @staticmethod
-    def generate_summary(severity: str, medications: List[str], interactions: List[Dict[str, Any]]) -> str:
+    @classmethod
+    def generate_summary(cls, severity: str, medications: List[str], interactions: List[Any]) -> str:
         if not interactions:
             return f"No interactions detected between {', '.join(medications)}."
-        pairs = [f"{p.get('drug_a')}-{p.get('drug_b')}" for p in interactions]
+        pairs = [f"{cls._get_attr(p, 'drug_a')}-{cls._get_attr(p, 'drug_b')}" for p in interactions]
         return f"Deterministic {severity} interaction detected involving: {', '.join(pairs)}."
 
     @staticmethod

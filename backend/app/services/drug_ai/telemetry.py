@@ -19,7 +19,8 @@ class DrugSafetyAITelemetry:
         with self._lock:
             self.explanation_requests += 1
 
-    def record_success(self, model: str, prompt_tokens: int, completion_tokens: int, latency_ms: float) -> None:
+    def record_success(self, model: str = "groq", prompt_tokens: int = 0, completion_tokens: int = 0, latency_ms: float = 0.0, model_used: Optional[str] = None, **kwargs) -> None:
+        target_model = model_used or model
         with self._lock:
             self.successful_generations += 1
             self.prompt_tokens += prompt_tokens
@@ -28,7 +29,7 @@ class DrugSafetyAITelemetry:
             cost = (prompt_tokens * 0.00000015) + (completion_tokens * 0.00000060)
             self.estimated_cost += cost
             self.total_latency_ms += latency_ms
-            self.model_usage[model] = self.model_usage.get(model, 0) + 1
+            self.model_usage[target_model] = self.model_usage.get(target_model, 0) + 1
 
     def record_fallback(self) -> None:
         with self._lock:

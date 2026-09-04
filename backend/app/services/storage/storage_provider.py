@@ -83,3 +83,17 @@ class StorageProvider(ABC):
             str: Temporary signed URL.
         """
         pass
+
+    @abstractmethod
+    async def download_file(self, bucket: str, object_key: str) -> Optional[bytes]:
+        """Downloads file binary bytes from storage backend.
+
+        Args:
+            bucket: Name of the bucket.
+            object_key: Key or path of the object.
+
+        Returns:
+            Optional[bytes]: File content bytes if found, None otherwise.
+        """
+        pass
+

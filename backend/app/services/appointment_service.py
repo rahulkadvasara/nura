@@ -60,12 +60,14 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
         user_repository: UserRepository,
         doctor_availability_repository: Optional[Any] = None,
         event_dispatcher = None,
+        google_meet_service: Optional[Any] = None,
     ):
         super().__init__()
         self.appointment_repository = appointment_repository
         self.doctor_profile_repository = doctor_profile_repository
         self.user_repository = user_repository
         self.doctor_availability_repository = doctor_availability_repository
+        self.google_meet_service = google_meet_service
         
         # Lazy load or use injected event dispatcher to prevent circular imports
         if event_dispatcher is None:
@@ -76,6 +78,7 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
                 self.event_dispatcher = None
         else:
             self.event_dispatcher = event_dispatcher
+
 
     async def create_appointment(
         self,
@@ -190,9 +193,22 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
         patient_id: str,
         limit: int = 100,
         skip: int = 0,
+        active_only: bool = False,
     ) -> List[AppointmentInDB]:
-        """Fetch all appointments for a patient"""
-        return await self.appointment_repository.get_by_patient_id(patient_id, limit=limit, skip=skip)
+        """Fetch appointments for a patient, sorted newest first, optionally filtered to active ones."""
+        appts = await self.appointment_repository.get_many({"patient_id": patient_id}, limit=100, skip=0)
+        appts.sort(key=lambda a: a.created_at, reverse=True)
+
+        if active_only:
+            valid_statuses = {"approved", "pending", "in_progress", "scheduled"}
+            filtered = []
+            for appt in appts:
+                st = appt.status.value if hasattr(appt.status, "value") else str(appt.status)
+                if st.lower() in valid_statuses:
+                    filtered.append(appt)
+            return filtered[skip:skip+limit]
+
+        return appts[skip:skip+limit]
 
     async def list_appointments_by_doctor(
         self,
@@ -224,17 +240,20 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
             doctor_profile = await self.doctor_profile_repository.get(appt.doctor_id)
             doctor_name = "Unknown Doctor"
             specialization = "General Medicine"
+            doctor_profile_picture = None
             if doctor_profile:
                 specialization = doctor_profile.specialization
                 doctor_user = await self.user_repository.get(doctor_profile.user_id)
                 if doctor_user:
                     doctor_name = doctor_user.full_name
+                    doctor_profile_picture = doctor_user.profile_picture
 
             history.append({
                 "id": appt.id,
                 "doctor_id": appt.doctor_id,
                 "doctor_name": doctor_name,
                 "specialization": specialization,
+                "doctor_profile_picture": doctor_profile_picture,
                 "appointment_date": appt.slot_date,
                 "appointment_time": appt.slot_time,
                 "status": appt.status.value if hasattr(appt.status, "value") else appt.status,
@@ -242,8 +261,12 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
                 "consultation_fee": appt.consultation_fee,
                 "reason": appt.reason or appt.notes or "General Consultation",
                 "rejection_reason": appt.rejection_reason,
+                "meeting_link": appt.meeting_link,
+                "meeting_provider": appt.meeting_provider,
+                "meeting_created_at": appt.meeting_created_at,
                 "created_at": appt.created_at
             })
+
 
         return history
 
@@ -303,18 +326,24 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
         for appt in appts:
             patient = await self.user_repository.get(appt.patient_id)
             patient_name = "Unknown Patient"
+            patient_profile_picture = None
             if patient:
                 patient_name = patient.full_name
+                patient_profile_picture = patient.profile_picture
 
             queue.append({
                 "id": appt.id,
                 "patient_id": appt.patient_id,
                 "patient_name": patient_name,
+                "patient_profile_picture": patient_profile_picture,
                 "appointment_date": appt.slot_date,
                 "appointment_time": appt.slot_time,
                 "reason": appt.reason or appt.notes or "General Consultation",
                 "status": appt.status.value if hasattr(appt.status, "value") else appt.status,
                 "rejection_reason": appt.rejection_reason,
+                "meeting_link": appt.meeting_link,
+                "meeting_provider": appt.meeting_provider,
+                "meeting_created_at": appt.meeting_created_at,
                 "created_at": appt.created_at
             })
 
@@ -328,7 +357,7 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
         notification_service: Any,
         audit_log_service: Any,
     ) -> AppointmentInDB:
-        """Approve a pending appointment request and perform audit log / notification side effects"""
+        """Approve a pending appointment request, auto-generate Google Meet link if configured, and perform side effects"""
         appt = await self.appointment_repository.get(appointment_id)
         if not appt or appt.doctor_id != doctor_profile_id:
             raise ValueError("Appointment not found or access denied")
@@ -336,8 +365,24 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
         if appt.status != AppointmentStatus.PENDING:
             raise ValueError(f"Cannot approve appointment with status: {appt.status.value if hasattr(appt.status, 'value') else appt.status}")
 
-        # Update status
+        now = utc_now()
+        meeting_link = None
+        
+        # Auto-create Google Meet space if GoogleMeetService is available and meeting not already created
+        if self.google_meet_service and not appt.meeting_link:
+            try:
+                meeting_link = await self.google_meet_service.create_meeting(appointment_id)
+            except Exception as e:
+                import logging
+                logging.getLogger("nura.services.appointment").warning(f"Google Meet space creation skipped or failed: {e}")
+
+        # Update status and meeting details if created
         update = AppointmentUpdate(status=AppointmentStatus.APPROVED)
+        if meeting_link:
+            update.meeting_link = meeting_link
+            update.meeting_provider = "google_meet"
+            update.meeting_created_at = now
+
         updated = await self.appointment_repository.update(appointment_id, update)
         if not updated:
             raise RuntimeError("Failed to update appointment status")
@@ -350,15 +395,19 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
             if doctor_user:
                 doctor_name = doctor_user.full_name
         
-        # Send Notification to patient
+        # Send Notification to patient (including meet link if available)
         try:
             from app.schemas.notification import NotificationCreateSchema
             from app.models.notification import NotificationType, NotificationPriority
+            notif_msg = f"Your appointment request with Dr. {doctor_name} has been approved."
+            if updated.meeting_link:
+                notif_msg += f" Google Meet Link: {updated.meeting_link}"
+
             notif_schema = NotificationCreateSchema(
                 user_id=appt.patient_id,
                 notification_type=NotificationType.APPOINTMENT_APPROVED,
                 title="Appointment Approved",
-                message=f"Your appointment request with Dr. {doctor_name} has been approved.",
+                message=notif_msg,
                 priority=NotificationPriority.HIGH,
                 related_entity_type="appointment",
                 related_entity_id=appointment_id,
@@ -377,7 +426,10 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
                 resource_type="appointments",
                 resource_id=appointment_id,
                 old_value={"status": "pending"},
-                new_value={"status": "approved"},
+                new_value={
+                    "status": "approved",
+                    "meeting_link": updated.meeting_link,
+                },
             )
             await audit_log_service.create_log(audit_schema)
         except Exception:
@@ -386,6 +438,7 @@ class AppointmentService(BaseService[AppointmentInDB, AppointmentCreate, Appoint
         return updated
 
     async def reject_appointment(
+
         self,
         appointment_id: str,
         doctor_profile_id: str,

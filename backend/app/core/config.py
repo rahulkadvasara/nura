@@ -27,7 +27,7 @@ class Settings:
         self.ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
         self.REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
         
-        # Frontend Communication
+        # Frontend Communication (Local: http://localhost:3000 | Prod: https://<YOUR-VERCEL-FRONTEND-URL>.vercel.app)
         self.FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
         
         # CORS Origins - handle as string and convert to list
@@ -48,7 +48,7 @@ class Settings:
         
         # Groq AI
         self.GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-        self.DEFAULT_LLM = os.getenv("DEFAULT_LLM", "llama-3.3-70b-versatile")
+        self.DEFAULT_LLM = os.getenv("DEFAULT_LLM", "openai/gpt-oss-120b")
         
         # Embedding Model
         self.EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
@@ -56,6 +56,11 @@ class Settings:
         # Google OAuth
         self.GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
         self.GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+        
+        # Google Meet OAuth (Local: http://localhost:8000/... | Prod: https://<YOUR-RENDER-BACKEND-NAME>.onrender.com/...)
+        self.GOOGLE_MEET_CLIENT_ID = os.getenv("GOOGLE_MEET_CLIENT_ID", os.getenv("GOOGLE_CLIENT_ID", ""))
+        self.GOOGLE_MEET_CLIENT_SECRET = os.getenv("GOOGLE_MEET_CLIENT_SECRET", os.getenv("GOOGLE_CLIENT_SECRET", ""))
+        self.GOOGLE_MEET_REDIRECT_URI = os.getenv("GOOGLE_MEET_REDIRECT_URI", "http://localhost:8000/api/v1/integrations/google/callback")
         
         # Email Service (SMTP)
         self.SMTP_HOST = os.getenv("SMTP_HOST", "")
@@ -69,7 +74,7 @@ class Settings:
         self.SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
         self.SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "medical-files")
         
-        # Storage Configuration
+        # Storage Configuration (Local: http://localhost:8000 | Prod: https://<YOUR-RENDER-BACKEND-NAME>.onrender.com)
         self.STORAGE_PROVIDER = os.getenv("STORAGE_PROVIDER", "local")
         self.BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
         

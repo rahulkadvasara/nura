@@ -24,6 +24,34 @@ from app.schemas.payment import (
 )
 
 
+def _payment_to_response(payment: PaymentInDB) -> PaymentResponse:
+    return PaymentResponse(
+        id=payment.id,
+        appointment_id=payment.appointment_id,
+        patient_id=payment.patient_id,
+        doctor_id=payment.doctor_id,
+        amount=payment.amount,
+        platform_fee=payment.platform_fee,
+        doctor_amount=payment.doctor_amount,
+        currency=payment.currency,
+        payment_method=payment.payment_method,
+        payment_status=payment.payment_status,
+        transaction_reference=payment.transaction_reference,
+        escrow_held=payment.escrow_held,
+        razorpay_order_id=payment.razorpay_order_id,
+        razorpay_payment_id=payment.razorpay_payment_id,
+        verified_at=payment.verified_at,
+        gateway_response=payment.gateway_response,
+        escrow_released_at=payment.escrow_released_at,
+        escrow_released_by=payment.escrow_released_by,
+        refunded_at=payment.refunded_at,
+        refund_reason=payment.refund_reason,
+        analytics_metadata=payment.analytics_metadata,
+        created_at=payment.created_at,
+        updated_at=payment.updated_at,
+    )
+
+
 class DoctorEarningsService:
     """Service layer for doctor financial metrics aggregation"""
 
@@ -157,7 +185,7 @@ class DoctorEarningsService:
 
         recent_cursor = self.payment_repository.collection.find(query).sort(sort_field, sort_direction).skip(skip).limit(limit)
         recent_payments = [PaymentInDB.from_mongo(doc) for doc in await recent_cursor.to_list(length=limit + 5)]
-        recent_transactions = [self.payment_repository.to_response(p) for p in recent_payments]
+        recent_transactions = [_payment_to_response(p) for p in recent_payments]
 
         return DoctorEarningsResponse(
             available_balance=round(available_balance, 2),

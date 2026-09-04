@@ -8,6 +8,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 
+from bson import ObjectId
 from app.models.report import ReportInDB
 from app.repositories.report_repository import ReportRepository
 from app.services.ai_service import AIService
@@ -39,6 +40,11 @@ class ReportUnderstandingService:
         self.prompt_loader = prompt_loader
         self.summary_service = summary_service
         self.insight_service = insight_service
+
+    def _get_report_id_filter(self, report_id: str) -> dict:
+        if ObjectId.is_valid(report_id):
+            return {"_id": ObjectId(report_id)}
+        return {"_id": report_id}
 
     async def generate_report_summary(self, report_id: str) -> Optional[ReportInDB]:
         """Runs the clinical AI summarization run loop and saves structured outcomes to MongoDB"""
@@ -201,7 +207,7 @@ class ReportUnderstandingService:
 
         # Save to DB
         await self.report_repository.collection.update_one(
-            {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id},
+            self._get_report_id_filter(report_id),
             {"$set": update_payload}
         )
 

@@ -31,7 +31,7 @@ const actions = [
     primary: false,
   },
   {
-    label: 'Book Appointment',
+    label: 'See Appointments',
     href: '/dashboard/appointments',
     icon: CalendarPlus,
     primary: false,

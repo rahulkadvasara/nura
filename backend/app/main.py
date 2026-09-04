@@ -12,7 +12,7 @@ from app.core.logging import setup_logging
 from app.db.mongodb import connect_to_mongodb, close_mongodb_connection, get_database
 from app.db.qdrant import connect_to_qdrant, close_qdrant_connection
 from app.db.init import setup_database
-from app.api.v1 import health, auth, users, dashboard, doctor, admin, doctors, appointments, patient, payments, ai, reports, chat
+from app.api.v1 import health, auth, users, dashboard, doctor, admin, doctors, appointments, patient, payments, ai, reports, chat, integrations
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi import Request, HTTPException, status
@@ -99,6 +99,11 @@ async def lifespan(app: FastAPI):
         drug_scheduler = get_drug_worker_scheduler()
         await drug_scheduler.start()
 
+        # Start medication reminder email dispatch background service
+        from app.services.reminder_dispatch_service import get_reminder_dispatch_service
+        reminder_dispatcher = get_reminder_dispatch_service()
+        await reminder_dispatcher.start()
+
     except Exception as e:
         import logging
         logging.getLogger("nura.main").error(f"Failed to start EventQueue background worker or drug scheduler: {e}")
@@ -122,6 +127,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         import logging
         logging.getLogger("nura.main").error(f"Failed to stop drug worker scheduler: {e}")
+
+    # Stop medication reminder email dispatch background service
+    try:
+        from app.services.reminder_dispatch_service import get_reminder_dispatch_service
+        reminder_dispatcher = get_reminder_dispatch_service()
+        await reminder_dispatcher.stop()
+    except Exception as e:
+        import logging
+        logging.getLogger("nura.main").error(f"Failed to stop reminder dispatch service: {e}")
     
     # Shutdown
     await close_mongodb_connection()
@@ -170,6 +184,19 @@ def create_application() -> FastAPI:
             content={
                 "success": False,
                 "message": exc.detail,
+                "errors": None
+            }
+        )
+
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception):
+        import logging
+        logging.getLogger("nura.main").exception(f"Unhandled server exception: {exc}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "success": False,
+                "message": f"Internal server error: {str(exc)}",
                 "errors": None
             }
         )
@@ -240,6 +267,12 @@ def create_application() -> FastAPI:
         prefix=settings.API_V1_PREFIX + "/chat",
         tags=["chat"]
     )
+    app.include_router(
+        integrations.router,
+        prefix=settings.API_V1_PREFIX + "/integrations",
+        tags=["integrations"]
+    )
+
 
     # Mount static files directory for local uploads
     from fastapi.staticfiles import StaticFiles

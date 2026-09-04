@@ -17,7 +17,7 @@ class IntentRegistry:
         """Load default intent-to-agent mapping configurations"""
         self._mappings = {
             "GREETING": "GreetingAgent",
-            "GENERAL_CHAT": "GeneralChatAgent",
+            "GENERAL_CHAT": "MedicalKnowledgeAgent",
             "MEDICAL_QUESTION": "MedicalKnowledgeAgent",
             "SYMPTOM_ANALYSIS": "SymptomAgent",
             "REPORT_ANALYSIS": "ReportAnalysisAgent",

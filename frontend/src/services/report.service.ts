@@ -147,7 +147,7 @@ export interface ReportTelemetryStats {
 export const reportService = {
   getReports: async (patientId?: string): Promise<ReportResponse[]> => {
     const params = patientId ? { patient_id: patientId } : {}
-    const response = await apiClient.get<{ success: boolean; data: { reports: ReportResponse[] } }>('/reports', { params })
+    const response = await apiClient.get<{ success: boolean; data: { reports: ReportResponse[] } }>('/reports/', { params })
     return response.data.data.reports
   },
 
@@ -157,7 +157,7 @@ export const reportService = {
     formData.append('report_type', reportType)
     formData.append('file', file)
 
-    const response = await apiClient.post<{ success: boolean; data: { report: ReportResponse } }>('/reports', formData, {
+    const response = await apiClient.post<{ success: boolean; data: { report: ReportResponse } }>('/reports/', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -286,7 +286,11 @@ export const reportService = {
   },
 
   downloadReportFile: (reportId: string): string => {
-    return `${apiClient.defaults.baseURL || 'http://localhost:8000/api/v1'}/reports/${reportId}/download`
+    const token = typeof window !== 'undefined' ? (localStorage.getItem('token') || localStorage.getItem('access_token') || '') : ''
+    // Local Development Fallback: 'http://localhost:8000/api/v1'
+    // Production (Render) Fallback: 'https://<YOUR-RENDER-BACKEND-NAME>.onrender.com/api/v1'
+    const baseUrl = apiClient.defaults.baseURL || 'http://localhost:8000/api/v1'
+    return `${baseUrl}/reports/${reportId}/download${token ? `?token=${encodeURIComponent(token)}` : ''}`
   },
 
   // ── Sprint 7: Progress Tracking ──────────────────────────────────────

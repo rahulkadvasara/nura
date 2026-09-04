@@ -45,6 +45,7 @@ export interface HealthStatus {
 export interface RecentHealthInsight {
   id: string
   title: string
+  summary?: string
   severity: 'low' | 'medium' | 'high' | null
   created_at: string
 }
@@ -250,6 +251,9 @@ export interface Appointment {
   rejection_reason?: string
   consultation_started_at?: string
   consultation_completed_at?: string
+  meeting_link?: string
+  meeting_provider?: string
+  meeting_created_at?: string
   created_at: string
   updated_at: string
 }
@@ -258,6 +262,7 @@ export interface PatientAppointmentHistoryItem {
   id: string
   doctor_id: string
   doctor_name: string
+  doctor_profile_picture?: string
   specialization: string
   appointment_date: string
   appointment_time: string
@@ -268,6 +273,9 @@ export interface PatientAppointmentHistoryItem {
   consultation_fee: number
   reason?: string
   rejection_reason?: string
+  meeting_link?: string
+  meeting_provider?: string
+  meeting_created_at?: string
   created_at: string
 }
 
@@ -280,8 +288,12 @@ export interface DoctorAppointmentItem {
   reason: string
   status: 'pending' | 'approved' | 'in_progress' | 'rejected' | 'cancelled' | 'completed'
   rejection_reason?: string
+  meeting_link?: string
+  meeting_provider?: string
+  meeting_created_at?: string
   created_at: string
 }
+
 
 export interface AppointmentCreateRequest {
   doctor_id: string

@@ -23,7 +23,7 @@ class PDFExtractor:
         """
         pages = []
         try:
-            reader = PdfReader(io.BytesIO(file_bytes))
+            reader = PdfReader(io.BytesIO(file_bytes), strict=False)
             for i, page in enumerate(reader.pages):
                 text = ""
                 try:
@@ -40,7 +40,15 @@ class PDFExtractor:
                     "is_scanned": is_scanned
                 })
         except Exception as exc:
-            logger.error(f"Failed to parse PDF document bytes: {exc}", exc_info=True)
-            raise ValueError(f"Invalid PDF document format: {exc}")
+            logger.warning(f"pypdf extraction encountered stream issue ({exc}). Falling back to OCR page mode.")
+            return [{
+                "page_number": 1,
+                "text": "",
+                "is_scanned": True
+            }]
 
-        return pages
+        return pages if pages else [{
+            "page_number": 1,
+            "text": "",
+            "is_scanned": True
+        }]

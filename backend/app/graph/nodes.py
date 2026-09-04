@@ -251,18 +251,83 @@ class MemoryAgentNode:
         }
 
 
+class GreetingAgentNode:
+    """Executes GreetingAgent to generate friendly, personalized greetings"""
+
+    async def __call__(self, state: GraphState) -> Dict[str, Any]:
+        from app.core.dependencies import get_greeting_agent
+        from app.agents.base.context import AgentContext
+        
+        agent = get_greeting_agent()
+        ctx = AgentContext(
+            request_id=state.request_id,
+            session_id=state.session_id,
+            conversation_id=state.conversation_id,
+            patient_id=state.patient_id,
+            doctor_id=state.doctor_id,
+            user_id=state.user_id,
+            role=state.role,
+            metadata=dict(state.metadata or {})
+        )
+        
+        res = await agent.run(state.query, ctx)
+        trace = list(state.execution_trace) if state.execution_trace else []
+        trace.append("GreetingAgent")
+        
+        if not res.success:
+            return {
+                "current_node": "GreetingAgent",
+                "previous_node": state.current_node,
+                "execution_trace": trace,
+                "error": res.message
+            }
+            
+        meta = dict(state.metadata or {})
+        meta.update(res.metadata or {})
+        greeting_data = res.response
+        greeting_text = greeting_data.greeting if hasattr(greeting_data, "greeting") else str(greeting_data)
+        
+        return {
+            "current_node": "GreetingAgent",
+            "previous_node": state.current_node,
+            "execution_trace": trace,
+            "response": greeting_text,
+            "metadata": meta,
+            "token_usage": getattr(greeting_data, "usage", {})
+        }
+
+
+class GeneralChatAgentNode:
+    """Delegates general chat queries to MedicalKnowledgeAgent for unified medical/general answering"""
+
+    async def __call__(self, state: GraphState) -> Dict[str, Any]:
+        med_node = MedicalKnowledgeAgentNode()
+        return await med_node(state)
+
+
 class UnknownAgentNode:
-    """Fallback agent node handling unrecognized intents"""
+    """Fallback agent node handling unrecognized intents with instant default response (0ms latency, 0 LLM cost)"""
 
     async def __call__(self, state: GraphState) -> Dict[str, Any]:
         trace = list(state.execution_trace) if state.execution_trace else []
         trace.append("UnknownAgent")
+        default_response = (
+            "I'm sorry, I couldn't understand your request. I am Nura, your AI clinical assistant, and I can help you with:\n\n"
+            "• **Symptom Triage & Risk Assessment** — Evaluate symptoms and recommend next steps\n"
+            "• **Medical & Diagnostic Knowledge** — Explain medical terms, tests (e.g. MRI, CT Scans, Blood Tests), and conditions\n"
+            "• **Medical Report Interpretation** — Explain lab findings and diagnostic results\n"
+            "• **Medication & Drug Safety** — Check drug interactions and dosage safety\n"
+            "• **Doctor Discovery & Scheduling** — Find verified specialists and book appointments\n"
+            "• **Medication Reminders** — Configure and view daily health alerts\n\n"
+            "How can I assist you today?"
+        )
         return {
             "current_node": "UnknownAgent",
             "previous_node": state.current_node,
             "execution_trace": trace,
-            "response": "I'm sorry, I could not classify your query's clinical intent. Please try rephrasing your symptoms or question."
+            "response": default_response
         }
+
 
 
 class ReportAnalysisAgentNode:
@@ -566,13 +631,27 @@ class RetrievalAgentNode:
     async def __call__(self, state: GraphState) -> Dict[str, Any]:
         trace = list(state.execution_trace) if state.execution_trace else []
         trace.append(RETRIEVAL_AGENT_NODE)
-        
+        meta = dict(state.metadata or {})
         retrieved_context_str = ""
         citations = []
-        meta = dict(state.metadata or {})
-        
+
+        # Skip heavy vector RAG retrieval for operational & conversational agents
+        bypass_retrieval_agents = {"GreetingAgent", "GeneralChatAgent", "AppointmentAgent", "ReminderAgent"}
+        if state.selected_agent in bypass_retrieval_agents:
+            return {
+                "current_node": RETRIEVAL_AGENT_NODE,
+                "previous_node": state.current_node,
+                "retrieved_context": "",
+                "citations": [],
+                "execution_trace": trace,
+                "metadata": meta
+            }
+
+
+
         # Only perform retrieval if there is a search query
         if state.query:
+
             try:
                 from app.core.dependencies import get_retrieval_agent
                 from app.agents.base.context import AgentContext

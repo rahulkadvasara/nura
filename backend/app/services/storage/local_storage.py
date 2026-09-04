@@ -81,3 +81,14 @@ class LocalStorage(StorageProvider):
 
     def generate_signed_url(self, bucket: str, object_key: str, expires_in: int = 3600) -> str:
         return self.get_public_url(bucket, object_key)
+
+    async def download_file(self, bucket: str, object_key: str) -> Optional[bytes]:
+        filepath = os.path.join(self.base_dir, bucket, object_key)
+        if os.path.exists(filepath) and os.path.isfile(filepath):
+            try:
+                with open(filepath, "rb") as f:
+                    return f.read()
+            except Exception:
+                return None
+        return None
+

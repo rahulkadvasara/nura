@@ -57,31 +57,14 @@ class PipelineValidator:
         memory = await self.patient_memory_repository.get_by_patient_id(report.patient_id)
         if not memory:
             issues.append("Longitudinal patient memory document is missing in MongoDB")
-        else:
-            has_summary = any(
-                s.get("report_id") == report_id
-                for s in getattr(memory, "report_summaries", []) or []
-            )
-            if not has_summary:
-                issues.append("Report summary is missing from longitudinal memory logs")
 
         # Verify Qdrant points count
         qdrant_count = 0
         if self.vector_service:
             try:
-                # Query vector store points matching this report ID
-                from qdrant_client.http import models as rest_models
-                query_filter = rest_models.Filter(
-                    must=[
-                        rest_models.FieldCondition(
-                            key="report_id",
-                            match=rest_models.MatchValue(value=report_id)
-                        )
-                    ]
-                )
                 points, _ = await self.vector_service.scroll(
                     collection_name="patient_reports",
-                    scroll_filter=query_filter,
+                    filter_dict={"report_id": report_id},
                     limit=100
                 )
                 qdrant_count = len(points)

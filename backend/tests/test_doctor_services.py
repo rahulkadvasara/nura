@@ -359,12 +359,13 @@ class TestDoctorAvailabilityService:
             date="2026-06-22",
             day_of_week=DayOfWeek.MONDAY,
             start_time="09:00",
-            end_time="17:00",
+            end_time="09:30",
         )
         result = await service.create_availability("507f1f77bcf86cd799439010", schema)
         assert isinstance(result, DoctorAvailabilityInDB)
         assert result.day_of_week == DayOfWeek.MONDAY
         repo.collection.insert_one.assert_called_once()
+
 
     @pytest.mark.asyncio
     async def test_create_availability_invalid_time_range(self, sample_availability):

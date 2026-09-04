@@ -381,12 +381,17 @@ class ContextAssemblyService:
             patient_context_response = None
             patient_context_dict = None
             if patient_id:
-                # Retrieve large context bounds so assembly service controls fine pruning
-                patient_context_response = await self.patient_context_service.assemble_context(
-                    patient_id=patient_id,
-                    token_budget=budget * 2
-                )
-                patient_context_dict = patient_context_response.model_dump()
+                try:
+                    # Retrieve large context bounds so assembly service controls fine pruning
+                    patient_context_response = await self.patient_context_service.assemble_context(
+                        patient_id=patient_id,
+                        token_budget=budget * 2
+                    )
+                    patient_context_dict = patient_context_response.model_dump() if patient_context_response else None
+                except Exception as e:
+                    logger.warning(f"ContextAssemblyService: patient context assembly failed ({e})")
+                    patient_context_dict = None
+
 
             # 2. Retrieve semantic chunks from Qdrant vector store
             # Enforce patient_id metadata filter to prevent data leak across patient files
@@ -521,8 +526,16 @@ class ContextAssemblyService:
                 latency_ms=assembly_time,
                 success=False
             )
-            logger.error(f"Context Assembly process failed: {str(e)}")
-            raise e
+            logger.warning(f"Context Assembly process failed: {str(e)}")
+            return {
+                "sections": {},
+                "citations": {},
+                "estimated_tokens": 0,
+                "compression_ratio": 1.0,
+                "assembly_time": assembly_time,
+                "metadata": {"error": str(e)}
+            }
+
 
 
 # Singleton instance helper

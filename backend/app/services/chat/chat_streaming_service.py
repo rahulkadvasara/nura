@@ -222,7 +222,7 @@ class ChatStreamingService:
 
             # 8. Resolve Healthcare Context & Cards
             resolved_ctx = await self.context_resolver.resolve_context(patient_id, message)
-            cards = self.rich_card_service.build_cards(resolved_ctx)
+            cards = self.rich_card_service.build_cards(resolved_ctx, user_query=message)
             
             actions = []
             for card in cards:

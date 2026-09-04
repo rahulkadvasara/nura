@@ -21,8 +21,9 @@ from app.services.chat.action_builder import ActionBuilder
 class RichCardService:
     """Builds list of rich healthcare cards from context structures"""
 
-    def build_cards(self, resolved_context: Dict[str, Any]) -> List[RichCardResponse]:
+    def build_cards(self, resolved_context: Dict[str, Any], user_query: str = "") -> List[RichCardResponse]:
         cards: List[RichCardResponse] = []
+        query_str = (user_query or str(resolved_context.get("query", ""))).lower()
 
         # 1. Report Cards
         if "reports" in resolved_context:
@@ -83,7 +84,19 @@ class RichCardService:
 
         # 3. Appointment Cards
         if "appointments" in resolved_context:
-            for appt in resolved_context["appointments"][:2]:
+            is_active_query = any(kw in query_str for kw in ["active", "upcoming", "future", "scheduled", "open", "pending"])
+            is_history_query = any(kw in query_str for kw in ["past", "history", "completed", "previous"])
+
+            all_appts = resolved_context["appointments"]
+            valid_appts = []
+            for appt in all_appts:
+                st_obj = getattr(appt, "status", "")
+                st_val = (st_obj.value if hasattr(st_obj, "value") else str(st_obj)).lower()
+                if (is_active_query or not is_history_query) and st_val not in ["approved", "pending", "scheduled", "in_progress"]:
+                    continue
+                valid_appts.append(appt)
+
+            for appt in valid_appts[:5]:
                 cards.append(
                     AppointmentCard(
                         card_type="appointment",
@@ -123,17 +136,32 @@ class RichCardService:
         # 5. Doctor Profile Cards
         if "doctors" in resolved_context:
             for doc in resolved_context["doctors"][:2]:
+                doc_id = str(getattr(doc, "id", ""))
+                raw_name = getattr(doc, "name", None) or getattr(doc, "full_name", None)
+                if not raw_name or (isinstance(raw_name, str) and len(raw_name) == 24 and all(c in "0123456789abcdefABCDEF" for c in raw_name)):
+                    raw_name = getattr(doc, "specialization", None) or "Medical Specialist"
+                title_raw = str(raw_name).strip()
+                if title_raw.startswith("Dr.") or title_raw.startswith("Doctor"):
+                    title_str = title_raw
+                else:
+                    title_str = f"Dr. {title_raw}"
+                specialization = getattr(doc, "specialization", None) or "General Medicine"
+                fee = getattr(doc, "consultation_fee", 0) or 0
+                avail = getattr(doc, "available_days", None) or getattr(doc, "availability_days", None) or "Weekdays"
+                profile_st = getattr(doc, "profile_status", "ACTIVE")
+                status_str = profile_st.value if hasattr(profile_st, "value") else str(profile_st)
+
                 cards.append(
                     DoctorCard(
                         card_type="doctor",
-                        title=f"Dr. {doc.user_id if hasattr(doc, 'user_id') else 'Profile'}",
-                        subtitle=doc.specialization or "General Medicine",
+                        title=title_str,
+                        subtitle=specialization,
                         icon="UserCheck",
-                        status=doc.profile_status.value if hasattr(doc, "profile_status") else str(doc.profile_status),
-                        summary=f"Consultation Fee: ${doc.consultation_fee}. Availability: {doc.available_days or 'Weekdays'}",
-                        metadata={"doctor_id": doc.id},
+                        status=status_str,
+                        summary=f"Consultation Fee: ₹{fee}. Availability: {avail}",
+                        metadata={"doctor_id": doc_id},
                         actions=[
-                            ActionBuilder.view_doctor(doc.id),
+                            ActionBuilder.view_doctor(doc_id),
                             ActionBuilder.book_appointment()
                         ]
                     )
@@ -180,3 +208,10 @@ class RichCardService:
                 )
 
         return cards
+
+    async def resolve_and_build_cards(self, patient_id: str, message: str) -> List[RichCardResponse]:
+        """Resolves context and builds rich cards list for patient and message query"""
+        from app.core.dependencies import get_context_resolver
+        resolver = get_context_resolver()
+        resolved = await resolver.resolve_context(patient_id, message)
+        return self.build_cards(resolved, user_query=message)

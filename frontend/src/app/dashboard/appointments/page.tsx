@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Calendar, Clock, Stethoscope, AlertCircle, XCircle } from 'lucide-react'
+import { Calendar, Clock, Stethoscope, AlertCircle, XCircle, Video } from 'lucide-react'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -19,7 +19,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 
-type TabType = 'approved' | 'pending' | 'cancelled'
+type TabType = 'pending' | 'upcoming' | 'completed' | 'rejected'
 
 interface ReceiptInfo {
   transactionId: string
@@ -45,7 +45,19 @@ const loadRazorpayScript = () => {
   })
 }
 
+function formatTime(timeStr?: string): string {
+  if (!timeStr) return ''
+  const parts = timeStr.split(':')
+  if (parts.length < 2) return timeStr
+  const hour = parseInt(parts[0], 10)
+  const minute = parts[1]
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const displayHour = hour % 12 || 12
+  return `${displayHour}:${minute} ${ampm}`
+}
+
 function AppointmentsContent() {
+
   const [activeTab, setActiveTab] = useState<TabType>('pending')
   const { data: appointments = [], isLoading, isError, error, refetch } = useAppointments()
   const { mutateAsync: cancelAppointment, isPending: isCancelling } = useCancelAppointment()
@@ -188,17 +200,20 @@ function AppointmentsContent() {
 
   // Segment appointments
   const pendingRequests = appointments.filter(a => a.status === 'pending')
-  const approvedRequests = appointments.filter(a => a.status === 'approved' || a.status === 'in_progress' || a.status === 'completed')
-  const cancelledRequests = appointments.filter(a => a.status === 'cancelled' || a.status === 'rejected')
+  const upcomingRequests = appointments.filter(a => a.status === 'approved' || a.status === 'in_progress')
+  const completedRequests = appointments.filter(a => a.status === 'completed')
+  const rejectedRequests = appointments.filter(a => a.status === 'cancelled' || a.status === 'rejected')
 
   const getActiveList = () => {
     switch (activeTab) {
-      case 'approved':
-        return approvedRequests
       case 'pending':
         return pendingRequests
-      case 'cancelled':
-        return cancelledRequests
+      case 'upcoming':
+        return upcomingRequests
+      case 'completed':
+        return completedRequests
+      case 'rejected':
+        return rejectedRequests
       default:
         return []
     }
@@ -237,7 +252,7 @@ function AppointmentsContent() {
       </div>
 
       {/* Tabs list */}
-      <div className="flex border-b border-slate-200">
+      <div className="flex flex-wrap border-b border-slate-200">
         <button
           onClick={() => setActiveTab('pending')}
           className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all ${
@@ -249,24 +264,34 @@ function AppointmentsContent() {
           Pending Requests ({pendingRequests.length})
         </button>
         <button
-          onClick={() => setActiveTab('approved')}
+          onClick={() => setActiveTab('upcoming')}
           className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all ${
-            activeTab === 'approved'
+            activeTab === 'upcoming'
               ? 'border-teal-600 text-teal-600'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          Upcoming Appointments ({approvedRequests.length})
+          Upcoming Appointments ({upcomingRequests.length})
         </button>
         <button
-          onClick={() => setActiveTab('cancelled')}
+          onClick={() => setActiveTab('completed')}
           className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all ${
-            activeTab === 'cancelled'
+            activeTab === 'completed'
               ? 'border-teal-600 text-teal-600'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          Cancelled / Rejected ({cancelledRequests.length})
+          Completed ({completedRequests.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('rejected')}
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all ${
+            activeTab === 'rejected'
+              ? 'border-teal-600 text-teal-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          Cancelled / Rejected ({rejectedRequests.length})
         </button>
       </div>
 
@@ -302,8 +327,10 @@ function AppointmentsContent() {
           <p className="text-xs text-slate-500 max-w-sm">
             {activeTab === 'pending'
               ? 'You do not have any pending appointment requests right now.'
-              : activeTab === 'approved'
+              : activeTab === 'upcoming'
               ? 'You do not have any upcoming approved consultations scheduled.'
+              : activeTab === 'completed'
+              ? 'No completed consultation history recorded.'
               : 'No cancelled or rejected appointment history was found.'}
           </p>
         </div>
@@ -315,13 +342,24 @@ function AppointmentsContent() {
             <Card key={appt.id} className="border-slate-200 hover:shadow-sm transition-shadow bg-white overflow-hidden">
               <CardContent className="p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Stethoscope className="h-4 w-4 text-teal-600 shrink-0" />
-                    <h3 className="font-bold text-slate-900">
-                      {appt.doctor_name.toLowerCase().startsWith('dr.') ? appt.doctor_name : `Dr. ${appt.doctor_name}`}
-                    </h3>
-                    <span className="text-xs text-slate-400">•</span>
-                    <span className="text-xs text-slate-500 font-medium">{appt.specialization}</span>
+                  <div className="flex items-center gap-3">
+                    {appt.doctor_profile_picture ? (
+                      <img
+                        src={appt.doctor_profile_picture}
+                        alt={appt.doctor_name}
+                        className="h-10 w-10 rounded-full object-cover border border-slate-200 shrink-0"
+                      />
+                    ) : (
+                      <div className="h-10 w-10 rounded-full bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600 shrink-0">
+                        <Stethoscope className="h-5 w-5" />
+                      </div>
+                    )}
+                    <div>
+                      <h3 className="font-bold text-slate-900 leading-tight">
+                        {appt.doctor_name.toLowerCase().startsWith('dr.') ? appt.doctor_name : `Dr. ${appt.doctor_name}`}
+                      </h3>
+                      <span className="text-xs text-slate-500 font-medium">{appt.specialization}</span>
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500 font-medium">
@@ -331,8 +369,9 @@ function AppointmentsContent() {
                     </div>
                     <div className="flex items-center gap-1">
                       <Clock className="h-3.5 w-3.5 text-slate-400" />
-                      <span>{appt.appointment_time}</span>
+                      <span>{formatTime(appt.appointment_time)}</span>
                     </div>
+
                     {getStatusBadge(appt.status)}
                     
                     {isPaid(appt) && (
@@ -377,7 +416,34 @@ function AppointmentsContent() {
                 </div>
 
                 <div className="flex gap-2 shrink-0">
+                  {appt.meeting_link && (appt.status === 'approved' || appt.status === 'in_progress') && (
+                    isPaid(appt) ? (
+                      <a
+                        href={appt.meeting_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 px-3 rounded-lg font-semibold shadow-sm transition-colors"
+                      >
+                        <Video className="h-3.5 w-3.5" />
+                        Join Google Meet
+                      </a>
+                    ) : (
+                      <Button
+                        disabled
+                        variant="outline"
+                        size="sm"
+                        title="Complete payment to join meeting"
+                        className="opacity-60 cursor-not-allowed bg-slate-100 border-slate-200 text-slate-500 text-xs shrink-0 flex items-center gap-1.5 h-9 px-3 rounded-lg font-semibold"
+                      >
+                        <Video className="h-3.5 w-3.5 text-slate-400" />
+                        Join Google Meet
+                      </Button>
+                    )
+                  )}
+
+
                   {appt.status === 'pending' && (
+
                     <Button
                       variant="outline"
                       size="sm"

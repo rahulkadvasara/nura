@@ -45,22 +45,10 @@ def _report_to_response(report: ReportInDB) -> ReportResponse:
         except Exception:
             pass
 
-    return ReportResponse(
-        id=report.id,
-        patient_id=report.patient_id,
-        uploaded_by=report.uploaded_by,
-        report_type=report.report_type,
-        file_url=file_url,
-        file_metadata=report.file_metadata,
-        raw_text=report.raw_text,
-        structured_data=report.structured_data,
-        entities=report.entities,
-        ai_summary=report.ai_summary,
-        risk_level=report.risk_level,
-        processing_status=report.processing_status,
-        created_at=report.created_at,
-        updated_at=report.updated_at,
-    )
+    data = report.model_dump()
+    data["id"] = report.id
+    data["file_url"] = file_url
+    return ReportResponse(**data)
 
 
 class ReportService(BaseService[ReportInDB, ReportCreate, ReportUpdate]):

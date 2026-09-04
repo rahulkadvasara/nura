@@ -190,6 +190,62 @@ class DoctorProfileService(BaseService[DoctorProfileInDB, DoctorProfileCreate, D
         """List only verified doctor profiles."""
         return await self.profile_repository.get_verified_doctors(limit=limit, skip=skip)
 
+    async def list_verified_doctors_with_names(
+        self, 
+        limit: int = 100, 
+        skip: int = 0,
+        specialization: Optional[str] = None
+    ) -> List[DoctorDiscoveryResponse]:
+        """List verified doctor profiles populated with full user names from UserRepository, optionally filtered by specialization."""
+        verified = await self.profile_repository.get_verified_doctors(limit=100, skip=skip)
+        if not verified:
+            return []
+        
+        if specialization:
+            spec_lower = specialization.lower().strip()
+            spec_filtered = [
+                p for p in verified 
+                if p.specialization and (spec_lower in p.specialization.lower() or p.specialization.lower() in spec_lower)
+            ]
+            if spec_filtered:
+                verified = spec_filtered
+
+        verified = verified[:limit]
+        
+        if not self.user_repository:
+            from app.core.dependencies import get_user_repository
+            self.user_repository = get_user_repository()
+
+        user_ids = [p.user_id for p in verified if p.user_id]
+        users = await self.user_repository.get_many({"_id": {"$in": user_ids}})
+        user_map = {u.id: u for u in users}
+
+        results = []
+        for p in verified:
+            user = user_map.get(p.user_id)
+            doc_name = user.full_name if user and user.full_name else None
+            if not doc_name and p.user_id:
+                doc_name = f"Doctor {p.user_id[:6]}"
+            results.append(
+                DoctorDiscoveryResponse(
+                    id=p.id,
+                    user_id=p.user_id,
+                    name=doc_name or "Medical Specialist",
+                    specialization=p.specialization or "General Medicine",
+                    qualifications=p.qualifications,
+                    experience_years=p.experience_years,
+                    consultation_fee=p.consultation_fee,
+                    bio=p.bio,
+                    languages=p.languages,
+                    hospital=p.hospital,
+                    education=p.education,
+                    profile_picture=user.profile_picture if user else None,
+                    average_rating=p.average_rating,
+                    total_reviews=p.total_reviews,
+                )
+            )
+        return results
+
     async def list_by_status(
         self,
         status: DoctorProfileStatus,
@@ -556,35 +612,68 @@ class DoctorAvailabilityService(
         doctor_id: str,
         schema: DoctorAvailabilityCreateSchema,
     ) -> DoctorAvailabilityInDB:
-        """Create a new availability slot for a doctor.
+        """Create new availability slot(s) for a doctor. If start_time to end_time spans multiple
+
+        intervals of slot_duration, automatically generates individual bookable sub-slots.
 
         Raises:
             ValueError: If the time range is invalid or overlaps with an existing slot.
         """
         self._validate_time_range(schema.start_time, schema.end_time)
-        await self._check_overlaps(doctor_id, schema.date, schema.start_time, schema.end_time)
+
+        start_h, start_m = map(int, schema.start_time.split(":"))
+        end_h, end_m = map(int, schema.end_time.split(":"))
+        start_mins = start_h * 60 + start_m
+        end_mins = end_h * 60 + end_m
+        duration = schema.slot_duration if schema.slot_duration > 0 else 30
+
+        intervals = []
+        curr = start_mins
+        while curr + duration <= end_mins:
+            s_h, s_m = divmod(curr, 60)
+            e_h, e_m = divmod(curr + duration, 60)
+            intervals.append((f"{s_h:02d}:{s_m:02d}", f"{e_h:02d}:{e_m:02d}"))
+            curr += duration
+
+        if not intervals:
+            intervals = [(schema.start_time, schema.end_time)]
 
         now = datetime.now(timezone.utc)
-        avail_create = DoctorAvailabilityCreate(
-            doctor_id=doctor_id,
-            date=schema.date,
-            day_of_week=schema.day_of_week or DayOfWeek(datetime.strptime(schema.date, "%Y-%m-%d").strftime("%A").lower()),
-            start_time=schema.start_time,
-            end_time=schema.end_time,
-            slot_duration=schema.slot_duration,
-            is_available=schema.is_available,
-            active=schema.active,
-        )
+        day_of_week = schema.day_of_week or DayOfWeek(datetime.strptime(schema.date, "%Y-%m-%d").strftime("%A").lower())
 
-        doc_dict = avail_create.model_dump()
-        doc_dict["created_at"] = now
-        doc_dict["updated_at"] = now
+        created_slots = []
+        for sub_start, sub_end in intervals:
+            # Check overlap for each interval, skipping if overlapping
+            try:
+                await self._check_overlaps(doctor_id, schema.date, sub_start, sub_end)
+            except ValueError:
+                continue
 
-        result = await self.availability_repository.collection.insert_one(doc_dict)
-        created = await self.availability_repository.collection.find_one({"_id": result.inserted_id})
-        if created is None:
-            raise RuntimeError("Doctor availability was inserted but could not be retrieved")
-        return DoctorAvailabilityInDB.from_mongo(created)
+            avail_create = DoctorAvailabilityCreate(
+                doctor_id=doctor_id,
+                date=schema.date,
+                day_of_week=day_of_week,
+                start_time=sub_start,
+                end_time=sub_end,
+                slot_duration=duration,
+                is_available=schema.is_available,
+                active=schema.active,
+            )
+
+            doc_dict = avail_create.model_dump()
+            doc_dict["created_at"] = now
+            doc_dict["updated_at"] = now
+
+            result = await self.availability_repository.collection.insert_one(doc_dict)
+            created = await self.availability_repository.collection.find_one({"_id": result.inserted_id})
+            if created:
+                created_slots.append(DoctorAvailabilityInDB.from_mongo(created))
+
+        if not created_slots:
+            raise ValueError("All time slots in the specified range overlap with existing availability.")
+
+        return created_slots[0]
+
 
     # ---- Read --------------------------------------------------------------
 

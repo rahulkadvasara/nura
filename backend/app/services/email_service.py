@@ -34,7 +34,8 @@ class EmailService:
             return True
 
         message = MIMEMultipart("alternative")
-        message["From"] = f"{settings.APP_NAME} <{self.sender_email}>"
+        sender_addr = self.smtp_user if self.smtp_user else self.sender_email
+        message["From"] = f"{settings.APP_NAME} <{sender_addr}>"
         message["To"] = to_email
         message["Subject"] = subject
 
@@ -122,3 +123,75 @@ class EmailService:
         )
 
         return await self._send_email(email, subject, html_content, text_content)
+
+    async def send_reminder_email(
+        self,
+        to_email: str,
+        patient_name: str,
+        reminder_title: str,
+        scheduled_time: str,
+        recurrence: str = "daily",
+        description: str = ""
+    ) -> bool:
+        """Sends a scheduled medication reminder email to the patient"""
+        # Format scheduled time to 12-hour AM/PM format
+        formatted_time = scheduled_time
+        try:
+            if ":" in scheduled_time and not ("AM" in scheduled_time.upper() or "PM" in scheduled_time.upper()):
+                parts = scheduled_time.strip().split(":")
+                hh = int(parts[0])
+                mm = parts[1]
+                period = "AM" if hh < 12 else "PM"
+                hh12 = hh % 12
+                if hh12 == 0:
+                    hh12 = 12
+                formatted_time = f"{hh12}:{mm} {period}"
+        except Exception:
+            formatted_time = scheduled_time
+
+        subject = f"⏰ Medication Reminder: {reminder_title} at {formatted_time}"
+        display_name = patient_name or "Patient"
+
+        desc_html = f"<p style='color: #4b5563; font-size: 14px; margin-top: 6px;'>{description}</p>" if description else ""
+        desc_text = f"\nNotes: {description}" if description else ""
+
+        html_content = f"""
+        <html>
+            <body style="font-family: 'Segoe UI', Arial, sans-serif; padding: 24px; color: #1e293b; background-color: #f8fafc;">
+                <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 16px; padding: 32px; border: 1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+                        <span style="font-size: 28px;">💊</span>
+                        <h2 style="margin: 0; color: #0d9488; font-size: 22px; font-weight: 700;">{settings.APP_NAME} Medication Reminder</h2>
+                    </div>
+                    <p style="font-size: 15px; margin-bottom: 16px;">Hello <strong>{display_name}</strong>,</p>
+                    <p style="font-size: 15px; margin-bottom: 20px;">It is time to take your scheduled medication:</p>
+                    
+                    <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 20px; border-radius: 12px; margin-bottom: 24px;">
+                        <h3 style="margin: 0 0 8px 0; color: #166534; font-size: 18px;">{reminder_title}</h3>
+                        <p style="margin: 0; color: #15803d; font-size: 14px; font-weight: 600;">Scheduled Time: {formatted_time} ({recurrence.title()})</p>
+                        {desc_html}
+                    </div>
+
+                    <p style="font-size: 13px; color: #64748b; line-height: 1.5; margin-bottom: 24px;">
+                        ⚠️ <strong>Patient Safety Note:</strong> Always take medications with water as prescribed by your physician. Do not double doses if a time was missed.
+                    </p>
+                    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+                    <p style="font-size: 12px; color: #94a3b8; text-align: center; margin: 0;">
+                        Sent automatically by {settings.APP_NAME} Healthcare Assistant.
+                    </p>
+                </div>
+            </body>
+        </html>
+        """
+
+        text_content = (
+            f"Hello {display_name},\n\n"
+            f"It is time to take your scheduled medication:\n\n"
+            f"Medication: {reminder_title}\n"
+            f"Scheduled Time: {formatted_time} ({recurrence.title()})\n"
+            f"{desc_text}\n\n"
+            f"Patient Safety Note: Always take medications as prescribed by your physician.\n\n"
+            f"Best regards,\nThe {settings.APP_NAME} Healthcare Team"
+        )
+
+        return await self._send_email(to_email, subject, html_content, text_content)

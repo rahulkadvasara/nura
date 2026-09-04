@@ -28,9 +28,13 @@ class VectorService:
         settings: AISettings = ai_settings
     ):
         self.settings = settings
-        self.settings.validate_config()
+        try:
+            self.settings.validate_config()
+        except AIConfigurationError as e:
+            logger.warning(f"VectorService config unvalidated: {e}")
         self._client = client
         self._collection_service = collection_service
+
 
     @property
     def client(self) -> QdrantClient:
@@ -169,6 +173,38 @@ class VectorService:
         """Delete a collection via the collection manager service"""
         return await self.collection_service.delete_collection(name=collection_name)
 
+    async def _handle_missing_collection_or_index(self, collection_name: str, error: Exception) -> bool:
+        err_str = str(error)
+        err_lower = err_str.lower()
+        target_col = self.collection_service.get_collection_name(collection_name)
+        
+        # Dynamically extract specific missing field name from Qdrant error message if present
+        import re
+        match = re.search(r'Index required but not found for ["\\]+([^"\\]+)["\\]+', err_str, re.IGNORECASE)
+        if match:
+            missing_field = match.group(1)
+            logger.info(f"Auto-creating missing Qdrant payload index for field '{missing_field}' in collection '{target_col}'")
+            try:
+                from qdrant_client.http import models as qdrant_models
+                self.client.create_payload_index(
+                    collection_name=target_col,
+                    field_name=missing_field,
+                    field_schema=qdrant_models.PayloadSchemaType.KEYWORD
+                )
+            except Exception as ex:
+                logger.warning(f"Failed to create payload index for '{missing_field}': {ex}")
+            self.collection_service.ensure_payload_indexes(collection_name)
+            return True
+        elif "index required" in err_lower or ("not found" in err_lower and "index" in err_lower):
+            logger.info(f"Auto-creating payload indexes for Qdrant collection '{target_col}'")
+            self.collection_service.ensure_payload_indexes(collection_name)
+            return True
+        elif "doesn't exist" in err_lower or ("collection" in err_lower and "not found" in err_lower):
+            logger.info(f"Auto-creating missing Qdrant collection '{target_col}'")
+            await self.create_collection(collection_name)
+            return True
+        return False
+
     async def upsert(self, collection_name: str, id: Union[str, int], vector: List[float], payload: Dict[str, Any]) -> bool:
         """Insert or update a single vector point in the database"""
         target_col = self.collection_service.get_collection_name(collection_name)
@@ -182,6 +218,13 @@ class VectorService:
             )
             return True
         except Exception as e:
+            if await self._handle_missing_collection_or_index(collection_name, e):
+                self.client.upsert(
+                    collection_name=target_col,
+                    points=[PointStruct(id=id, vector=vector, payload=self.serialize_payload(payload))],
+                    wait=True
+                )
+                return True
             logger.error(f"Failed to upsert vector point {id} to Qdrant collection '{target_col}': {e}")
             raise AIConfigurationError(f"Vector upsert failed: {str(e)}") from e
 
@@ -228,6 +271,8 @@ class VectorService:
                     )
                     success = True
                 except Exception as e:
+                    if retries == 3:
+                        await self._handle_missing_collection_or_index(collection_name, e)
                     retries -= 1
                     last_err = str(e)
                     if retries > 0:
@@ -268,28 +313,57 @@ class VectorService:
 
         cb = get_circuit_breaker("qdrant_service", fallback_func=fallback_search)
 
-        async def do_search():
-            try:
-                logger.info(f"Searching nearest neighbors in collection {target_col} (limit: {limit})")
-                results = self.client.search(
-                    collection_name=target_col,
+        def _do_qdrant_search(col: str):
+            if hasattr(self.client, "search"):
+                return self.client.search(
+                    collection_name=col,
                     query_vector=query_vector,
                     query_filter=qdrant_filter,
                     limit=limit
                 )
+            elif hasattr(self.client, "query_points"):
+                res = self.client.query_points(
+                    collection_name=col,
+                    query=query_vector,
+                    query_filter=qdrant_filter,
+                    limit=limit
+                )
+                return getattr(res, "points", [])
+            else:
+                return []
+
+        async def do_search():
+            try:
+                logger.info(f"Searching nearest neighbors in collection {target_col} (limit: {limit})")
+                results = _do_qdrant_search(target_col)
                 return [
                     {
                         "id": str(r.id),
-                        "score": float(r.score),
-                        "payload": r.payload or {}
+                        "score": float(getattr(r, "score", 0.0)),
+                        "payload": getattr(r, "payload", {}) or {}
                     }
                     for r in results
                 ]
             except Exception as e:
+                err_msg = str(e)
+                if "not found" in err_msg.lower() or "doesn't exist" in err_msg.lower():
+                    logger.warning(f"Collection '{target_col}' not present. Returning empty search results.")
+                    return []
+                if await self._handle_missing_collection_or_index(collection_name, e):
+                    results = _do_qdrant_search(target_col)
+                    return [
+                        {
+                            "id": str(r.id),
+                            "score": float(getattr(r, "score", 0.0)),
+                            "payload": getattr(r, "payload", {}) or {}
+                        }
+                        for r in results
+                    ]
                 logger.error(f"Search query failed in collection '{target_col}': {e}")
                 raise AIConfigurationError(f"Vector search failed: {str(e)}") from e
 
         return await cb.execute_async(do_search)
+
 
     async def delete(self, collection_name: str, ids: List[Union[str, int]]) -> bool:
         """Delete specific vector point records by ID"""
@@ -301,6 +375,12 @@ class VectorService:
             )
             return True
         except Exception as e:
+            if await self._handle_missing_collection_or_index(collection_name, e):
+                self.client.delete(
+                    collection_name=target_col,
+                    points_selector=qdrant_models.PointIdsList(points=ids)
+                )
+                return True
             logger.error(f"Delete points failed in collection '{target_col}': {e}")
             raise AIConfigurationError(f"Vector points deletion failed: {str(e)}") from e
 
@@ -317,6 +397,12 @@ class VectorService:
             )
             return True
         except Exception as e:
+            if await self._handle_missing_collection_or_index(collection_name, e):
+                self.client.delete(
+                    collection_name=target_col,
+                    points_selector=qdrant_models.FilterSelector(filter=qdrant_filter)
+                )
+                return True
             logger.error(f"Delete by filter failed in collection '{target_col}': {e}")
             raise AIConfigurationError(f"Vector delete by filter failed: {str(e)}") from e
 
@@ -339,6 +425,21 @@ class VectorService:
                 for r in results
             ]
         except Exception as e:
+            if await self._handle_missing_collection_or_index(collection_name, e):
+                results = self.client.retrieve(
+                    collection_name=target_col,
+                    ids=ids,
+                    with_payload=True,
+                    with_vectors=True
+                )
+                return [
+                    {
+                        "id": str(r.id),
+                        "payload": r.payload or {},
+                        "vector": r.vector
+                    }
+                    for r in results
+                ]
             logger.error(f"Points retrieve failed in collection '{target_col}': {e}")
             raise AIConfigurationError(f"Vector retrieve failed: {str(e)}") from e
 
@@ -354,6 +455,13 @@ class VectorService:
             )
             return res.count
         except Exception as e:
+            if await self._handle_missing_collection_or_index(collection_name, e):
+                res = self.client.count(
+                    collection_name=target_col,
+                    count_filter=qdrant_filter,
+                    exact=True
+                )
+                return res.count
             logger.error(f"Vector count failed in collection '{target_col}': {e}")
             raise AIConfigurationError(f"Vector count query failed: {str(e)}") from e
 
@@ -386,8 +494,30 @@ class VectorService:
             ]
             return points_list, next_offset
         except Exception as e:
-            logger.error(f"Vector scroll query failed in collection '{target_col}': {e}")
-            raise AIConfigurationError(f"Vector scroll failed: {str(e)}") from e
+            if await self._handle_missing_collection_or_index(collection_name, e):
+                try:
+                    points, next_offset = self.client.scroll(
+                        collection_name=target_col,
+                        scroll_filter=qdrant_filter,
+                        limit=limit,
+                        offset=offset,
+                        with_payload=True,
+                        with_vectors=True
+                    )
+                    points_list = [
+                        {
+                            "id": str(p.id),
+                            "payload": p.payload or {},
+                            "vector": p.vector
+                        }
+                        for p in points
+                    ]
+                    return points_list, next_offset
+                except Exception as retry_err:
+                    logger.warning(f"Qdrant scroll retry failed after index creation: {retry_err}")
+                    return [], None
+            logger.warning(f"Qdrant scroll query failed in collection '{target_col}': {e}")
+            return [], None
 
     async def health(self) -> dict:
         """Ping check details of the vector store connection status"""

@@ -33,7 +33,8 @@ class PipelineService:
         telemetry: PipelineTelemetry,
         validator: PipelineValidator,
         event_dispatcher=None,
-        max_stage_retries: int = 3
+        max_stage_retries: int = 3,
+        progress_tracker=None
     ):
         self.report_repository = report_repository
         self.document_parser = document_parser
@@ -45,6 +46,25 @@ class PipelineService:
         self.validator = validator
         self.event_dispatcher = event_dispatcher
         self.max_stage_retries = max_stage_retries
+        self.progress_tracker = progress_tracker
+
+    async def _update_progress(self, report_id: str, stage: str, extra: Optional[dict] = None):
+        if self.progress_tracker:
+            try:
+                if stage == "completed":
+                    await self.progress_tracker.mark_completed(report_id)
+                elif stage == "failed":
+                    err = extra.get("error", "Pipeline execution failed") if extra else "Pipeline execution failed"
+                    await self.progress_tracker.mark_failed(report_id, err)
+                else:
+                    await self.progress_tracker.set_stage(report_id, stage, extra)
+            except Exception as exc:
+                logger.warning(f"Failed to update progress tracker for {report_id} stage {stage}: {exc}")
+
+    def _get_report_id_filter(self, report_id: str) -> dict:
+        if ObjectId.is_valid(report_id):
+            return {"_id": ObjectId(report_id)}
+        return {"_id": report_id}
 
     async def execute_pipeline(self, report_id: str, force_retry: bool = False) -> Dict[str, Any]:
         """Execute end-to-end processing pipeline with stage retries, recovery, and telemetry tracking"""
@@ -64,7 +84,7 @@ class PipelineService:
         
         # Initial status update
         await self.report_repository.collection.update_one(
-            {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id if not isinstance(report_id, bytes) else report_id},
+            self._get_report_id_filter(report_id),
             {
                 "$set": {
                     "pipeline_status": PipelineState.PROCESSING,
@@ -86,6 +106,7 @@ class PipelineService:
             stage_start = time.time()
             ocr_status = getattr(report, "ocr_status", "pending")
             
+            await self._update_progress(report_id, "ocr")
             if ocr_status == "completed" and not force_retry:
                 logger.info(f"Skipping OCR stage for {report_id} (already complete)")
                 timings["ocr_duration_ms"] = getattr(report, "ocr_duration_ms", 0.0) or 0.0
@@ -112,6 +133,7 @@ class PipelineService:
             stage_start = time.time()
             ext_status = getattr(report, "extraction_status", "pending")
             
+            await self._update_progress(report_id, "extraction")
             if ext_status == "completed" and not force_retry and report.laboratory_results:
                 logger.info(f"Skipping Clinical Extraction stage for {report_id} (already complete)")
                 timings["extraction_duration_ms"] = getattr(report, "extraction_duration_ms", 0.0) or 0.0
@@ -138,6 +160,7 @@ class PipelineService:
             stage_start = time.time()
             risk_status = getattr(report, "overall_risk", None)
             
+            await self._update_progress(report_id, "risk")
             if risk_status and not force_retry:
                 logger.info(f"Skipping Clinical Risk stage for {report_id} (already complete)")
                 timings["risk_duration_ms"] = getattr(report, "risk_duration_ms", 0.0) or 0.0
@@ -164,6 +187,7 @@ class PipelineService:
             stage_start = time.time()
             sum_status = getattr(report, "ai_summary", None)
             
+            await self._update_progress(report_id, "summary")
             if sum_status and not force_retry:
                 logger.info(f"Skipping AI Summarization stage for {report_id} (already complete)")
                 timings["summary_duration_ms"] = getattr(report, "summary_duration_ms", 0.0) or 0.0
@@ -190,6 +214,7 @@ class PipelineService:
             stage_start = time.time()
             sync_status = getattr(report, "is_synchronized", False)
             
+            await self._update_progress(report_id, "sync")
             if sync_status and not force_retry:
                 logger.info(f"Skipping Knowledge Sync stage for {report_id} (already complete)")
                 timings["sync_duration_ms"] = getattr(report, "sync_duration_ms", 0.0) or 0.0
@@ -217,7 +242,7 @@ class PipelineService:
                 # Transition status to READY
                 total_duration_ms = (time.time() - pipeline_start) * 1000.0
                 await self.report_repository.collection.update_one(
-                    {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id if not isinstance(report_id, bytes) else report_id},
+                    self._get_report_id_filter(report_id),
                     {
                         "$set": {
                             "pipeline_status": PipelineState.READY,
@@ -231,6 +256,7 @@ class PipelineService:
                 await self.telemetry.record_stage_duration(
                     report_id, "pipeline", total_duration_ms, True
                 )
+                await self._update_progress(report_id, "completed")
                 await self._dispatch_event(PipelineCompletedEvent(report_id, report.patient_id, PipelineState.READY))
                 
                 return {
@@ -243,7 +269,7 @@ class PipelineService:
                 # Transition status to PARTIAL_SUCCESS or FAILED based on validator issues
                 logger.warning(f"Report validation audit failed for {report_id}: {audit['issues']}")
                 await self.report_repository.collection.update_one(
-                    {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id if not isinstance(report_id, bytes) else report_id},
+                    self._get_report_id_filter(report_id),
                     {
                         "$set": {
                             "pipeline_status": PipelineState.PARTIAL_SUCCESS,
@@ -262,10 +288,11 @@ class PipelineService:
         except Exception as exc:
             logger.error(f"Processing pipeline execution halted for {report_id}: {exc}", exc_info=True)
             err_msg = str(exc)
+            await self._update_progress(report_id, "failed", {"error": err_msg})
             
             # Transition status to FAILED
             await self.report_repository.collection.update_one(
-                {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id if not isinstance(report_id, bytes) else report_id},
+                self._get_report_id_filter(report_id),
                 {
                     "$set": {
                         "pipeline_status": PipelineState.FAILED,
@@ -310,7 +337,7 @@ class PipelineService:
         """Update report pipeline status key in MongoDB"""
         try:
             await self.report_repository.collection.update_one(
-                {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id if not isinstance(report_id, bytes) else report_id},
+                self._get_report_id_filter(report_id),
                 {"$set": {"pipeline_status": status}}
             )
         except Exception as e:

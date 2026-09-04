@@ -7,6 +7,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
+from bson import ObjectId
 from app.models.report import ReportInDB
 from app.repositories.report_repository import ReportRepository
 from app.services.report_risk.laboratory_analyzer import LaboratoryAnalyzer
@@ -35,6 +36,11 @@ class RiskAnalysisService:
         self.recommendation_engine = recommendation_engine
         self.risk_engine = risk_engine
 
+    def _get_report_id_filter(self, report_id: str) -> dict:
+        if ObjectId.is_valid(report_id):
+            return {"_id": ObjectId(report_id)}
+        return {"_id": report_id}
+
     async def analyze_report_risks(self, report_id: str) -> Optional[ReportInDB]:
         """Trigger clinical risk evaluation on a structured report, saving diagnostic flags back to MongoDB"""
         start_time = time.time()
@@ -52,7 +58,7 @@ class RiskAnalysisService:
 
         # Set status in DB to processing
         await self.report_repository.collection.update_one(
-            {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id},
+            self._get_report_id_filter(report_id),
             {"$set": {"processing_status": "processing"}}
         )
 
@@ -84,7 +90,7 @@ class RiskAnalysisService:
             # Update report laboratory results in DB with analyzed statuses
             if evaluated_labs:
                 await self.report_repository.collection.update_one(
-                    {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id},
+                    self._get_report_id_filter(report_id),
                     {"$set": {"laboratory_results": evaluated_labs}}
                 )
 
@@ -95,7 +101,7 @@ class RiskAnalysisService:
             recommendations = self.recommendation_engine.generate_recommendations(rule_findings, critical_labs_count)
 
             # 5. Risk Scoring and Category mapping
-            risk_score, overall_risk = self.risk_engine.calculate_score_and_severity(rule_findings, critical_labs_count)
+            risk_score, overall_risk = self.risk_engine.calculate_score_and_severity(rule_findings, critical_labs_count, evaluated_labs)
 
             # 6. Query AI explanations justifications
             ai_justifications = await self.risk_engine.analyze_risks(ocr_text, rule_findings)
@@ -153,7 +159,7 @@ class RiskAnalysisService:
             }
 
             await self.report_repository.collection.update_one(
-                {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id},
+                self._get_report_id_filter(report_id),
                 {"$set": update_payload}
             )
 
@@ -169,7 +175,7 @@ class RiskAnalysisService:
             logger.error(f"Clinical risk assessment pipeline crashed for report {report_id}: {err}", exc_info=True)
             
             await self.report_repository.collection.update_one(
-                {"_id": self.report_repository.collection.find_one({"_id": report_id}) or report_id},
+                self._get_report_id_filter(report_id),
                 {"$set": {"processing_status": "failed"}}
             )
             

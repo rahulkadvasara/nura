@@ -67,7 +67,7 @@ class ReportBase(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     patient_id: str = Field(..., description="Reference to the patient user ID")
-    uploaded_by: str = Field(..., description="Reference to the user ID who uploaded the report")
+    uploaded_by: Optional[str] = Field(None, description="Reference to the user ID who uploaded the report")
     report_type: ReportType = Field(default=ReportType.OTHER, description="Type of medical report")
     file_url: str = Field(..., description="URL of the uploaded report file")
     file_metadata: Optional[FileMetadata] = Field(None, description="Metadata of uploaded report file")
@@ -122,6 +122,8 @@ class ReportBase(BaseModel):
     summary_version: Optional[str] = Field(None, description="AI summary prompt template version")
     summary_generated_at: Optional[datetime] = Field(None, description="AI summary generation timestamp")
     interaction_findings: Optional[List[Dict[str, Any]]] = Field(None, description="Detailed interaction findings discovered during sync validation")
+    is_synchronized: Optional[bool] = Field(None, description="Knowledge sync flag")
+    synchronized_at: Optional[datetime] = Field(None, description="Knowledge sync timestamp")
 
 
 class ReportCreate(ReportBase):
@@ -187,6 +189,8 @@ class ReportUpdate(BaseModel):
     summary_version: Optional[str] = None
     summary_generated_at: Optional[datetime] = None
     interaction_findings: Optional[List[Dict[str, Any]]] = None
+    is_synchronized: Optional[bool] = None
+    synchronized_at: Optional[datetime] = None
 
 
 class ReportInDB(ReportBase):

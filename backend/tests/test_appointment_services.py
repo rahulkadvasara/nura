@@ -82,7 +82,7 @@ def sample_appointment():
         id="507f1f77bcf86cd799439050",
         patient_id="507f1f77bcf86cd799439001",
         doctor_id="507f1f77bcf86cd799439010",
-        slot_date="2026-06-25",
+        slot_date="2026-12-25",
         slot_time="10:00",
         duration_minutes=30,
         consultation_fee=500.0,
@@ -149,7 +149,7 @@ class TestAppointmentService:
             "_id": ObjectId("507f1f77bcf86cd799439050"),
             "patient_id": sample_user.id,
             "doctor_id": sample_doctor_profile.id,
-            "slot_date": "2026-06-25",
+            "slot_date": "2026-12-25",
             "slot_time": "10:00",
             "duration_minutes": 30,
             "consultation_fee": 500.0,
@@ -171,7 +171,7 @@ class TestAppointmentService:
         slot = MagicMock()
         slot.id = "507f1f77bcf86cd799439020"
         slot.doctor_id = sample_doctor_profile.id
-        slot.date = "2026-06-25"
+        slot.date = "2026-12-25"
         slot.start_time = "10:00"
         slot.end_time = "10:30"
         slot.slot_duration = 30
@@ -184,11 +184,12 @@ class TestAppointmentService:
             doctor_id=sample_doctor_profile.id,
             availability_id="507f1f77bcf86cd799439020",
             reason="Regular checkup",
-            slot_date="2026-06-25",
+            slot_date="2026-12-25",
             slot_time="10:00",
             consultation_fee=500.0,
             notes="Regular checkup",
         )
+
 
         result = await service.create_appointment(sample_user.id, schema)
         assert isinstance(result, AppointmentInDB)

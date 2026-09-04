@@ -25,9 +25,13 @@ class ConversationCompressionService:
         Compress history to fit max_tokens budget.
         Preserves recent, bookmarked, cited, and clinical messages, compressing others.
         """
-        total_tokens = sum(self.estimate_tokens(m.content) for m in messages)
+        if not messages:
+            return []
+
+        total_tokens = sum(self.estimate_tokens(m.content or "") for m in messages if m and m.content)
         if total_tokens <= self.max_tokens:
             return self._map_to_history(messages)
+
 
         logger.info(f"Conversation exceeds token budget ({total_tokens} > {self.max_tokens}). Compressing...")
 

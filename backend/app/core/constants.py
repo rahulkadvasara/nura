@@ -90,6 +90,7 @@ AI_AGENTS = {
 QDRANT_COLLECTIONS = {
     "PATIENT_REPORTS": "patient_reports",
     "CHAT_MEMORY": "chat_memory",
+    "PATIENT_MEMORY": "patient_memory",
     "MEDICAL_KNOWLEDGE": "medical_knowledge",
     "DRUG_KNOWLEDGE": "drug_knowledge",
     "DOCTOR_KNOWLEDGE": "doctor_knowledge"

@@ -21,6 +21,7 @@ import {
   useBookmarkMessage,
   useRemoveBookmark,
   useBookmarks,
+  useFollowupQuestions,
 } from '@/hooks/use-chat'
 import {
   Plus,
@@ -103,11 +104,13 @@ export default function ChatPage() {
   // Message input state
   const [messageText, setMessageText] = useState('')
   const [messageRole, setMessageRole] = useState<'USER' | 'ASSISTANT' | 'SYSTEM'>('USER')
+  const [optimisticUserMsg, setOptimisticUserMsg] = useState<any | null>(null)
 
   // Streaming State
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingText, setStreamingText] = useState('')
   const [streamingAgent, setStreamingAgent] = useState('')
+  const [streamingCards, setStreamingCards] = useState<any[]>([])
   const abortControllerRef = useRef<AbortController | null>(null)
 
   // Feedback State
@@ -235,10 +238,9 @@ export default function ChatPage() {
     }
   }
 
-  // Handle session creation
-  const handleCreateSession = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newSessionTitle.trim()) return
+  // Handle instant session creation without prompt
+  const handleCreateSession = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
     if (!patientId) {
       toast.error('Patient identity not loaded. Please log in again.')
       return
@@ -247,12 +249,12 @@ export default function ChatPage() {
     try {
       const newSession = await createSessionMutation.mutateAsync({
         patientId,
-        title: newSessionTitle.trim(),
+        title: 'New Chat',
       })
       setSelectedSessionId(newSession.id)
       setNewSessionTitle('')
       setIsCreating(false)
-      toast.success('Chat session created')
+      toast.success('New chat session created')
     } catch (err: any) {
       toast.error(err.message || 'Failed to create session')
     }
@@ -319,10 +321,16 @@ export default function ChatPage() {
     setIsStreaming(true)
     setStreamingText('')
     setStreamingAgent('')
+    setStreamingCards([])
 
     abortControllerRef.current = new AbortController()
+    let finalAccText = ''
+    let finalAgent = ''
+    let finalCards: any[] = []
 
     try {
+      // Local Development Fallback: 'http://localhost:8000/api/v1'
+      // Production (Render) Fallback: 'https://<YOUR-RENDER-BACKEND-NAME>.onrender.com/api/v1'
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
       const token = localStorage.getItem('access_token')
       const headers: Record<string, string> = {
@@ -371,10 +379,16 @@ export default function ChatPage() {
           try {
             const parsed = JSON.parse(rawJson)
             if (parsed.type === 'token') {
+              finalAccText += parsed.content
               setStreamingText((prev) => prev + parsed.content)
             } else if (parsed.type === 'metadata') {
               if (parsed.agent_used) {
+                finalAgent = parsed.agent_used
                 setStreamingAgent(parsed.agent_used)
+              }
+              if (parsed.cards && Array.isArray(parsed.cards)) {
+                finalCards = parsed.cards
+                setStreamingCards(parsed.cards)
               }
             } else if (parsed.type === 'error') {
               toast.error(parsed.error || 'AI pipeline errored')
@@ -393,10 +407,35 @@ export default function ChatPage() {
         toast.error(err.message || 'Streaming failed')
       }
     } finally {
+      if (finalAccText.trim() && selectedSessionId) {
+        const tempAssistantMsg = {
+          id: `temp-assistant-${Date.now()}`,
+          session_id: selectedSessionId,
+          patient_id: patientId,
+          role: 'ASSISTANT',
+          content: finalAccText,
+          created_at: new Date().toISOString(),
+          metadata: { agent: finalAgent, cards: finalCards },
+          cards: finalCards,
+          citations: [],
+          token_usage: {},
+          deleted: false
+        }
+        queryClient.setQueriesData({ queryKey: ['chat', 'messages', selectedSessionId] }, (oldData: any) => {
+          if (!oldData) return { messages: [tempAssistantMsg], total: 1, limit: 100, skip: 0 }
+          const list = Array.isArray(oldData.messages) ? oldData.messages : (Array.isArray(oldData) ? oldData : [])
+          return {
+            ...oldData,
+            messages: [...list, tempAssistantMsg]
+          }
+        })
+      }
+
       setIsStreaming(false)
       setStreamingText('')
       setStreamingAgent('')
-      // Invalidate message queries to reload complete messages list from server
+      setStreamingCards([])
+
       queryClient.invalidateQueries({ queryKey: ['chat', 'messages', selectedSessionId] })
       queryClient.invalidateQueries({ queryKey: ['chat', 'session', selectedSessionId] })
       queryClient.invalidateQueries({ queryKey: ['chat', 'sessions'] })
@@ -407,29 +446,56 @@ export default function ChatPage() {
   // Handle message post
   const handleSendMessage = async (e: React.FormEvent, customText?: string) => {
     if (e) e.preventDefault()
-    const textToSend = customText || messageText
-    if (!textToSend.trim() || !selectedSessionId) return
+    const textToSend = (customText || messageText).trim()
+    if (!textToSend || !selectedSessionId) return
 
     if (!customText) {
       setMessageText('')
     }
 
+    if (messageRole === 'USER') {
+      // Instantly update React Query cache for this session so user message renders in 0ms!
+      const tempMsg = {
+        id: `temp-user-${Date.now()}`,
+        session_id: selectedSessionId,
+        patient_id: patientId,
+        role: 'USER',
+        content: textToSend,
+        created_at: new Date().toISOString(),
+        metadata: {},
+        citations: [],
+        token_usage: {},
+        deleted: false
+      }
+      queryClient.setQueriesData({ queryKey: ['chat', 'messages', selectedSessionId] }, (oldData: any) => {
+        if (!oldData) return { messages: [tempMsg], total: 1, limit: 100, skip: 0 }
+        const existingMessages = Array.isArray(oldData.messages) ? oldData.messages : (Array.isArray(oldData) ? oldData : [])
+        return {
+          ...oldData,
+          messages: [...existingMessages, tempMsg]
+        }
+      })
+      setOptimisticUserMsg(tempMsg)
+    }
+
     try {
       if (messageRole === 'USER') {
         // Run AI pipeline with Streaming SSE
-        await handleStartMessageStream(textToSend.trim())
+        await handleStartMessageStream(textToSend)
       } else {
         // Manual simulation fallback
         await createMessageMutation.mutateAsync({
           session_id: selectedSessionId,
           patient_id: patientId,
           role: messageRole,
-          content: textToSend.trim(),
+          content: textToSend,
         })
         toast.success('Manual message stored')
       }
     } catch (err: any) {
       toast.error(err.message || 'Execution crashed')
+    } finally {
+      setOptimisticUserMsg(null)
     }
   }
 
@@ -492,6 +558,25 @@ export default function ChatPage() {
 
   const lastAssistant = getLastAssistantMessage()
 
+  // Inline markdown parser for **bold**, *italic*, and `code`
+  const parseInlineMarkdown = (content: string): (string | React.JSX.Element)[] => {
+    if (!content) return ['']
+    const regex = /(\*\*.*?\*\*|\*.*?\*|_.*?_|`.*?`)/g
+    const parts = content.split(regex)
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
+        return <strong key={i} className="font-bold text-slate-900">{parseInlineMarkdown(part.slice(2, -2))}</strong>
+      }
+      if ((part.startsWith('*') && part.endsWith('*') && part.length >= 2) || (part.startsWith('_') && part.endsWith('_') && part.length >= 2)) {
+        return <em key={i} className="italic text-slate-700">{parseInlineMarkdown(part.slice(1, -1))}</em>
+      }
+      if (part.startsWith('`') && part.endsWith('`') && part.length >= 2) {
+        return <code key={i} className="px-1.5 py-0.5 rounded bg-slate-100 text-teal-750 font-mono text-[11px] border border-slate-200/60">{part.slice(1, -1)}</code>
+      }
+      return part
+    })
+  }
+
   // Standalone premium markdown rendering with code highlighting, tables, headers, and lists
   const renderMarkdown = (text: string) => {
     const lines = text.split('\n')
@@ -537,7 +622,7 @@ export default function ChatPage() {
         renderedElements.push(
           <div key={`table-row-${index}`} className="flex border-b border-slate-100 py-2 px-3 bg-slate-50/50 text-[11px] font-medium text-slate-600 gap-4 hover:bg-slate-100/50 transition-all">
             {cells.map((cell, cidx) => (
-              <div key={cidx} className="flex-1 min-w-0 truncate">{cell}</div>
+              <div key={cidx} className="flex-1 min-w-0">{parseInlineMarkdown(cell)}</div>
             ))}
           </div>
         )
@@ -546,19 +631,19 @@ export default function ChatPage() {
 
       // Custom headers
       if (line.startsWith('### ')) {
-        renderedElements.push(<h4 key={index} className="text-xs font-bold text-slate-800 mt-3 mb-1.5 flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-teal-500" />{line.replace('### ', '')}</h4>)
+        renderedElements.push(<h4 key={index} className="text-xs font-bold text-slate-900 mt-3 mb-1.5 flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-teal-500" />{parseInlineMarkdown(line.replace('### ', ''))}</h4>)
         return
       }
       if (line.startsWith('## ')) {
-        renderedElements.push(<h3 key={index} className="text-sm font-extrabold text-slate-800 mt-4 mb-2">{line.replace('## ', '')}</h3>)
+        renderedElements.push(<h3 key={index} className="text-sm font-extrabold text-slate-900 mt-4 mb-2">{parseInlineMarkdown(line.replace('## ', ''))}</h3>)
         return
       }
 
       // Lists
       if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
         renderedElements.push(
-          <li key={index} className="ml-4 list-disc text-slate-600 my-1 leading-relaxed">
-            {line.trim().replace(/^[-*]\s+/, '')}
+          <li key={index} className="ml-4 list-disc text-slate-700 my-1 leading-relaxed">
+            {parseInlineMarkdown(line.trim().replace(/^[-*]\s+/, ''))}
           </li>
         )
         return
@@ -566,7 +651,7 @@ export default function ChatPage() {
 
       // Standard paragraphs
       if (line.trim() !== '') {
-        renderedElements.push(<p key={index} className="my-1.5 text-slate-600 leading-relaxed">{line}</p>)
+        renderedElements.push(<p key={index} className="my-1.5 text-slate-700 leading-relaxed">{parseInlineMarkdown(line)}</p>)
       }
     })
 
@@ -574,9 +659,9 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+    <div className="flex h-[calc(100vh-6.5rem)] min-h-[500px] w-full max-w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
       {/* 1. Left Sidebar: Chat Sessions / Bookmarks list */}
-      <div className="flex w-80 flex-col border-r border-slate-100 bg-slate-50/50">
+      <div className="flex w-64 md:w-72 lg:w-80 flex-shrink-0 flex-col border-r border-slate-100 bg-slate-50/50">
         {/* Sidebar Header */}
         <div className="p-4 border-b border-slate-100 bg-white">
           <div className="flex items-center justify-between mb-3">
@@ -585,35 +670,13 @@ export default function ChatPage() {
               <span>Conversations</span>
             </h2>
             <button
-              onClick={() => setIsCreating(!isCreating)}
+              onClick={() => handleCreateSession()}
               className="p-1.5 rounded-full bg-teal-50 text-teal-700 hover:bg-teal-100 hover:text-teal-800 transition-colors"
               title="New Session"
             >
               <Plus className="h-4 w-4" />
             </button>
           </div>
-
-          {/* New Session form */}
-          {isCreating && (
-            <form onSubmit={handleCreateSession} className="mb-3 animate-in fade-in slide-in-from-top duration-200">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="New session title..."
-                  value={newSessionTitle}
-                  onChange={(e) => setNewSessionTitle(e.target.value)}
-                  className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500 bg-slate-50"
-                  autoFocus
-                />
-                <button
-                  type="submit"
-                  className="px-3 py-1 text-xs font-semibold rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition-colors"
-                >
-                  Create
-                </button>
-              </div>
-            </form>
-          )}
 
           {/* Sidebar Tabs */}
           <div className="flex border-b border-slate-200 mb-3">
@@ -876,39 +939,23 @@ export default function ChatPage() {
       <div className="flex flex-1 flex-col bg-white">
         {selectedSessionId && activeSession ? (
           <>
-            {/* Header section with Stats Bar */}
-            <div className="flex flex-col p-4 border-b border-slate-100 bg-white">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                    <span>{activeSession.title}</span>
-                    {activeSession.pinned && <Pin className="h-3 w-3 text-amber-500 fill-amber-500" />}
+            {/* Header section */}
+            <div className="flex flex-col p-3 md:p-4 border-b border-slate-100 bg-white gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <h1 className="text-sm font-bold text-slate-800 flex items-center gap-2 truncate">
+                    <span className="truncate">{activeSession.title}</span>
+                    {activeSession.pinned && <Pin className="h-3 w-3 flex-shrink-0 text-amber-500 fill-amber-500" />}
                   </h1>
-                  <p className="text-[10px] text-slate-400 mt-0.5 font-semibold">
-                    Patient: <span className="font-mono text-slate-500">{activeSession.patient_id}</span>
-                  </p>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setDeveloperMode(!developerMode)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
-                      developerMode
-                        ? 'border-teal-500 bg-teal-50 text-teal-700'
-                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    <Code className="h-3.5 w-3.5" />
-                    <span>Dev Mode: {developerMode ? 'On' : 'Off'}</span>
-                  </button>
-
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                   {/* Regenerate Action */}
                   <button
                     type="button"
                     onClick={handleRegenerate}
                     disabled={regenerateMutation.isPending || isStreaming}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-all"
+                    className="flex items-center gap-1.5 px-2 py-1 text-[11px] sm:px-2.5 sm:py-1.5 sm:text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-all"
                     title="Regenerate last assistant message"
                   >
                     <RotateCcw className={`h-3.5 w-3.5 ${regenerateMutation.isPending ? 'animate-spin' : ''}`} />
@@ -918,11 +965,12 @@ export default function ChatPage() {
                   <button
                     type="button"
                     onClick={() => handleTogglePin(activeSession)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                    className={`flex items-center gap-1.5 px-2 py-1 text-[11px] sm:px-2.5 sm:py-1.5 sm:text-xs font-semibold rounded-lg border transition-all ${
                       activeSession.pinned
                         ? 'border-amber-200 bg-amber-50 text-amber-700'
                         : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                     }`}
+                    title="Pin Session"
                   >
                     <Pin className="h-3.5 w-3.5" />
                   </button>
@@ -930,11 +978,12 @@ export default function ChatPage() {
                   <button
                     type="button"
                     onClick={() => handleToggleArchive(activeSession)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                    className={`flex items-center gap-1.5 px-2 py-1 text-[11px] sm:px-2.5 sm:py-1.5 sm:text-xs font-semibold rounded-lg border transition-all ${
                       activeSession.archived
                         ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
                         : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                     }`}
+                    title="Archive Session"
                   >
                     <Archive className="h-3.5 w-3.5" />
                   </button>
@@ -950,18 +999,18 @@ export default function ChatPage() {
                       navigator.clipboard.writeText(transcript)
                       toast.success('Conversation copied!')
                     }}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all"
+                    className="flex items-center gap-1.5 px-2 py-1 text-[11px] sm:px-2.5 sm:py-1.5 sm:text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all"
                     title="Copy full conversation transcript"
                   >
                     <Copy className="h-3.5 w-3.5" />
-                    <span>Copy Chats</span>
+                    <span>Copy</span>
                   </button>
 
                   {/* Export Menu Dropdown */}
                   <div className="relative group/export">
                     <button
                       type="button"
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-teal-600 bg-teal-600 text-white hover:bg-teal-700 transition-all shadow-md shadow-teal-600/10"
+                      className="flex items-center gap-1.5 px-2 py-1 text-[11px] sm:px-2.5 sm:py-1.5 sm:text-xs font-semibold rounded-lg border border-teal-600 bg-teal-600 text-white hover:bg-teal-700 transition-all shadow-md shadow-teal-600/10"
                     >
                       <Download className="h-3.5 w-3.5" />
                       <span>Export</span>
@@ -990,9 +1039,9 @@ export default function ChatPage() {
                 </div>
               </div>
 
-              {/* Statistics info-bar */}
-              {stats && (
-                <div className="flex items-center gap-4 text-[10px] text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 mt-2.5">
+              {/* Developer Statistics info-bar */}
+              {developerMode && stats && (
+                <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 mt-1">
                   <span className="flex items-center gap-1">
                     <MessageSquare className="h-3.5 w-3.5 text-teal-600" />
                     Messages: <strong className="text-slate-700">{stats.message_count}</strong>
@@ -1027,7 +1076,7 @@ export default function ChatPage() {
                 <div className="flex items-center justify-center h-full">
                   <span className="text-xs text-slate-400 animate-pulse">Loading conversation...</span>
                 </div>
-              ) : history.messages.length === 0 && !isStreaming ? (
+              ) : history.messages.length === 0 && !isStreaming && !optimisticUserMsg ? (
                 <div className="flex flex-col items-center justify-center h-full text-center max-w-sm mx-auto p-4 space-y-4">
                   <div className="h-10 w-10 rounded-full bg-teal-50 flex items-center justify-center">
                     <Sparkles className="h-5 w-5 text-teal-600 animate-pulse" />
@@ -1043,10 +1092,10 @@ export default function ChatPage() {
                     <span className="text-[10px] text-slate-450 font-bold uppercase tracking-wider">Suggested Queries:</span>
                     <div className="flex flex-wrap justify-center gap-1.5 w-full">
                       {[
-                        "Explain my lab report details",
-                        "Check medication safety constraints",
-                        "Summarize my overall health profile",
-                        "What key questions should I ask my doctor?"
+                        "What are my active appointments?",
+                        "Suggest a doctor for consultation",
+                        "Explain my blood test report details",
+                        "Check if my medications interact"
                       ].map((promptText, pIdx) => (
                         <button
                           key={pIdx}
@@ -1062,7 +1111,12 @@ export default function ChatPage() {
                 </div>
               ) : (
                 <>
-                  {history.messages.map((message) => {
+                  {(() => {
+                    const allMsgs = [...history.messages]
+                    if (optimisticUserMsg && !allMsgs.some(m => m.id === optimisticUserMsg.id || (m.role === 'USER' && m.content === optimisticUserMsg.content))) {
+                      allMsgs.push(optimisticUserMsg)
+                    }
+                    return allMsgs.map((message) => {
                     const isUser = message.role === 'USER'
                     const isSystem = message.role === 'SYSTEM'
 
@@ -1355,7 +1409,7 @@ export default function ChatPage() {
                         </div>
                       </div>
                     )
-                  })}
+                  })})()}
                 </>
               )}
 
@@ -1365,11 +1419,57 @@ export default function ChatPage() {
                   <div className="h-8 w-8 rounded-full bg-teal-50 border border-teal-200 flex items-center justify-center flex-shrink-0 shadow-sm animate-pulse">
                     <Sparkles className="h-4 w-4 text-teal-600" />
                   </div>
-                  <div className="flex flex-col">
+                  <div className="flex flex-col max-w-full">
                     <div className="px-4 py-2.5 rounded-2xl bg-white border border-slate-150 text-slate-700 rounded-tl-none text-xs leading-relaxed shadow-sm">
                       <div>{renderMarkdown(streamingText)}</div>
                       <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-teal-600 animate-pulse" />
                     </div>
+
+                    {streamingCards && streamingCards.length > 0 && (
+                      <div className="mt-2.5 space-y-3 max-w-md w-full animate-in slide-in-from-bottom-2 duration-300">
+                        {streamingCards.map((card, cidx) => (
+                          <div
+                            key={cidx}
+                            className="p-3.5 rounded-xl border border-slate-150 bg-white/70 backdrop-blur-md shadow-sm flex flex-col gap-3"
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className="p-2 rounded-lg bg-teal-50 border border-teal-100 text-teal-600">
+                                <Calendar className="h-4 w-4" />
+                              </div>
+                              <div className="flex-1">
+                                <h4 className="text-xs font-bold text-slate-800">{card.title}</h4>
+                                {card.subtitle && <p className="text-[10px] text-slate-500 font-medium">{card.subtitle}</p>}
+                              </div>
+                              {card.status && (
+                                <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-teal-50 text-teal-700 border border-teal-100">
+                                  {card.status}
+                                </span>
+                              )}
+                            </div>
+                            {card.summary && (
+                              <p className="text-[10px] text-slate-600 leading-normal font-medium bg-slate-50/50 p-2 rounded-lg border border-slate-100/50">
+                                {card.summary}
+                              </p>
+                            )}
+                            {card.actions && card.actions.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mt-0.5">
+                                {card.actions.map((action: any, aidx: number) => (
+                                  <a
+                                    key={aidx}
+                                    href={action.url}
+                                    className="px-3 py-1.5 rounded-lg text-[9px] font-bold transition-all flex items-center gap-1 shadow-sm bg-teal-600 text-white hover:bg-teal-700"
+                                  >
+                                    <span>{action.label}</span>
+                                    <ChevronRight className="h-3 w-3" />
+                                  </a>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     {streamingAgent && (
                       <div className="mt-1 text-[9px] text-slate-400 font-bold">
                         agent: {streamingAgent}
@@ -1425,18 +1525,19 @@ export default function ChatPage() {
                       }
                     }}
                   />
-                  
                   <div className="flex flex-col gap-2">
-                    <select
-                      value={messageRole}
-                      onChange={(e) => setMessageRole(e.target.value as any)}
-                      className="px-2 py-1 text-[10px] rounded border border-slate-200 bg-slate-50 font-semibold text-slate-600 focus:outline-none"
-                      disabled={isStreaming}
-                    >
-                      <option value="USER">Patient (User)</option>
-                      <option value="ASSISTANT">Manual Nura (Assistant)</option>
-                      <option value="SYSTEM">Manual Event (System)</option>
-                    </select>
+                    {developerMode && (
+                      <select
+                        value={messageRole}
+                        onChange={(e) => setMessageRole(e.target.value as any)}
+                        className="px-2 py-1 text-[10px] rounded border border-slate-200 bg-slate-50 font-semibold text-slate-600 focus:outline-none"
+                        disabled={isStreaming}
+                      >
+                        <option value="USER">Patient (User)</option>
+                        <option value="ASSISTANT">Manual Nura (Assistant)</option>
+                        <option value="SYSTEM">Manual Event (System)</option>
+                      </select>
+                    )}
 
                     {isStreaming ? (
                       <button
@@ -1697,7 +1798,6 @@ function FollowUpQuestionsSection({
   messageId: string
   onQuestionClick: (q: string) => void
 }) {
-  const { useFollowupQuestions } = require('@/hooks/use-chat')
   const { data: questions = [], isLoading } = useFollowupQuestions(messageId)
 
   if (isLoading || questions.length === 0) return null
