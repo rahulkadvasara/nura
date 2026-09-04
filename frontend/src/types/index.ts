@@ -45,6 +45,7 @@ export interface HealthStatus {
 export interface RecentHealthInsight {
   id: string
   title: string
+  summary?: string
   severity: 'low' | 'medium' | 'high' | null
   created_at: string
 }
@@ -261,6 +262,7 @@ export interface PatientAppointmentHistoryItem {
   id: string
   doctor_id: string
   doctor_name: string
+  doctor_profile_picture?: string
   specialization: string
   appointment_date: string
   appointment_time: string
