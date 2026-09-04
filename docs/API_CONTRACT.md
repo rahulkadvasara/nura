@@ -596,7 +596,7 @@ DELETE /reminders/{reminder_id}
 
 # 10. Chat APIs
 
-## Send Message
+## Send Message (Synchronous)
 
 ```http
 POST /chat/message
@@ -611,17 +611,29 @@ POST /chat/message
 }
 ```
 
-### Response
+---
+
+## Stream Message (SSE Real-Time Streaming)
+
+```http
+POST /chat/message/stream
+```
+
+### Request
 
 ```json
 {
-  "success": true,
-  "data": {
-    "response": "",
-    "agent": "ReportAnalysisAgent",
-    "sources": []
-  }
+  "session_id": "session_id",
+  "message": "Explain my lab report"
 }
+```
+
+### Response (Server-Sent Events)
+
+```text
+data: {"type": "token", "content": "Based on "}
+data: {"type": "token", "content": "your lab results..."}
+data: {"type": "metadata", "agent_used": "ReportAnalysisAgent", "cards": []}
 ```
 
 ---
@@ -637,7 +649,7 @@ POST /chat/session
 ## List Chat Sessions
 
 ```http
-GET /chat/sessions
+POST /chat/sessions
 ```
 
 ---
@@ -646,6 +658,18 @@ GET /chat/sessions
 
 ```http
 GET /chat/session/{session_id}
+```
+
+---
+
+## Message Bookmarks & Search
+
+```http
+POST   /chat/bookmarks                # Add bookmark
+GET    /chat/bookmarks                # List bookmarks
+DELETE /chat/bookmarks/{message_id}   # Remove bookmark
+GET    /chat/search?query={q}         # Search conversations
+POST   /chat/export/{session_id}      # Export transcript (md|pdf|json)
 ```
 
 ---

@@ -24,12 +24,12 @@ Recommended:
 
 | Component      | Version |
 | -------------- | ------- |
-| Python         | 3.12+   |
-| Node.js        | 22+     |
+| Python         | 3.11+ / 3.13+ |
+| Node.js        | 20+ / 22+     |
 | npm            | 10+     |
 | Git            | Latest  |
-| Docker         | Latest  |
-| Docker Compose | Latest  |
+| Docker         | Optional|
+| Docker Compose | Optional|
 
 ---
 

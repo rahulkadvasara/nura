@@ -60,7 +60,7 @@ MongoDB Qdrant Groq
 | Payment Gateway  | Razorpay           |
 | Storage          | Supabase Storage   |
 | Deployment FE    | Vercel             |
-| Deployment BE    | Railway / Render   |
+| Deployment BE    | Render             |
 
 ---
 
@@ -443,7 +443,7 @@ Frontend:
 
 Backend:
 
-* Railway or Render
+* Render (Web Service)
 
 Services:
 
@@ -475,12 +475,12 @@ Metrics:
 
 # 21. Future Enhancements
 
-* Voice Assistant
-* Wearable Integration
-* Telemedicine Calls
-* Insurance Integration
-* Mobile Apps
-* Predictive Health Analytics
+* Real-Time WebSockets / SSE Streaming & Agent Thinking Status
+* Distributed Redis Caching & Message Broker Layer
+* Multi-Channel Notification Engine (In-app, SMTP/Brevo, SMS/WhatsApp)
+* Voice Assistant & Speech-to-Text Input
+* Wearable Integration & Predictive Health Analytics
+* Telemedicine Calls & Mobile Apps
 
 ---
 
