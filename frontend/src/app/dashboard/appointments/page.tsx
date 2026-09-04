@@ -19,7 +19,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 
-type TabType = 'approved' | 'pending' | 'cancelled'
+type TabType = 'pending' | 'upcoming' | 'completed' | 'rejected'
 
 interface ReceiptInfo {
   transactionId: string
@@ -200,17 +200,20 @@ function AppointmentsContent() {
 
   // Segment appointments
   const pendingRequests = appointments.filter(a => a.status === 'pending')
-  const approvedRequests = appointments.filter(a => a.status === 'approved' || a.status === 'in_progress' || a.status === 'completed')
-  const cancelledRequests = appointments.filter(a => a.status === 'cancelled' || a.status === 'rejected')
+  const upcomingRequests = appointments.filter(a => a.status === 'approved' || a.status === 'in_progress')
+  const completedRequests = appointments.filter(a => a.status === 'completed')
+  const rejectedRequests = appointments.filter(a => a.status === 'cancelled' || a.status === 'rejected')
 
   const getActiveList = () => {
     switch (activeTab) {
-      case 'approved':
-        return approvedRequests
       case 'pending':
         return pendingRequests
-      case 'cancelled':
-        return cancelledRequests
+      case 'upcoming':
+        return upcomingRequests
+      case 'completed':
+        return completedRequests
+      case 'rejected':
+        return rejectedRequests
       default:
         return []
     }
@@ -249,7 +252,7 @@ function AppointmentsContent() {
       </div>
 
       {/* Tabs list */}
-      <div className="flex border-b border-slate-200">
+      <div className="flex flex-wrap border-b border-slate-200">
         <button
           onClick={() => setActiveTab('pending')}
           className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all ${
@@ -261,24 +264,34 @@ function AppointmentsContent() {
           Pending Requests ({pendingRequests.length})
         </button>
         <button
-          onClick={() => setActiveTab('approved')}
+          onClick={() => setActiveTab('upcoming')}
           className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all ${
-            activeTab === 'approved'
+            activeTab === 'upcoming'
               ? 'border-teal-600 text-teal-600'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          Upcoming Appointments ({approvedRequests.length})
+          Upcoming Appointments ({upcomingRequests.length})
         </button>
         <button
-          onClick={() => setActiveTab('cancelled')}
+          onClick={() => setActiveTab('completed')}
           className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all ${
-            activeTab === 'cancelled'
+            activeTab === 'completed'
               ? 'border-teal-600 text-teal-600'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          Cancelled / Rejected ({cancelledRequests.length})
+          Completed ({completedRequests.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('rejected')}
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all ${
+            activeTab === 'rejected'
+              ? 'border-teal-600 text-teal-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          Cancelled / Rejected ({rejectedRequests.length})
         </button>
       </div>
 
@@ -314,8 +327,10 @@ function AppointmentsContent() {
           <p className="text-xs text-slate-500 max-w-sm">
             {activeTab === 'pending'
               ? 'You do not have any pending appointment requests right now.'
-              : activeTab === 'approved'
+              : activeTab === 'upcoming'
               ? 'You do not have any upcoming approved consultations scheduled.'
+              : activeTab === 'completed'
+              ? 'No completed consultation history recorded.'
               : 'No cancelled or rejected appointment history was found.'}
           </p>
         </div>

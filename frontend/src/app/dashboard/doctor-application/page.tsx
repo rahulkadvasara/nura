@@ -495,9 +495,10 @@ export default function DoctorApplicationPage() {
                     id="experience_years" 
                     type="number"
                     placeholder="e.g. 5" 
+                    className="pr-16 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     {...register('experience_years')} 
                   />
-                  <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-medium">Years</span>
+                  <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-medium pointer-events-none">Years</span>
                 </div>
                 {errors.experience_years && <p className="text-xs text-rose-500">{errors.experience_years.message}</p>}
               </div>
@@ -509,9 +510,10 @@ export default function DoctorApplicationPage() {
                     id="consultation_fee" 
                     type="number"
                     placeholder="e.g. 500" 
+                    className="pr-10 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     {...register('consultation_fee')} 
                   />
-                  <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-medium">₹</span>
+                  <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-medium pointer-events-none">₹</span>
                 </div>
                 {errors.consultation_fee && <p className="text-xs text-rose-500">{errors.consultation_fee.message}</p>}
               </div>

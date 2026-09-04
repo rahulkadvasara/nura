@@ -937,7 +937,7 @@ export default function ChatPage() {
       <div className="flex flex-1 flex-col bg-white">
         {selectedSessionId && activeSession ? (
           <>
-            {/* Header section with Stats Bar */}
+            {/* Header section */}
             <div className="flex flex-col p-3 md:p-4 border-b border-slate-100 bg-white gap-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0 flex-1">
@@ -945,25 +945,9 @@ export default function ChatPage() {
                     <span className="truncate">{activeSession.title}</span>
                     {activeSession.pinned && <Pin className="h-3 w-3 flex-shrink-0 text-amber-500 fill-amber-500" />}
                   </h1>
-                  <p className="text-[10px] text-slate-400 mt-0.5 font-semibold truncate">
-                    Patient: <span className="font-mono text-slate-500">{activeSession.patient_id}</span>
-                  </p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setDeveloperMode(!developerMode)}
-                    className={`flex items-center gap-1.5 px-2 py-1 text-[11px] sm:px-2.5 sm:py-1.5 sm:text-xs font-semibold rounded-lg border transition-all ${
-                      developerMode
-                        ? 'border-teal-500 bg-teal-50 text-teal-700'
-                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    <Code className="h-3.5 w-3.5" />
-                    <span>Dev: {developerMode ? 'On' : 'Off'}</span>
-                  </button>
-
                   {/* Regenerate Action */}
                   <button
                     type="button"
@@ -1053,8 +1037,8 @@ export default function ChatPage() {
                 </div>
               </div>
 
-              {/* Statistics info-bar */}
-              {stats && (
+              {/* Developer Statistics info-bar */}
+              {developerMode && stats && (
                 <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 mt-1">
                   <span className="flex items-center gap-1">
                     <MessageSquare className="h-3.5 w-3.5 text-teal-600" />

@@ -44,24 +44,23 @@ class DrugExplanationService:
                 res = copy.deepcopy(cached_val)
                 latency_ms = (time.perf_counter() - start_time) * 1000.0
                 res["latency_ms"] = round(latency_ms, 2)
+                
+                # Record telemetry
+                self.telemetry.record_request()
+                self.telemetry.record_success(
+                    model_used=res.get("model_used", "cached"),
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    latency_ms=latency_ms
+                )
+                drug_safety_telemetry.record_explanation(
+                    latency_ms=latency_ms,
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    cost=0.0,
+                    fallback_used=res.get("fallback_used", False)
+                )
                 return res
-            
-            # Record telemetry
-            self.telemetry.record_request()
-            self.telemetry.record_success(
-                model_used=res.get("model_used", "cached"),
-                prompt_tokens=0,
-                completion_tokens=0,
-                latency_ms=latency_ms
-            )
-            drug_safety_telemetry.record_explanation(
-                latency_ms=latency_ms,
-                prompt_tokens=0,
-                completion_tokens=0,
-                cost=0.0,
-                fallback_used=res.get("fallback_used", False)
-            )
-            return res
 
         # Fast path: If no interactions were detected, return concise safe response without firing LLM queries
         if not interactions or severity == "NONE":

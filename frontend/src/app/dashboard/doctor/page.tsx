@@ -137,16 +137,12 @@ function DoctorDashboardContent() {
           <PatientOverviewCard count={data.total_patients_count} />
         </div>
 
-        {/* Right Side: Wallet details & Verification details */}
+        {/* Right Side: Wallet details */}
         <div className="space-y-6">
           <EarningsCard 
             walletBalance={data.wallet_balance} 
             totalEarnings={data.total_earnings}
             pendingBalance={data.pending_balance}
-          />
-          <VerificationStatusCard 
-            profileStatus={data.profile_status} 
-            documentStatus={data.document_status} 
           />
         </div>
       </div>

@@ -261,6 +261,7 @@ export interface PatientAppointmentHistoryItem {
   id: string
   doctor_id: string
   doctor_name: string
+  doctor_profile_picture?: string
   specialization: string
   appointment_date: string
   appointment_time: string

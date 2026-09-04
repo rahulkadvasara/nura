@@ -734,8 +734,7 @@ export default function PatientRecordsPage() {
                     { id: 'structured', name: 'Profile Summary' },
                     { id: 'labs', name: 'Lab Results' },
                     { id: 'meds', name: 'Prescribed Drugs' },
-                    { id: 'ocr', name: 'Raw OCR Text' },
-                    { id: 'developer', name: 'Raw JSON (Dev)' }
+                    { id: 'ocr', name: 'Raw OCR Text' }
                   ].map((tab) => (
                     <Button
                       key={tab.id}
@@ -901,42 +900,7 @@ export default function PatientRecordsPage() {
                           </div>
                         </div>
 
-                        {/* Synchronization Status Details */}
-                        <Card className="border border-slate-200 shadow-xs bg-white">
-                          <CardHeader className="py-2.5 bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between">
-                            <CardTitle className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                              <Cpu className="h-3.5 w-3.5 text-teal-600" />
-                              Knowledge Synchronization Status
-                            </CardTitle>
-                            {reportSyncStatus?.in_sync ? (
-                              <Badge className="bg-emerald-50 text-emerald-800 border-emerald-200">Synchronized</Badge>
-                            ) : (
-                              <Badge className="bg-amber-50 text-amber-800 border-amber-200">Out of Sync</Badge>
-                            )}
-                          </CardHeader>
-                          <CardContent className="pt-3 pb-3 space-y-2">
-                            <p className="text-xs text-slate-500 leading-relaxed">
-                              Synchronize this processed report&apos;s summaries and structured parameters with the longitudinal AI Patient Memory and Qdrant semantic vector index.
-                            </p>
-                            {reportSyncStatus?.validation_details && (
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-50 p-2.5 rounded border border-slate-100 text-[10px] font-mono">
-                                <div>Memory: <span className="font-bold text-slate-700">{reportSyncStatus.validation_details.mongodb_memory_status}</span></div>
-                                <div>Indexed chunks: <span className="font-bold text-slate-700">{reportSyncStatus.validation_details.qdrant_points_status}</span></div>
-                                <div>Compatible: <span className="font-bold text-slate-700">{reportSyncStatus.validation_details.version_synchronized ? 'Yes' : 'No'}</span></div>
-                              </div>
-                            )}
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                onClick={() => handleSynchronizeReport(inspectingReport.id)}
-                                className="bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold h-8"
-                                disabled={loadingSync}
-                              >
-                                {loadingSync ? 'Synchronizing...' : 'Synchronize Now'}
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
+
 
                         {/* Patient Explanation */}
                         <Card className="border border-slate-100 shadow-xs">
