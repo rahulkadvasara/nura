@@ -329,6 +329,8 @@ export default function ChatPage() {
     let finalCards: any[] = []
 
     try {
+      // Local Development Fallback: 'http://localhost:8000/api/v1'
+      // Production (Render) Fallback: 'https://<YOUR-RENDER-BACKEND-NAME>.onrender.com/api/v1'
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
       const token = localStorage.getItem('access_token')
       const headers: Record<string, string> = {

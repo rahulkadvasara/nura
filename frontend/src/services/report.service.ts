@@ -287,6 +287,8 @@ export const reportService = {
 
   downloadReportFile: (reportId: string): string => {
     const token = typeof window !== 'undefined' ? (localStorage.getItem('token') || localStorage.getItem('access_token') || '') : ''
+    // Local Development Fallback: 'http://localhost:8000/api/v1'
+    // Production (Render) Fallback: 'https://<YOUR-RENDER-BACKEND-NAME>.onrender.com/api/v1'
     const baseUrl = apiClient.defaults.baseURL || 'http://localhost:8000/api/v1'
     return `${baseUrl}/reports/${reportId}/download${token ? `?token=${encodeURIComponent(token)}` : ''}`
   },
