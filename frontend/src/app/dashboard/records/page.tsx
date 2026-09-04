@@ -381,13 +381,34 @@ export default function PatientRecordsPage() {
                 </span>
                 <span className="text-slate-400 text-xs font-semibold">•</span>
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                  Sync Status: Synchronized (v{patientMemory.summary_version})
+                  Sync Status: Synchronized
                 </span>
               </div>
               <h3 className="font-bold text-slate-800 text-sm">Longitudinal Health Summary</h3>
-              <p className="text-xs text-slate-600 leading-relaxed max-w-4xl">
-                {patientMemory.longitudinal_summary || patientMemory.ai_summary || 'Aggregating patient medical data...'}
-              </p>
+              {(() => {
+                const summaryRaw = patientMemory.longitudinal_summary || patientMemory.ai_summary
+                if (!summaryRaw) {
+                  return <p className="text-xs text-slate-600 leading-relaxed">Aggregating patient medical data...</p>
+                }
+                const cleaned = summaryRaw.replace(/\.\.+/g, '.').trim()
+                const lines = cleaned
+                  .split(/;\s*|\n+|•\s*/)
+                  .flatMap((chunk: string) => chunk.split(/(?<=\.)\s+(?=[A-Z])/))
+                  .map((s: string) => s.trim())
+                  .filter(Boolean)
+                  .map((s: string) => (s.endsWith('.') || s.endsWith(':') ? s : s + '.'))
+
+                return (
+                  <div className="text-xs text-slate-700 leading-relaxed max-w-4xl space-y-1.5 pt-1">
+                    {lines.map((line: string, idx: number) => (
+                      <div key={idx} className="flex items-start gap-2">
+                        <span className="text-teal-600 font-bold select-none text-xs leading-none mt-0.5">•</span>
+                        <span className="flex-1">{line}</span>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
             </div>
             <div className="flex flex-col text-right items-end text-xs text-slate-400 font-medium space-y-1 bg-white/70 border border-slate-100 rounded-lg p-3 w-full md:w-auto shrink-0">
               <div>Last Synced: {patientMemory.last_updated ? new Date(patientMemory.last_updated).toLocaleString() : 'N/A'}</div>

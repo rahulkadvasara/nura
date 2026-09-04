@@ -59,30 +59,48 @@ export function HealthInsights({ insights }: HealthInsightsProps) {
           </div>
         ) : (
           <div className="space-y-3">
-            {insights.map((insight) => (
+            {insights.slice(0, 2).map((insight) => (
               <div
                 key={insight.id}
-                className="flex items-start justify-between gap-3 rounded-lg border border-slate-100 p-3 hover:bg-slate-50/50 transition-colors"
+                className="rounded-lg border border-slate-100 p-3 hover:bg-slate-50/50 transition-colors space-y-1.5"
               >
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-slate-800 truncate">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-xs font-bold text-slate-900 leading-snug truncate">
                     {insight.title}
                   </p>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    {new Date(insight.created_at).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
-                  </p>
+                  {insight.severity && (
+                    <Badge
+                      className={`text-[9px] px-1.5 py-0.5 capitalize shrink-0 ${severityColor(insight.severity)}`}
+                    >
+                      {insight.severity} Risk
+                    </Badge>
+                  )}
                 </div>
-                {insight.severity && (
-                  <Badge
-                    className={`text-[10px] px-2 py-0.5 capitalize ${severityColor(insight.severity)}`}
-                  >
-                    {insight.severity}
-                  </Badge>
+                {insight.summary && (
+                  <div className="bg-slate-50/70 p-3 rounded-lg border border-slate-100/90 text-xs text-slate-700 leading-relaxed space-y-1.5">
+                    {insight.summary.includes('\n') || insight.summary.includes('•') ? (
+                      insight.summary
+                        .split('\n')
+                        .map((line) => line.replace(/^•\s*/, '').trim())
+                        .filter(Boolean)
+                        .map((line, idx) => (
+                          <div key={idx} className="flex items-start gap-2">
+                            <span className="text-teal-600 font-bold select-none text-xs leading-none mt-0.5">•</span>
+                            <span className="flex-1">{line}</span>
+                          </div>
+                        ))
+                    ) : (
+                      <p>{insight.summary}</p>
+                    )}
+                  </div>
                 )}
+                <p className="text-[10px] text-slate-400 font-medium pt-0.5">
+                  {new Date(insight.created_at).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })}
+                </p>
               </div>
             ))}
           </div>

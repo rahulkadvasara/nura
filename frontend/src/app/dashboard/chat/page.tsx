@@ -1523,18 +1523,19 @@ export default function ChatPage() {
                       }
                     }}
                   />
-                  
                   <div className="flex flex-col gap-2">
-                    <select
-                      value={messageRole}
-                      onChange={(e) => setMessageRole(e.target.value as any)}
-                      className="px-2 py-1 text-[10px] rounded border border-slate-200 bg-slate-50 font-semibold text-slate-600 focus:outline-none"
-                      disabled={isStreaming}
-                    >
-                      <option value="USER">Patient (User)</option>
-                      <option value="ASSISTANT">Manual Nura (Assistant)</option>
-                      <option value="SYSTEM">Manual Event (System)</option>
-                    </select>
+                    {developerMode && (
+                      <select
+                        value={messageRole}
+                        onChange={(e) => setMessageRole(e.target.value as any)}
+                        className="px-2 py-1 text-[10px] rounded border border-slate-200 bg-slate-50 font-semibold text-slate-600 focus:outline-none"
+                        disabled={isStreaming}
+                      >
+                        <option value="USER">Patient (User)</option>
+                        <option value="ASSISTANT">Manual Nura (Assistant)</option>
+                        <option value="SYSTEM">Manual Event (System)</option>
+                      </select>
+                    )}
 
                     {isStreaming ? (
                       <button

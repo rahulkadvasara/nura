@@ -10,7 +10,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { useDoctorAppointments, useApproveAppointment, useRejectAppointment, useStartConsultation } from '@/hooks/use-appointments'
 import { toast } from 'sonner'
 
-type TabType = 'pending' | 'approved' | 'rejected'
+type TabType = 'pending' | 'upcoming' | 'completed' | 'rejected'
 
 function formatTime(timeStr?: string): string {
   if (!timeStr) return ''
@@ -86,17 +86,20 @@ function DoctorAppointmentsContent() {
     }
   }
 
-  // Segment appointments
+  // Segment appointments into 4 tabs
   const pendingRequests = appointments.filter(a => a.status === 'pending')
-  const approvedAppointments = appointments.filter(a => a.status === 'approved' || a.status === 'in_progress' || a.status === 'completed')
+  const upcomingAppointments = appointments.filter(a => a.status === 'approved' || a.status === 'in_progress')
+  const completedAppointments = appointments.filter(a => a.status === 'completed')
   const rejectedHistory = appointments.filter(a => a.status === 'rejected' || a.status === 'cancelled')
 
   const getActiveList = () => {
     switch (activeTab) {
       case 'pending':
         return pendingRequests
-      case 'approved':
-        return approvedAppointments
+      case 'upcoming':
+        return upcomingAppointments
+      case 'completed':
+        return completedAppointments
       case 'rejected':
         return rejectedHistory
       default:
@@ -129,11 +132,11 @@ function DoctorAppointmentsContent() {
     <div className="space-y-6 max-w-4xl relative">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">Manage Appointments</h1>
-        <p className="text-slate-500 mt-1">Review, approve, or reject incoming patient appointment requests.</p>
+        <p className="text-slate-500 mt-1">Review, approve, or manage incoming patient appointments.</p>
       </div>
 
-      {/* Tabs list */}
-      <div className="flex border-b border-slate-200">
+      {/* 4 Tabs List */}
+      <div className="flex flex-wrap border-b border-slate-200 gap-1">
         <button
           onClick={() => setActiveTab('pending')}
           className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all ${
@@ -145,14 +148,24 @@ function DoctorAppointmentsContent() {
           Pending Requests ({pendingRequests.length})
         </button>
         <button
-          onClick={() => setActiveTab('approved')}
+          onClick={() => setActiveTab('upcoming')}
           className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all ${
-            activeTab === 'approved'
+            activeTab === 'upcoming'
               ? 'border-teal-600 text-teal-600'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          Approved & Upcoming ({approvedAppointments.length})
+          Upcoming ({upcomingAppointments.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('completed')}
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all ${
+            activeTab === 'completed'
+              ? 'border-teal-600 text-teal-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          Completed ({completedAppointments.length})
         </button>
         <button
           onClick={() => setActiveTab('rejected')}
@@ -198,8 +211,10 @@ function DoctorAppointmentsContent() {
           <p className="text-xs text-slate-500 max-w-sm">
             {activeTab === 'pending'
               ? 'You do not have any pending appointment requests right now.'
-              : activeTab === 'approved'
+              : activeTab === 'upcoming'
               ? 'You do not have any upcoming approved consultations scheduled.'
+              : activeTab === 'completed'
+              ? 'No completed consultation history found.'
               : 'No rejected or cancelled appointment history was found.'}
           </p>
         </div>

@@ -45,6 +45,7 @@ export interface HealthStatus {
 export interface RecentHealthInsight {
   id: string
   title: string
+  summary?: string
   severity: 'low' | 'medium' | 'high' | null
   created_at: string
 }
