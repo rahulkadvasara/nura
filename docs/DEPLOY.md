@@ -209,3 +209,24 @@ Once deployed:
 2. Check network requests in Developer Tools (F12) to verify requests reach `https://<YOUR-RENDER-BACKEND-NAME>.onrender.com/api/v1`.
 3. Check Backend Health endpoint: `https://<YOUR-RENDER-BACKEND-NAME>.onrender.com/api/v1/health`.
 4. Check Swagger API docs: `https://<YOUR-RENDER-BACKEND-NAME>.onrender.com/docs`.
+
+---
+
+## 6. Render Free Tier Sleep Prevention (24x7 Automatic Keep-Alive)
+
+Render's free tier Web Services automatically spin down after **15 minutes** of inactivity, which causes a 30-50 second cold-start delay for returning users.
+
+To keep the Render backend awake **24x7 (day and night, 365 days a year)**, the application uses a dual keep-alive mechanism:
+
+### 1. Vercel Cron (24x7 Server-to-Server Pings)
+- `frontend/vercel.json` defines an automated cron job that triggers every 10 minutes (`*/10 * * * *`).
+- Vercel's cloud infrastructure invokes `/api/ping-backend` on your frontend, which fetches the live Render backend health endpoint `https://<YOUR-RENDER-BACKEND-NAME>.onrender.com/health` (or `/api/v1/health`).
+- **No browser tab needs to be open!** Vercel handles the 24x7 pings automatically in the cloud.
+
+### 2. Client Browser Heartbeat (`KeepAliveHeartbeat.tsx`)
+- Pings the backend every 9.5 minutes whenever a user has the website open in their browser.
+- Automatically pings on app mount and when switching back to a tab that was backgrounded.
+
+### Verified Health Endpoints
+- **Root Health Endpoint:** `GET https://<YOUR-RENDER-BACKEND-NAME>.onrender.com/health`
+- **API v1 Health Endpoint:** `GET https://<YOUR-RENDER-BACKEND-NAME>.onrender.com/api/v1/health`

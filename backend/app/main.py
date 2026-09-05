@@ -201,6 +201,15 @@ def create_application() -> FastAPI:
             }
         )
 
+    @app.get("/health", tags=["health"])
+    async def root_health_check():
+        """Root health check endpoint for pings and keep-alive monitors"""
+        return {
+            "status": "healthy",
+            "app": settings.APP_NAME,
+            "environment": settings.APP_ENV
+        }
+
     # Include routers
     app.include_router(
         health.router,
