@@ -12,7 +12,6 @@ export const metadata = {
 import { Toaster } from 'sonner'
 import { AuthProvider } from '@/components/auth/AuthProvider'
 import { GoogleOAuthProvider } from '@react-oauth/google'
-import { KeepAliveHeartbeat } from '@/components/KeepAliveHeartbeat'
 
 export default function RootLayout({
   children,
@@ -27,7 +26,6 @@ export default function RootLayout({
         <GoogleOAuthProvider clientId={googleClientId}>
           <QueryProvider>
             <AuthProvider>
-              <KeepAliveHeartbeat />
               {children}
             </AuthProvider>
           </QueryProvider>
