@@ -19,26 +19,34 @@ export function Topbar() {
     router.push('/auth/login')
   }
 
+  const [isNotifOpen, setIsNotifOpen] = useState(false)
+
   return (
     <header className="flex h-16 items-center justify-between border-b bg-white px-6">
-      <div className="flex items-center flex-1">
-        <div className="relative w-full max-w-md">
-          <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-            <Search className="h-4 w-4 text-slate-400" />
-          </div>
-          <Input 
-            type="search" 
-            placeholder="Search..." 
-            className="w-full pl-10 bg-slate-50 border-slate-200"
-          />
-        </div>
-      </div>
+      <div className="flex-1"></div>
       
       <div className="flex items-center gap-4">
-        <button className="relative p-2 text-slate-400 hover:text-slate-600 transition-colors rounded-full hover:bg-slate-100">
-          <Bell className="h-5 w-5" />
-          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-destructive"></span>
-        </button>
+        <div className="relative">
+          <button 
+            onClick={() => setIsNotifOpen(!isNotifOpen)}
+            className="relative p-2 text-slate-400 hover:text-slate-600 transition-colors rounded-full hover:bg-slate-100"
+          >
+            <Bell className="h-5 w-5" />
+            <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-teal-500"></span>
+          </button>
+
+          {isNotifOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setIsNotifOpen(false)}></div>
+              <div className="absolute right-0 mt-2 w-72 rounded-md bg-white p-4 shadow-lg ring-1 ring-black ring-opacity-5 z-20">
+                <h4 className="text-xs font-bold text-slate-900 border-b pb-2 mb-2">Notifications</h4>
+                <div className="text-xs text-slate-500 py-3 text-center">
+                  No new notifications right now.
+                </div>
+              </div>
+            </>
+          )}
+        </div>
         
         <div className="relative">
           <button 

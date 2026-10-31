@@ -38,6 +38,18 @@ function formatDateHeader(dateStr: string): string {
   }
 }
 
+function formatTime(timeStr?: string): string {
+  if (!timeStr) return ''
+  const parts = timeStr.split(':')
+  if (parts.length < 2) return timeStr
+  const hour = parseInt(parts[0], 10)
+  const minute = parts[1]
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const displayHour = hour % 12 || 12
+  return `${displayHour}:${minute} ${ampm}`
+}
+
+
 function DoctorDetailsContent() {
   const params = useParams()
   const router = useRouter()
@@ -259,8 +271,9 @@ function DoctorDetailsContent() {
                                   : 'bg-slate-50/70 border-slate-100 text-slate-700 hover:border-teal-500/30 hover:bg-teal-50/20 cursor-pointer'
                                 }`}
                             >
-                              {slot.start_time}
+                              {formatTime(slot.start_time)}
                             </button>
+
                           )
                         })}
                       </div>
@@ -347,6 +360,18 @@ function DoctorDetailsContent() {
               <h3 className="text-lg font-bold text-slate-900">Request Appointment</h3>
               <p className="text-xs text-slate-500 mt-1">Provide a brief reason for your visit with Dr. {doctor.name}.</p>
             </div>
+
+            {selectedSlotId && (() => {
+              const sel = slots.find((s) => s.id === selectedSlotId)
+              if (!sel) return null
+              return (
+                <div className="p-3 bg-teal-50 border border-teal-100/60 rounded-lg text-xs text-teal-800 font-medium flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-teal-600 shrink-0" />
+                  <span>Selected Slot: <strong className="text-teal-950">{formatDateHeader(sel.date)}</strong> • <strong className="text-teal-950">{formatTime(sel.start_time)} - {formatTime(sel.end_time)}</strong></span>
+                </div>
+              )
+            })()}
+
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700">Reason for Visit</label>
               <textarea

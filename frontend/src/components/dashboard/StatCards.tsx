@@ -36,25 +36,10 @@ const stats = [
 ]
 
 export function StatCards({ data }: StatCardsProps) {
-  // Determine health risk from insights
-  const hasInsights = data.recent_health_insights.length > 0
-  const highestSeverity = hasInsights
-    ? data.recent_health_insights.reduce((max, insight) => {
-        const order = { high: 3, medium: 2, low: 1 }
-        const current = insight.severity ? order[insight.severity] || 0 : 0
-        return current > max.val ? { val: current, sev: insight.severity } : max
-      }, { val: 0, sev: null as string | null })
-    : null
-
-  const riskLabel = highestSeverity?.sev
-    ? highestSeverity.sev.charAt(0).toUpperCase() + highestSeverity.sev.slice(1)
-    : 'Not assessed'
-  const riskSubtitle = hasInsights ? 'Based on recent insights' : 'Complete a check-in'
-
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 gap-4">
       {stats.map((stat) => {
-        const value = data[stat.key]
+        const value = data[stat.key] ?? 0
         return (
           <Card key={stat.key} className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
             <CardContent className="p-5">
@@ -62,7 +47,7 @@ export function StatCards({ data }: StatCardsProps) {
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-slate-500">{stat.label}</p>
                   <p className="text-3xl font-bold text-slate-900">
-                    {value === 0 ? '—' : value}
+                    {value}
                   </p>
                   <p className="text-xs text-slate-400">{stat.subtitle(value)}</p>
                 </div>
@@ -74,22 +59,6 @@ export function StatCards({ data }: StatCardsProps) {
           </Card>
         )
       })}
-
-      {/* Health Risk Card */}
-      <Card className="border-teal-200 bg-teal-50/30 shadow-sm hover:shadow-md transition-shadow">
-        <CardContent className="p-5">
-          <div className="flex items-start justify-between">
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-500">Current Health Risk</p>
-              <p className="text-2xl font-bold text-slate-900">{riskLabel}</p>
-              <p className="text-xs text-slate-400">{riskSubtitle}</p>
-            </div>
-            <div className="p-2.5 rounded-xl bg-teal-100">
-              <ShieldCheck className="h-5 w-5 text-teal-600" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }

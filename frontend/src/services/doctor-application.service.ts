@@ -14,4 +14,16 @@ export const doctorApplicationService = {
     const response = await apiClient.put<ApiResponse<DoctorApplicationData>>('/doctor/application', data)
     return response.data
   },
+  uploadDocument: async (file: File, documentType: string): Promise<ApiResponse<{ url: string; metadata: any }>> => {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('document_type', documentType)
+    const response = await apiClient.post<ApiResponse<{ url: string; metadata: any }>>('/doctor/documents/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+    return response.data
+  },
 }
+

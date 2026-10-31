@@ -28,6 +28,36 @@ def _today_iso() -> str:
     return date.today().isoformat()
 
 
+def format_summary_to_bullets(text: str, max_bullets: int = 6) -> str:
+    if not text or not isinstance(text, str):
+        return ""
+    text = text.strip()
+    
+    # Remove double periods
+    while ".." in text:
+        text = text.replace("..", ".")
+
+    import re
+    parts = []
+    for chunk in text.split(';'):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        sentences = re.split(r'(?<=\.)\s+(?=[A-Z])', chunk)
+        for s in sentences:
+            s = s.strip()
+            if s:
+                parts.append(s)
+
+    formatted_lines = []
+    for p in parts[:max_bullets]:
+        if not p.endswith('.') and not p.endswith(':'):
+            p += '.'
+        formatted_lines.append(f"• {p}")
+
+    return "\n".join(formatted_lines)
+
+
 class PatientDashboardService:
     """Aggregation service for the patient dashboard"""
 
@@ -82,24 +112,52 @@ class PatientDashboardService:
             "read": False,
         })
 
-        # 5. Recent health insights (last 5, newest first)
-        cursor = (
-            self.health_insight_repository.collection
-            .find({"patient_id": patient_id})
-            .sort("created_at", -1)
-            .limit(5)
-        )
-        recent_docs = await cursor.to_list(length=5)
+        # 5. Health insights (Longitudinal Health Summary from patient_memory FIRST)
         recent_health_insights: List[RecentHealthInsight] = []
-        for doc in recent_docs:
-            recent_health_insights.append(
-                RecentHealthInsight(
-                    id=str(doc["_id"]),
-                    title=doc.get("title", ""),
-                    severity=doc.get("severity"),
-                    created_at=doc.get("created_at", datetime.now(timezone.utc)),
-                )
+        try:
+            db = self.health_insight_repository.collection.database
+            memory_doc = await db["patient_memory"].find_one({"patient_id": patient_id})
+            if memory_doc:
+                mem_summary = memory_doc.get("longitudinal_summary") or memory_doc.get("ai_summary")
+                if mem_summary and isinstance(mem_summary, str) and mem_summary.strip():
+                    recent_health_insights.append(
+                        RecentHealthInsight(
+                            id=str(memory_doc.get("_id", "patient_memory")),
+                            title="Longitudinal Health Summary",
+                            summary=format_summary_to_bullets(mem_summary, max_bullets=8),
+                            severity=memory_doc.get("overall_risk") if memory_doc.get("overall_risk") in ["low", "medium", "high"] else None,
+                            created_at=memory_doc.get("updated_at") or memory_doc.get("last_updated") or datetime.now(timezone.utc),
+                        )
+                    )
+        except Exception as err:
+            pass
+
+        # Fallback: If patient_memory is empty, surface recent report summaries
+        if not recent_health_insights:
+            report_cursor = (
+                self.report_repository.collection
+                .find({"patient_id": patient_id})
+                .sort("created_at", -1)
+                .limit(3)
             )
+            report_docs = await report_cursor.to_list(length=3)
+            for rdoc in report_docs:
+                rep_summary = rdoc.get("summary") or rdoc.get("patient_summary") or rdoc.get("ai_summary")
+                if isinstance(rep_summary, dict):
+                    rep_summary = rep_summary.get("patient_summary") or rep_summary.get("ai_summary") or rep_summary.get("summary") or ""
+                
+                filename = rdoc.get("filename") or "Medical Report"
+                risk = rdoc.get("overall_risk") or rdoc.get("risk_level")
+                if rep_summary and isinstance(rep_summary, str) and rep_summary.strip():
+                    recent_health_insights.append(
+                        RecentHealthInsight(
+                            id=str(rdoc["_id"]),
+                            title=f"{filename}",
+                            summary=format_summary_to_bullets(rep_summary, max_bullets=3),
+                            severity=risk if risk in ["low", "medium", "high"] else None,
+                            created_at=rdoc.get("created_at", datetime.now(timezone.utc)),
+                        )
+                    )
 
         # 6. Recent Consultation
         consultation_doc = await self.consultation_repository.collection.find_one(

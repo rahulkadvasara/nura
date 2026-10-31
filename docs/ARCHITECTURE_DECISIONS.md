@@ -107,3 +107,13 @@ Simplify Drug Safety Architecture by using MongoDB (`drug_master`, `drug_interac
 
 Reason:
 MongoDB provides deterministic drug interactions and normalizations. The `drug_knowledge` Qdrant collection introduces duplicate storage and unnecessary complexity, while semantic search is not reliable enough for determining clinical interactions.
+
+---
+
+## ADR-012
+
+Decision:
+Deploy Frontend natively on Vercel and Backend natively on Render as Web Service, using Supabase Storage as the cloud file provider.
+
+Reason:
+Vercel provides native Next.js edge performance and global CDN distribution. Render provides seamless FastAPI deployment with dynamic port binding and zero container build overhead. Supabase Storage provides secure S3-compatible cloud storage with fine-grained bucket ACLs and pre-signed URL capabilities.

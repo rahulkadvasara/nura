@@ -20,8 +20,8 @@ export function useDoctorApplication() {
       }
     },
     retry: false, // If it returns 404, we don't need to retry
-    staleTime: 30_000,
-    refetchOnWindowFocus: true,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
   })
 }
 
@@ -58,3 +58,16 @@ export function useUpdateDoctorApplication() {
     },
   })
 }
+
+export function useUploadDoctorDocument() {
+  return useMutation({
+    mutationFn: async ({ file, documentType }: { file: File; documentType: string }) => {
+      const response = await doctorApplicationService.uploadDocument(file, documentType)
+      if (response.success && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to upload verification document')
+    },
+  })
+}
+

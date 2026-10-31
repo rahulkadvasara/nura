@@ -12,7 +12,6 @@ import {
   QuickActions,
   AppointmentsList,
   MedicationsList,
-  RecentReports,
   HealthInsights,
 } from '@/components/dashboard'
 
@@ -234,9 +233,8 @@ function PatientDashboard() {
         </div>
       </div>
 
-      {/* Reports + Health Insights */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <RecentReports count={data.reports_count} />
+      {/* Health Insights (Full width) */}
+      <div className="w-full">
         <HealthInsights insights={data.recent_health_insights} />
       </div>
     </div>

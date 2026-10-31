@@ -89,7 +89,7 @@ def _make_otp(
 def test_register_success(client, mocks):
     """Test successful user registration"""
     mock_user_service, mock_otp_service, mock_email_service = mocks
-    mock_user_service.user_exists.return_value = False
+    mock_user_service.get_user_by_email.return_value = None
     mock_user_service.create_user.return_value = _make_user()
     mock_otp_service.send_otp.return_value = "123456"
     mock_email_service.send_otp_email.return_value = True
@@ -108,16 +108,17 @@ def test_register_success(client, mocks):
     assert data["success"] is True
     assert data["message"] == "OTP sent successfully"
 
-    mock_user_service.user_exists.assert_called_once_with("rahul@example.com")
+    mock_user_service.get_user_by_email.assert_called_once_with("rahul@example.com")
     mock_user_service.create_user.assert_called_once()
     mock_otp_service.send_otp.assert_called_once_with("rahul@example.com", OTPPurpose.REGISTRATION)
     mock_email_service.send_otp_email.assert_called_once_with("rahul@example.com", "123456", "registration")
 
 
 def test_register_duplicate_email(client, mocks):
-    """Test register with an email that is already registered"""
+    """Test register with an email that is already registered and verified"""
     mock_user_service, _, _ = mocks
-    mock_user_service.user_exists.return_value = True
+    verified_user = _make_user(email="rahul@example.com", email_verified=True)
+    mock_user_service.get_user_by_email.return_value = verified_user
 
     response = client.post(
         "/api/v1/auth/register",
@@ -132,6 +133,46 @@ def test_register_duplicate_email(client, mocks):
     data = response.json()
     assert data["success"] is False
     assert "already exists" in data["message"]
+
+
+def test_register_unverified_email_resends_otp(client, mocks):
+    """Test register with an unverified email resends OTP successfully"""
+    mock_user_service, mock_otp_service, mock_email_service = mocks
+    unverified_user = _make_user(email="rahul@example.com", email_verified=False)
+    mock_user_service.get_user_by_email.return_value = unverified_user
+    mock_otp_service.send_otp.return_value = "654321"
+
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "full_name": "Rahul",
+            "email": "rahul@example.com",
+            "password": "Password123"
+        }
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["success"] is True
+    assert "Verification OTP sent" in data["message"]
+
+
+def test_resend_otp_success(client, mocks):
+    """Test successful resending of verification OTP"""
+    mock_user_service, mock_otp_service, mock_email_service = mocks
+    unverified_user = _make_user(email="rahul@example.com", email_verified=False)
+    mock_user_service.get_user_by_email.return_value = unverified_user
+    mock_otp_service.send_otp.return_value = "654321"
+
+    response = client.post(
+        "/api/v1/auth/resend-otp",
+        json={"email": "rahul@example.com"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert "new OTP has been sent" in data["message"]
 
 
 def test_register_invalid_password(client, mocks):
@@ -742,9 +783,10 @@ def test_google_login_existing_user(client, auth_mocks):
     mock_user_service.get_user_by_email.return_value = user
     
     # Setup updated user mocks
-    mock_user_service.verify_user_email.return_value = user
-    mock_user_service.update_user.return_value = user
-    mock_user_service.get_user_by_id.return_value = user
+    updated_user = _make_user(email="google_user@example.com", email_verified=True, is_active=True)
+    mock_user_service.verify_user_email.return_value = updated_user
+    mock_user_service.update_user.return_value = updated_user
+    mock_user_service.get_user_by_id.return_value = updated_user
     
     token_response = TokenResponse(
         access_token="google_access_token",

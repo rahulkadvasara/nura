@@ -56,7 +56,7 @@ function AdminReportsDashboardContent() {
   const [loadingRisk, setLoadingRisk] = useState(false)
   const [loadingSummary, setLoadingSummary] = useState(false)
   const [loadingSync, setLoadingSync] = useState(false)
-  const [inspectTab, setInspectTab] = useState<'ocr' | 'json' | 'warnings' | 'risk' | 'summary_json' | 'prompt_debug' | 'sync_validation'>('json')
+  const [inspectTab, setInspectTab] = useState<'status_metadata' | 'sync_validation' | 'warnings'>('status_metadata')
 
   const fetchData = async () => {
     try {
@@ -227,8 +227,7 @@ function AdminReportsDashboardContent() {
     setStructuredData(null)
     setRiskData(null)
     setSummaryData(null)
-    setInsightsData(null)
-    setInspectTab(report.patient_summary || report.ai_summary ? 'summary_json' : report.overall_risk ? 'risk' : report.extraction_status === 'completed' ? 'json' : 'ocr')
+    setInspectTab('status_metadata')
 
     if (report.ocr_status === 'completed') {
       try {
@@ -764,24 +763,24 @@ function AdminReportsDashboardContent() {
                 {filteredReports.map((report) => (
                   <div
                     key={report.id}
-                    className="border border-slate-200 rounded-lg p-3.5 bg-white hover:shadow-xs transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs"
+                    className="border border-slate-200 rounded-lg p-3.5 bg-white hover:shadow-xs transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs w-full overflow-hidden"
                   >
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-2">
-                        <strong className="text-slate-800 truncate max-w-xs">{getCleanFileName(report)}</strong>
+                    <div className="space-y-0.5 min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <strong className="text-slate-800 truncate max-w-[200px] sm:max-w-xs">{getCleanFileName(report)}</strong>
 
                         {report.document_type && (
                           <Badge className="bg-teal-50 text-teal-700 border-teal-200 scale-90 rounded">
                             {report.document_type}
                           </Badge>
                         )}
-                        {report.overall_risk && (
-                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${getRiskBadgeColor(report.overall_risk)}`}>
-                            {report.overall_risk}
+                        {report.processing_status && (
+                          <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-100 text-slate-700">
+                            {report.processing_status}
                           </span>
                         )}
                       </div>
-                      <p className="text-[10px] text-slate-400">ID: {report.id} • Created: {new Date(report.created_at).toLocaleDateString()}</p>
+                      <p className="text-[10px] text-slate-400">Ref: #{report.id.substring(0, 8)} • Uploaded: {new Date(report.created_at).toLocaleDateString()}</p>
                     </div>
 
                     <div className="flex items-center gap-2 justify-end w-full sm:w-auto">
@@ -857,35 +856,31 @@ function AdminReportsDashboardContent() {
 
         {/* Right Column: Inspector Panel details */}
         {inspectingReport ? (
-          <Card className="border-2 border-teal-500 shadow-sm bg-white h-fit">
+          <Card className="border-2 border-teal-500 shadow-sm bg-white h-fit overflow-hidden">
             <CardHeader className="pb-3 border-b border-slate-100 bg-teal-50/10">
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                    <Database className="h-4 w-4 text-teal-600" />
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2 truncate">
+                    <Database className="h-4 w-4 text-teal-600 shrink-0" />
                     Pipeline Diagnostics
                   </CardTitle>
-                  <span className="text-xs text-slate-500 font-mono mt-1 block">
-                    Report ID: {inspectingReport.id}
+                  <span className="text-xs text-slate-500 font-mono mt-1 block truncate">
+                    Ref: #{inspectingReport.id.substring(0, 8)} • {getCleanFileName(inspectingReport)}
                   </span>
                 </div>
 
-                <div className="flex gap-1.5 flex-wrap">
+                <div className="flex gap-1.5 overflow-x-auto max-w-full pb-1 shrink-0">
                   {[
-                    { id: 'summary_json', name: 'Summary JSON' },
-                    { id: 'prompt_debug', name: 'Prompt Debug' },
+                    { id: 'status_metadata', name: 'Processing Status' },
                     { id: 'sync_validation', name: 'Sync Status' },
-                    { id: 'risk', name: 'Risk JSON' },
-                    { id: 'json', name: 'Struct JSON' },
-                    { id: 'warnings', name: 'Warnings' },
-                    { id: 'ocr', name: 'OCR Text' }
+                    { id: 'warnings', name: 'Warnings' }
                   ].map((tab) => (
                     <Button
                       key={tab.id}
                       variant={inspectTab === tab.id ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => setInspectTab(tab.id as any)}
-                      className={`h-8 text-xs font-semibold ${inspectTab === tab.id ? 'bg-teal-600 hover:bg-teal-700 text-white' : ''}`}
+                      className={`h-8 text-xs font-semibold whitespace-nowrap ${inspectTab === tab.id ? 'bg-teal-600 hover:bg-teal-700 text-white' : ''}`}
                     >
                       {tab.name}
                     </Button>
@@ -894,6 +889,43 @@ function AdminReportsDashboardContent() {
               </div>
             </CardHeader>
             <CardContent className="pt-6 space-y-6">
+              {inspectTab === 'status_metadata' && (
+                <div className="space-y-4">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Operational Processing Overview</span>
+                  
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="p-3 border rounded-lg bg-slate-50">
+                      <span className="text-slate-400 font-bold block text-[10px] uppercase">Overall Status</span>
+                      <span className="text-sm font-bold text-slate-800 mt-1 block capitalize">{inspectingReport.processing_status || 'Pending'}</span>
+                    </div>
+                    <div className="p-3 border rounded-lg bg-slate-50">
+                      <span className="text-slate-400 font-bold block text-[10px] uppercase">Document Type</span>
+                      <span className="text-sm font-bold text-slate-800 mt-1 block">{inspectingReport.document_type || 'Medical Report'}</span>
+                    </div>
+                    <div className="p-3 border rounded-lg bg-slate-50">
+                      <span className="text-slate-400 font-bold block text-[10px] uppercase">OCR Status</span>
+                      <span className="text-sm font-bold text-slate-800 mt-1 block capitalize">{inspectingReport.ocr_status || 'N/A'}</span>
+                    </div>
+                    <div className="p-3 border rounded-lg bg-slate-50">
+                      <span className="text-slate-400 font-bold block text-[10px] uppercase">Extraction Status</span>
+                      <span className="text-sm font-bold text-slate-800 mt-1 block capitalize">{inspectingReport.extraction_status || 'N/A'}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-4 border rounded-lg bg-teal-50/20 border-teal-100 space-y-2 text-xs">
+                    <div className="flex justify-between items-center border-b border-teal-100/60 pb-2">
+                      <span className="text-slate-600 font-medium">Memory Sync Index:</span>
+                      <Badge className={inspectingReport.is_synchronized ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"}>
+                        {inspectingReport.is_synchronized ? "Synchronized" : "Pending Sync"}
+                      </Badge>
+                    </div>
+                    <div className="flex justify-between items-center pt-1">
+                      <span className="text-slate-600 font-medium">Upload Date:</span>
+                      <span className="text-slate-800 font-mono">{new Date(inspectingReport.created_at).toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
               {inspectTab === 'sync_validation' && (
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
@@ -942,145 +974,6 @@ function AdminReportsDashboardContent() {
                 </div>
               )}
 
-              {inspectTab === 'summary_json' && (
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">AI Summarization Outputs JSON</span>
-                    {inspectingReport.overall_risk && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleGenerateSummary(inspectingReport.id)}
-                        className="h-7 text-[10px] text-teal-700 border-teal-200"
-                        disabled={loadingSummary}
-                      >
-                        Generate AI Summary
-                      </Button>
-                    )}
-                  </div>
-
-                  {loadingSummary ? (
-                    <div className="text-center py-20 text-slate-500">
-                      <RefreshCw className="h-8 w-8 animate-spin text-teal-600 mb-2" />
-                      <p className="text-sm">Synthesizing clinical insights and descriptions...</p>
-                    </div>
-                  ) : summaryData ? (
-                    <pre className="bg-slate-950 text-emerald-400 p-4 rounded-lg font-mono text-[11px] overflow-auto max-h-[500px] border border-slate-800 whitespace-pre-wrap">
-                      {JSON.stringify({ summaryData, insightsData }, null, 2)}
-                    </pre>
-                  ) : (
-                    <div className="text-center py-20 border border-dashed rounded-lg text-slate-400 bg-slate-50/50">
-                      <Zap className="h-10 w-10 mx-auto text-slate-300 mb-2 stroke-1" />
-                      <p className="text-sm">No summaries compiled yet. Click &quot;Generate AI Summary&quot; above.</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {inspectTab === 'prompt_debug' && (
-                <div className="space-y-4">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">AI Prompts Template Debugger</span>
-                  <div className="space-y-3 font-mono text-[10px]">
-                    <div className="border border-slate-800 rounded bg-slate-950 text-cyan-400 p-3 space-y-1">
-                      <span className="font-sans text-[10px] font-bold text-slate-400 block border-b border-slate-800 pb-1">report_summary_system.md</span>
-                      <pre className="whitespace-pre-wrap leading-relaxed">
-{`You are an expert medical AI assistant specialized in clinical summarization and diagnostics interpretations.
-Your task is to analyze structured lab parameters and write structured interpretations.
-Output structure JSON:
-{
-  "ai_summary": "Concise overview",
-  "patient_summary": "Simple friendly explanation",
-  "doctor_summary": "Differential interpretation",
-  "key_findings": ["string"],
-  "clinical_insights": ["string"],
-  "followup_questions": ["string"],
-  "confidence": 0.95
-}`}
-                      </pre>
-                    </div>
-
-                    <div className="border border-slate-800 rounded bg-slate-950 text-indigo-300 p-3 space-y-1">
-                      <span className="font-sans text-[10px] font-bold text-slate-400 block border-b border-slate-800 pb-1">patient_summary.md & doctor_summary.md</span>
-                      <pre className="whitespace-pre-wrap leading-relaxed">
-{`Demographics: ${JSON.stringify(structuredData?.patient_information ?? {}, null, 2)}
-Lab Results (count: ${structuredData?.laboratory_results?.length ?? 0}): ...
-Risk Assessment: ${JSON.stringify(riskData ?? {}, null, 2)}`}
-                      </pre>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {inspectTab === 'risk' && (
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Calculated Diagnostic Risks Payload</span>
-                    {inspectingReport.extraction_status === 'completed' && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleRunRiskAnalysis(inspectingReport.id)}
-                        className="h-7 text-[10px] text-orange-700 border-orange-200"
-                        disabled={loadingRisk}
-                      >
-                        Calculate Risks
-                      </Button>
-                    )}
-                  </div>
-
-                  {loadingRisk ? (
-                    <div className="text-center py-20 text-slate-500">
-                      <RefreshCw className="h-8 w-8 animate-spin text-teal-600 mb-2" />
-                      <p className="text-sm">Evaluating clinical diagnostic ranges & AI scores...</p>
-                    </div>
-                  ) : riskData ? (
-                    <pre className="bg-slate-950 text-orange-400 p-4 rounded-lg font-mono text-[11px] overflow-auto max-h-[500px] border border-slate-800 whitespace-pre-wrap">
-                      {JSON.stringify(riskData, null, 2)}
-                    </pre>
-                  ) : (
-                    <div className="text-center py-20 border border-dashed rounded-lg text-slate-400 bg-slate-50/50">
-                      <Shield className="h-10 w-10 mx-auto text-slate-300 mb-2 stroke-1" />
-                      <p className="text-sm">No risk data compiled. Click &quot;Calculate Risks&quot; above.</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {inspectTab === 'json' && (
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Clinical JSON Output</span>
-                    {inspectingReport.ocr_status === 'completed' && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleExtract(inspectingReport.id)}
-                        className="h-7 text-[10px] text-teal-700 border-teal-200"
-                        disabled={loadingExtraction}
-                      >
-                        Re-run Extraction
-                      </Button>
-                    )}
-                  </div>
-
-                  {loadingExtraction ? (
-                    <div className="text-center py-20 text-slate-500">
-                      <RefreshCw className="h-8 w-8 animate-spin text-teal-600 mb-2" />
-                      <p className="text-sm">Running structured clinical extractor model...</p>
-                    </div>
-                  ) : structuredData ? (
-                    <pre className="bg-slate-950 text-teal-400 p-4 rounded-lg font-mono text-[11px] overflow-auto max-h-[500px] border border-slate-800 whitespace-pre-wrap">
-                      {JSON.stringify(structuredData, null, 2)}
-                    </pre>
-                  ) : (
-                    <div className="text-center py-20 border border-dashed rounded-lg text-slate-400 bg-slate-50/50">
-                      <Database className="h-10 w-10 mx-auto text-slate-300 mb-2 stroke-1" />
-                      <p className="text-sm">No structured data extracted. Click &quot;Re-run Extraction&quot; above.</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
               {inspectTab === 'warnings' && (
                 <div className="space-y-4">
                   <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Pipeline Warnings & Log Stack</span>
@@ -1098,39 +991,6 @@ Risk Assessment: ${JSON.stringify(riskData ?? {}, null, 2)}`}
                       <CheckCircle className="h-10 w-10 mx-auto text-emerald-500 mb-2 stroke-1" />
                       <p className="text-xs font-semibold text-slate-600">Extraction layout clean!</p>
                       <p className="text-[10px] text-slate-400 mt-1">No clinical validation warning alerts registered.</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {inspectTab === 'ocr' && (
-                <div className="space-y-6">
-                  {loadingOcr ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-slate-500">
-                      <RefreshCw className="h-8 w-8 animate-spin text-teal-600 mb-2" />
-                      <p className="text-sm">Loading layouts...</p>
-                    </div>
-                  ) : ocrData ? (
-                    <div className="space-y-4">
-                      {ocrData.ocr_pages && ocrData.ocr_pages.length > 0 && (
-                        <div className="space-y-2">
-                          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Pages Confidence Analysis</span>
-                          <div className="flex gap-2 flex-wrap">
-                            {ocrData.ocr_pages.map((p, idx) => (
-                              <Badge key={idx} className="bg-slate-100 hover:bg-slate-100 text-slate-700 py-1">
-                                Pg {p.page_number}: {(p.confidence * 100).toFixed(0)}%
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      <pre className="bg-slate-950 text-slate-200 p-4 rounded-lg font-mono text-[11px] overflow-auto max-h-[300px] border border-slate-800 whitespace-pre-wrap">
-                        {ocrData.normalized_text}
-                      </pre>
-                    </div>
-                  ) : (
-                    <div className="text-center py-20 text-slate-400">
-                      No layout data found.
                     </div>
                   )}
                 </div>

@@ -13,6 +13,10 @@ export interface VerifyOtpPayload {
   otp: string
 }
 
+export interface ResendOtpPayload {
+  email: string
+}
+
 export interface LoginPayload {
   email: string
   password: string
@@ -49,6 +53,11 @@ export const authService = {
 
   async verifyOTP(data: VerifyOtpPayload): Promise<ApiResponse> {
     const response = await apiClient.post<ApiResponse>('/auth/verify-otp', data)
+    return response.data
+  },
+
+  async resendOTP(data: ResendOtpPayload): Promise<ApiResponse> {
+    const response = await apiClient.post<ApiResponse>('/auth/resend-otp', data)
     return response.data
   },
 

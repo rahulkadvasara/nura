@@ -64,6 +64,9 @@ class AppointmentBase(BaseModel):
     rejection_reason: Optional[str] = Field(None, description="Reason for rejecting the appointment")
     consultation_started_at: Optional[datetime] = Field(None, description="Timestamp of when the consultation started")
     consultation_completed_at: Optional[datetime] = Field(None, description="Timestamp of when the consultation completed")
+    meeting_link: Optional[str] = Field(None, description="Google Meet or video meeting URL")
+    meeting_provider: Optional[str] = Field(None, description="Video provider identifier (e.g. google_meet)")
+    meeting_created_at: Optional[datetime] = Field(None, description="Timestamp when the meeting link was created")
 
 
 class AppointmentCreate(AppointmentBase):
@@ -87,6 +90,9 @@ class AppointmentUpdate(BaseModel):
     rejection_reason: Optional[str] = None
     consultation_started_at: Optional[datetime] = None
     consultation_completed_at: Optional[datetime] = None
+    meeting_link: Optional[str] = None
+    meeting_provider: Optional[str] = None
+    meeting_created_at: Optional[datetime] = None
 
 
 class AppointmentInDB(AppointmentBase):

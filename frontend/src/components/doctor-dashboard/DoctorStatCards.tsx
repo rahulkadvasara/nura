@@ -63,7 +63,7 @@ export function DoctorStatCards({ data }: DoctorStatCardsProps) {
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-slate-500">{stat.label}</p>
                   <p className="text-3xl font-bold text-slate-900">
-                    {stat.value === 0 ? '—' : stat.value}
+                    {stat.value ?? 0}
                   </p>
                   <p className="text-xs text-slate-400">{stat.subtitle}</p>
                 </div>

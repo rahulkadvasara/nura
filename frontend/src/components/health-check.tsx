@@ -9,7 +9,7 @@ import { CheckCircle, XCircle, AlertCircle } from 'lucide-react'
 export function HealthCheck() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['health'],
-    queryFn: healthService.checkHealth,
+    queryFn: () => healthService.checkHealth(),
     refetchInterval: 30000, // Refresh every 30 seconds
   })
 

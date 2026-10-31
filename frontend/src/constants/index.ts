@@ -2,6 +2,8 @@
 
 export const APP_CONFIG = {
   NAME: process.env.NEXT_PUBLIC_APP_NAME || 'Nura',
+  // Local Development Fallback: 'http://localhost:8000/api/v1'
+  // Production (Render) Fallback: 'https://<YOUR-RENDER-BACKEND-NAME>.onrender.com/api/v1'
   API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1',
 } as const
 

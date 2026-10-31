@@ -55,6 +55,17 @@ class OTPVerify(BaseModel):
         return v.lower().strip()
 
 
+class ResendOTPRequest(BaseModel):
+    """Resend OTP request schema"""
+    email: EmailStr = Field(..., description="Email address to resend OTP")
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        """Normalize email to lowercase"""
+        return v.lower().strip()
+
+
 class TokenUser(BaseModel):
     """User information embedded in a token response"""
     model_config = ConfigDict(json_encoders={datetime: lambda dt: dt.isoformat()})
@@ -64,6 +75,8 @@ class TokenUser(BaseModel):
     email: EmailStr = Field(..., description="User email address")
     full_name: str = Field(..., description="Full name")
     email_verified: bool = Field(..., description="Email verification status")
+    profile_picture: Optional[str] = Field(None, description="Profile picture URL")
+    phone: Optional[str] = Field(None, description="Phone number")
 
 
 class TokenResponse(BaseModel):

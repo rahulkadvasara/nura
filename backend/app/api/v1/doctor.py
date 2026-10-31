@@ -90,6 +90,19 @@ def get_application_status(profile_status: DoctorProfileStatus) -> str:
     return "Unknown"
 
 
+def _match_storage_metadata(item: dict, url: str) -> bool:
+    if not url or not item:
+        return False
+    obj_key = item.get("object_key", "")
+    pub_url = item.get("public_url", "")
+    if obj_key and (obj_key in url or url in obj_key):
+        return True
+    if pub_url and pub_url == url:
+        return True
+    return False
+
+
+
 @router.post(
     "/apply",
     response_model=SuccessResponse,
@@ -153,7 +166,7 @@ async def apply_doctor(
             metadata = None
             if url:
                 async for item in db["storage_metadata"].find({"bucket": "doctor-documents"}):
-                    if item.get("object_key") in url:
+                    if _match_storage_metadata(item, url):
                         metadata = item
                         break
 
@@ -163,6 +176,7 @@ async def apply_doctor(
                 document_metadata=metadata
             )
             await doctor_document_service.upload_document(profile.id, doc_create)
+
 
         # Retrieve newly created documents
         docs = await doctor_document_service.get_documents_by_doctor(profile.id)
@@ -373,7 +387,7 @@ async def update_application(
             if url is not None:
                 metadata = None
                 async for item in db["storage_metadata"].find({"bucket": "doctor-documents"}):
-                    if item.get("object_key") in url:
+                    if _match_storage_metadata(item, url):
                         metadata = item
                         break
 

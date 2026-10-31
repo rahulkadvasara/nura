@@ -115,6 +115,8 @@ class AuthService:
                 email=user.email,
                 full_name=user.full_name,
                 email_verified=user.email_verified,
+                profile_picture=user.profile_picture,
+                phone=user.phone,
             ),
         )
         return token_response, raw_refresh, refresh_token_create

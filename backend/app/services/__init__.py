@@ -49,11 +49,15 @@ from app.services.context_assembly_service import ContextAssemblyService, get_co
 from app.services.intent_detection_service import IntentDetectionService, get_intent_detection_service
 from app.services.patient_summary_builder import PatientSummaryBuilder
 from app.services.memory_sync_service import MemorySyncService
+from app.services.google_meet_service import GoogleMeetService
 
 
 __all__ = [
     # Base service
     "BaseService",
+
+    # Integration services
+    "GoogleMeetService",
 
     # Specific services
     "UserService",
@@ -61,6 +65,7 @@ __all__ = [
     "OTPService",
     "EmailService",
     "AdminBootstrapService",
+
 
     # Doctor services
     "DoctorProfileService",

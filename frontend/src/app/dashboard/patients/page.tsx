@@ -29,6 +29,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
 import { reportService } from '@/services/report.service'
+import { toast } from 'sonner'
 
 export default function DoctorPatientsPage() {
   const [search, setSearch] = useState('')
@@ -268,18 +269,18 @@ export default function DoctorPatientsPage() {
                   </div>
 
                   {/* Summary Counts bar */}
-                  <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-100 text-center text-xs">
-                    <div>
-                      <p className="text-slate-400 font-medium">Appointments</p>
-                      <p className="font-semibold text-slate-800 mt-0.5">{patient.total_appointments}</p>
+                  <div className="grid grid-cols-3 gap-1.5 bg-slate-50 p-2 rounded-lg border border-slate-100 text-center text-[10px]">
+                    <div className="min-w-0">
+                      <p className="text-slate-400 font-medium truncate">Appointments</p>
+                      <p className="font-semibold text-slate-800 mt-0.5 text-xs">{patient.total_appointments}</p>
                     </div>
-                    <div>
-                      <p className="text-slate-400 font-medium">Consultations</p>
-                      <p className="font-semibold text-slate-800 mt-0.5">{patient.total_consultations}</p>
+                    <div className="min-w-0">
+                      <p className="text-slate-400 font-medium truncate">Consultations</p>
+                      <p className="font-semibold text-slate-800 mt-0.5 text-xs">{patient.total_consultations}</p>
                     </div>
-                    <div>
-                      <p className="text-slate-400 font-medium">Reports</p>
-                      <p className="font-semibold text-slate-800 mt-0.5">{patient.total_reports}</p>
+                    <div className="min-w-0">
+                      <p className="text-slate-400 font-medium truncate">Reports</p>
+                      <p className="font-semibold text-slate-800 mt-0.5 text-xs">{patient.total_reports}</p>
                     </div>
                   </div>
                 </div>
@@ -1246,16 +1247,13 @@ export default function DoctorPatientsPage() {
 
                 {/* Footer Actions */}
                 <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row gap-3">
-                  <Link
-                    href={`/dashboard/doctor/chat?patient=${selectedPatientId}`}
-                    className="flex-1"
-                    onClick={handleCloseDetail}
+                  <Button
+                    onClick={() => toast.info('Direct patient chat feature coming soon')}
+                    className="flex-1 bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center gap-2"
                   >
-                    <Button className="w-full bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center gap-2">
-                      <MessageSquare className="h-4 w-4" />
-                      Open Chat Channel
-                    </Button>
-                  </Link>
+                    <MessageSquare className="h-4 w-4" />
+                    Open Chat Channel
+                  </Button>
 
                   <Button
                     onClick={handleCloseDetail}

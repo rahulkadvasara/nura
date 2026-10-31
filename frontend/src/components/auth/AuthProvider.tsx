@@ -35,7 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     initSession()
-  }, []) // Empty dependency array ensures this runs once on mount
+  }, [accessToken]) // Empty dependency array ensures this runs once on mount
 
   if (isInitializing) {
     return (

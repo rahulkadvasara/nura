@@ -28,6 +28,14 @@ from app.schemas.chat import ChatSessionResponse
 logger = logging.getLogger(__name__)
 
 
+def _normalize_dt(dt: Optional[datetime]) -> datetime:
+    if dt is None:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 class DoctorPatientService:
     """Service layer for doctor-specific patient directory operations"""
 
@@ -214,7 +222,7 @@ class DoctorPatientService:
             {"patient_id": patient_id, "doctor_id": doctor_profile_id},
             limit=1000
         )
-        cons_docs.sort(key=lambda c: c.created_at, reverse=True)
+        cons_docs.sort(key=lambda c: _normalize_dt(c.created_at), reverse=True)
         consultations = [ConsultationResponse(**c.model_dump()) for c in cons_docs]
 
         # Reports
@@ -222,7 +230,7 @@ class DoctorPatientService:
             {"patient_id": patient_id},
             limit=1000
         )
-        report_docs.sort(key=lambda r: r.created_at, reverse=True)
+        report_docs.sort(key=lambda r: _normalize_dt(r.created_at), reverse=True)
         reports = [ReportResponse(**r.model_dump()) for r in report_docs]
 
         # Prescriptions
@@ -230,7 +238,7 @@ class DoctorPatientService:
             {"patient_id": patient_id, "doctor_id": doctor_profile_id},
             limit=1000
         )
-        pres_docs.sort(key=lambda p: p.created_at, reverse=True)
+        pres_docs.sort(key=lambda p: _normalize_dt(p.created_at), reverse=True)
         prescriptions = [PrescriptionResponse(**p.model_dump()) for p in pres_docs]
 
         # Health insights
@@ -238,7 +246,7 @@ class DoctorPatientService:
             {"patient_id": patient_id},
             limit=1000
         )
-        insight_docs.sort(key=lambda i: i.created_at, reverse=True)
+        insight_docs.sort(key=lambda i: _normalize_dt(i.created_at), reverse=True)
         health_insights = [HealthInsightResponse(**i.model_dump()) for i in insight_docs]
 
         # Active reminders
@@ -246,7 +254,7 @@ class DoctorPatientService:
             {"patient_id": patient_id, "status": "active"},
             limit=1000
         )
-        reminder_docs.sort(key=lambda r: r.created_at, reverse=True)
+        reminder_docs.sort(key=lambda r: _normalize_dt(r.created_at), reverse=True)
         current_reminders = [ReminderResponse(**r.model_dump()) for r in reminder_docs]
 
         # Latest doctor chat session

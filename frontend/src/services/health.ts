@@ -4,13 +4,15 @@ export interface HealthResponse {
   status: string
   app: string
   environment: string
-  mongodb: string
-  qdrant: string
+  mongodb?: string
+  qdrant?: string
 }
 
 export const healthService = {
-  checkHealth: async (): Promise<HealthResponse> => {
-    const response = await apiClient.get<HealthResponse>('/health')
+  checkHealth: async (timeoutMs?: number): Promise<HealthResponse> => {
+    const response = await apiClient.get<HealthResponse>('/health', {
+      timeout: typeof timeoutMs === 'number' ? timeoutMs : 60000
+    })
     return response.data
   }
 }

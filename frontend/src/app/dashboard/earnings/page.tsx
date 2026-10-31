@@ -280,7 +280,7 @@ export default function DoctorEarningsPage() {
   // Get status badge colors
   const getStatusBadge = (statusStr: string) => {
     const cleanStatus = (statusStr || '').toLowerCase()
-    if (cleanStatus === 'completed' || cleanStatus === 'approved') {
+    if (cleanStatus === 'completed' || cleanStatus === 'approved' || cleanStatus === 'success' || cleanStatus === 'paid') {
       return (
         <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold capitalize gap-1 hover:bg-emerald-50">
           <CheckCircle2 className="h-3 w-3" />

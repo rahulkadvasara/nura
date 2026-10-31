@@ -584,7 +584,7 @@ Production secrets must be stored in:
 ```text
 Vercel Environment Variables
 
-Railway Environment Variables
+Render Environment Variables
 ```
 
 Never hardcode secrets.

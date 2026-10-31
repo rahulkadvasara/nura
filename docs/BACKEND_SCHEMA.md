@@ -26,82 +26,53 @@ Architecture Style:
 backend/
 
 ├── app/
-│
-├── api/
-│   └── v1/
-│       ├── auth/
-│       ├── users/
-│       ├── doctors/
-│       ├── appointments/
-│       ├── payments/
-│       ├── reports/
-│       ├── reminders/
-│       ├── chat/
-│       ├── notifications/
-│       └── admin/
-│
-├── core/
-│   ├── config.py
-│   ├── security.py
-│   ├── dependencies.py
-│   ├── database.py
-│   └── qdrant.py
-│
-├── models/
-│   ├── user.py
-│   ├── doctor.py
-│   ├── appointment.py
-│   ├── payment.py
-│   ├── report.py
-│   ├── reminder.py
-│   ├── notification.py
-│   └── chat.py
-│
-├── schemas/
-│   ├── auth.py
-│   ├── user.py
-│   ├── doctor.py
-│   ├── appointment.py
-│   ├── payment.py
-│   ├── report.py
-│   ├── reminder.py
-│   └── chat.py
-│
-├── repositories/
-│   ├── user_repository.py
-│   ├── doctor_repository.py
-│   ├── appointment_repository.py
-│   ├── payment_repository.py
-│   ├── report_repository.py
-│   ├── reminder_repository.py
-│   └── chat_repository.py
-│
-├── services/
-│   ├── auth_service.py
-│   ├── user_service.py
-│   ├── doctor_service.py
-│   ├── appointment_service.py
-│   ├── payment_service.py
-│   ├── report_service.py
-│   ├── reminder_service.py
-│   ├── notification_service.py
-│   └── chat_service.py
-│
-├── ai/
+│   ├── api/
+│   │   └── v1/
+│   │       ├── admin.py
+│   │       ├── ai.py
+│   │       ├── appointments.py
+│   │       ├── auth.py
+│   │       ├── chat.py
+│   │       ├── dashboard.py
+│   │       ├── doctor.py
+│   │       ├── doctors.py
+│   │       ├── health.py
+│   │       ├── integrations.py
+│   │       ├── patient.py
+│   │       ├── payments.py
+│   │       ├── reports.py
+│   │       └── users.py
+│   │
 │   ├── agents/
+│   │   ├── core/
+│   │   ├── healthcare/
+│   │   ├── operations/
+│   │   └── router/
+│   │
 │   ├── graph/
-│   ├── retrieval/
-│   ├── memory/
-│   ├── prompts/
-│   └── tools/
-│
-├── middleware/
-│
-├── utils/
+│   │   ├── builder.py
+│   │   ├── engine.py
+│   │   ├── nodes.py
+│   │   └── state.py
+│   │
+│   ├── core/
+│   │   ├── config.py
+│   │   ├── ai_config.py
+│   │   └── security.py
+│   │
+│   ├── db/
+│   │   ├── mongodb.py
+│   │   └── qdrant.py
+│   │
+│   ├── models/
+│   ├── schemas/
+│   ├── repositories/
+│   ├── services/
+│   └── utils/
 │
 ├── tests/
-│
-└── main.py
+├── run.py
+└── Dockerfile
 ```
 
 ---

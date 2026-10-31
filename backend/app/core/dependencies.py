@@ -29,6 +29,7 @@ from app.repositories import (
     ReportRepository,
     ChatSessionRepository,
     ChatMessageRepository,
+    SystemIntegrationRepository,
 )
 from app.services import (
     UserService,
@@ -63,7 +64,9 @@ from app.services import (
     ReminderService,
     ChatSessionService,
     ChatMessageService,
+    GoogleMeetService,
 )
+
 from app.events import EventDispatcher, EventQueue
 from app.agents import (
     BaseAgent,
@@ -378,6 +381,27 @@ def get_doctor_availability_service(
     return DoctorAvailabilityService(availability_repository, appointment_repository)
 
 
+def get_system_integration_repository() -> SystemIntegrationRepository:
+    """Get SystemIntegrationRepository instance"""
+    database: AsyncIOMotorDatabase = get_database()
+    return SystemIntegrationRepository(database.system_integrations)
+
+
+def get_google_meet_service(
+    system_integration_repository: SystemIntegrationRepository = Depends(get_system_integration_repository),
+) -> GoogleMeetService:
+    """Get GoogleMeetService instance"""
+    from fastapi.params import Depends as DependsType
+    if isinstance(system_integration_repository, DependsType):
+        system_integration_repository = get_system_integration_repository()
+    database: AsyncIOMotorDatabase = get_database()
+    appointment_repository = AppointmentRepository(database.appointments)
+    return GoogleMeetService(
+        system_integration_repository=system_integration_repository,
+        appointment_repository=appointment_repository,
+    )
+
+
 def get_appointment_repository() -> AppointmentRepository:
     """Get AppointmentRepository instance"""
     database: AsyncIOMotorDatabase = get_database()
@@ -389,6 +413,7 @@ def get_appointment_service(
     doctor_profile_repository: DoctorProfileRepository = Depends(get_doctor_profile_repository),
     user_repository: UserRepository = Depends(get_user_repository),
     doctor_availability_repository: DoctorAvailabilityRepository = Depends(get_doctor_availability_repository),
+    google_meet_service: GoogleMeetService = Depends(get_google_meet_service),
 ) -> AppointmentService:
     """Get AppointmentService instance"""
     from fastapi.params import Depends as DependsType
@@ -400,12 +425,16 @@ def get_appointment_service(
         user_repository = get_user_repository()
     if isinstance(doctor_availability_repository, DependsType):
         doctor_availability_repository = get_doctor_availability_repository()
+    if isinstance(google_meet_service, DependsType):
+        google_meet_service = get_google_meet_service()
     return AppointmentService(
         appointment_repository=appointment_repository,
         doctor_profile_repository=doctor_profile_repository,
         user_repository=user_repository,
         doctor_availability_repository=doctor_availability_repository,
+        google_meet_service=google_meet_service,
     )
+
 
 
 def get_consultation_repository() -> ConsultationRepository:

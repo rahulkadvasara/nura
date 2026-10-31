@@ -344,12 +344,12 @@ Business Metrics:
 
 # 9. Future Scope
 
-* Wearable integrations
-* Health trend forecasting
-* Voice consultations
-* Telemedicine integration
-* Insurance integration
-* Mobile applications
+* Real-Time Interactive Chat System (WebSockets/SSE Streaming, Agent Live Thinking Status, Voice Input)
+* Distributed Redis Caching & Task Queue Engine (Session caching, LLM response caching, rate limiting, background workers)
+* Multi-Channel Notification System (In-app WebSocket notifications, SMTP/Brevo emails, SMS/WhatsApp appointment & clinical risk alerts)
+* Wearable Device Integrations & Health Trend Forecasting
+* Telemedicine Video & Voice Consultations
+* Mobile Applications (iOS & Android)
 
 ---
 

@@ -18,6 +18,7 @@ class RecentHealthInsight(BaseModel):
 
     id: str = Field(..., description="Health insight ID")
     title: str = Field(..., description="Short insight title")
+    summary: Optional[str] = Field(None, description="Detailed summary or key health findings")
     severity: Optional[str] = Field(None, description="Severity level (low/medium/high)")
     created_at: datetime = Field(..., description="When the insight was generated")
 
