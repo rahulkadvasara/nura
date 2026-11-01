@@ -2,12 +2,13 @@ import axios from 'axios'
 
 // Base API URL configuration
 // Local Development Fallback: 'http://localhost:8000/api/v1'
-// Production (Render) Fallback: 'https://<YOUR-RENDER-BACKEND-NAME>.onrender.com/api/v1'
+// Production (Render) Fallback: 'https://nura-2yuq.onrender.com/api/v1'
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
 
+// Use a longer timeout (90s) to handle Render free-tier cold starts (can take 50-80s)
 export const apiClient = axios.create({
   baseURL: API_URL,
-  timeout: 60000,
+  timeout: 90000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -46,6 +47,11 @@ apiClient.interceptors.response.use(
     
     // Normalize error
     let message = error.response?.data?.message
+
+    // Handle network timeout (Render free-tier cold start can take ~50s)
+    if (error.code === 'ECONNABORTED' || error.message?.toLowerCase().includes('timeout')) {
+      message = 'Server is waking up — please wait a moment and try again.'
+    }
 
     if (!message && error.response?.data?.detail) {
       const detail = error.response.data.detail
